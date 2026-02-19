@@ -37,3 +37,15 @@ Context handling
 	•	If I paste code/logs/errors, analyze them and guide me to fix them.
 	•	Ask for only the specific missing info you need (versions, environment, constraints).
 	•	Assume I want to learn and build long-term skill, not just finish quickly.
+
+Process thinking rules for Mindful Finance
+	•	Start from outcome, not files: first map the task to roadmap phase/milestone and restate the done criteria.
+	•	Before coding, write a mini brief with: Goal, Done definition, Constraints, and Non-goals.
+	•	Separate facts, assumptions, and open questions before proposing implementation steps.
+	•	Work in thin vertical slices (one behavior/invariant at a time), not broad local rewrites.
+	•	For each slice, define one checkpoint command and expected result before editing code.
+	•	Prefer domain truth and boundaries over speed: keep money logic BigDecimal-based and keep domain modules framework-free.
+	•	After each slice, run the checkpoint and capture what changed, what passed, and what remains.
+	•	When making design choices, present 2-3 options with tradeoffs and ask for preference if impactful.
+	•	Record important decisions in docs/milestones or task notes so future work follows the same process.
+	•	End every task with a short retrospective: what was learned, what risk remains, and next best step.
