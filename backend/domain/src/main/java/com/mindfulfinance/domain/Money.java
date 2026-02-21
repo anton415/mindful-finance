@@ -3,6 +3,10 @@ package com.mindfulfinance.domain;
 import java.math.BigDecimal;
 import java.util.Currency;
 
+/**
+ * Represents a monetary amount in a specific currency.
+ * This class is immutable and thread-safe.
+ */
 public record Money(BigDecimal amount, Currency currency) {
     public Money {
         if (amount == null || currency == null) {
@@ -18,5 +22,80 @@ public record Money(BigDecimal amount, Currency currency) {
         }
 
         amount = amount.setScale(scale);
+    }
+
+    /**
+     * Returns a Money instance with zero amount for the given currency.
+     * @param currency the currency for which to create the zero amount
+     * @return a Money instance with zero amount in the specified currency
+     */
+    public static Money zero(Currency currency) {
+        return new Money(BigDecimal.ZERO, currency);
+    }
+
+    /**
+     * Adds another Money instance to this one, returning a new Money instance with the sum.
+     * @param other the Money instance to add
+     * @return a new Money instance representing the sum of this and the other
+     * @throws IllegalArgumentException if the currencies of the two Money instances do not match
+     */
+    public Money add(Money other) {
+        if (!this.currency.equals(other.currency)) {
+            throw new IllegalArgumentException("Cannot add amounts with different currencies");
+        }
+        return new Money(this.amount.add(other.amount), this.currency);
+    }
+
+    /**
+     * Subtracts another Money instance from this one, returning a new Money instance with the difference.
+     * @param other the Money instance to subtract
+     * @return a new Money instance representing the difference between this and the other
+     * @throws IllegalArgumentException if the currencies of the two Money instances do not match
+     */
+    public Money subtract(Money other) {
+        if (!this.currency.equals(other.currency)) {
+            throw new IllegalArgumentException("Cannot subtract amounts with different currencies");   
+        }
+        return new Money(this.amount.subtract(other.amount), this.currency);
+    }
+
+    /**
+     * Returns a new Money instance with the negated amount of this instance.
+     * @return a new Money instance with the negated amount of this instance
+     */
+    public Money negated() { 
+        return new Money(amount.negate(), currency); 
+    }
+
+    /**
+     * Returns the signum of the amount: -1 if negative, 0 if zero, and 1 if positive.
+     * @return the signum of the amount
+     */
+    public int signum() { 
+        return amount.signum(); 
+    }
+
+    /**
+     * Returns true if the amount is zero, false otherwise.
+     * @return true if the amount is zero, false otherwise
+     */
+    public boolean isZero() { 
+        return signum() == 0; 
+    }
+
+    /**
+     * Returns true if the amount is positive, false otherwise.
+     * @return true if the amount is positive, false otherwise
+     */
+    public boolean isPositive() { 
+        return signum() > 0; 
+    }
+
+    /**
+     * Returns true if the amount is negative, false otherwise.
+     * @return true if the amount is negative, false otherwise
+     */
+    public boolean isNegative() { 
+        return signum() < 0; 
     }
 }
