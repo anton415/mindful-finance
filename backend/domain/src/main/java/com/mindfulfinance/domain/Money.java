@@ -2,6 +2,13 @@ package com.mindfulfinance.domain;
 
 import java.math.BigDecimal;
 import java.util.Currency;
+import java.util.Map;
+
+import static com.mindfulfinance.domain.shared.DomainErrorCode.MONEY_CURRENCY_MISMATCH;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.MONEY_INVALID_CURRENCY_FRACTION_DIGITS;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.MONEY_NULL_AMOUNT_OR_CURRENCY;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.MONEY_TOO_MANY_DECIMALS;
+import com.mindfulfinance.domain.shared.DomainException;
 
 /**
  * Represents a monetary amount in a specific currency.
@@ -10,15 +17,16 @@ import java.util.Currency;
 public record Money(BigDecimal amount, Currency currency) {
     public Money {
         if (amount == null || currency == null) {
-            throw new NullPointerException("Amount and Currency must not be null");
+            throw new DomainException(MONEY_NULL_AMOUNT_OR_CURRENCY, "Amount and Currency must not be null", null);
         }
 
         int scale = currency.getDefaultFractionDigits();
         if (scale < 0) {
-            throw new IllegalArgumentException("Currency must have a valid number of fraction digits");
+            throw new DomainException(MONEY_INVALID_CURRENCY_FRACTION_DIGITS, "Currency must have a valid number of fraction digits", Map.of("currency", currency, "scale", scale));
+            
         }
         if (amount.scale() > scale) {
-            throw new IllegalArgumentException("Amount cannot have more decimal places than the currency allows");
+            throw new DomainException(MONEY_TOO_MANY_DECIMALS, "Amount cannot have more decimal places than the currency allows", Map.of("currency", currency, "scale", scale));
         }
 
         amount = amount.setScale(scale);
@@ -37,11 +45,11 @@ public record Money(BigDecimal amount, Currency currency) {
      * Adds another Money instance to this one, returning a new Money instance with the sum.
      * @param other the Money instance to add
      * @return a new Money instance representing the sum of this and the other
-     * @throws IllegalArgumentException if the currencies of the two Money instances do not match
+     * @throws DomainException if the currencies of the two Money instances do not match
      */
     public Money add(Money other) {
         if (!this.currency.equals(other.currency)) {
-            throw new IllegalArgumentException("Cannot add amounts with different currencies");
+            throw new DomainException(MONEY_CURRENCY_MISMATCH, "Cannot add amounts with different currencies", Map.of("currency1", this.currency, "currency2", other.currency));
         }
         return new Money(this.amount.add(other.amount), this.currency);
     }
@@ -50,11 +58,11 @@ public record Money(BigDecimal amount, Currency currency) {
      * Subtracts another Money instance from this one, returning a new Money instance with the difference.
      * @param other the Money instance to subtract
      * @return a new Money instance representing the difference between this and the other
-     * @throws IllegalArgumentException if the currencies of the two Money instances do not match
+     * @throws DomainException if the currencies of the two Money instances do not match
      */
     public Money subtract(Money other) {
         if (!this.currency.equals(other.currency)) {
-            throw new IllegalArgumentException("Cannot subtract amounts with different currencies");   
+            throw new DomainException(MONEY_CURRENCY_MISMATCH, "Cannot subtract amounts with different currencies", Map.of("currency1", this.currency, "currency2", other.currency));
         }
         return new Money(this.amount.subtract(other.amount), this.currency);
     }
