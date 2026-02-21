@@ -62,7 +62,7 @@ Behavior helpers (small, pure):
 - `Account archive()` (idempotent)
 
 Enums:
-- `AccountType` (start minimal: CHECKING, SAVINGS, CASH, CREDIT_CARD, BROKERAGE)
+- `AccountType` (start minimal: CASH, DEPOSIT, FUND, IIS, BROKERAGE)
 - `AccountStatus` (ACTIVE, ARCHIVED)
 
 ### `Transaction`

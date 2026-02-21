@@ -24,5 +24,35 @@ public enum DomainErrorCode {
     /**
      * Indicates that an operation was attempted on two Money instances with different currencies.
      */
-    MONEY_CURRENCY_MISMATCH
+    MONEY_CURRENCY_MISMATCH,
+
+    /**
+     * Indicates that an Account was created with a null id.
+     */
+    ACCOUNT_ID_NULL,
+
+    /**
+     * Indicates that an Account was created with a null or blank name.
+     */
+    ACCOUNT_NAME_NULL_OR_BLANK,
+
+    /**
+    * Indicates that an Account was created with a null currency.
+    */
+    ACCOUNT_CURRENCY_NULL,
+
+    /**
+     * Indicates that an Account was created with a null type.
+     */
+    ACCOUNT_TYPE_NULL,
+
+    /**
+     * Indicates that an Account was created with a null status.
+     */
+    ACCOUNT_STATUS_NULL,
+
+    /**
+     * Indicates that an Account was created with a null createdAt timestamp.
+     */
+    ACCOUNT_CREATED_AT_NULL
 }

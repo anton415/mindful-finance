@@ -1,4 +1,4 @@
-package com.mindfulfinance.domain;
+package com.mindfulfinance.domain.money;
 
 import java.math.BigDecimal;
 import java.util.Currency;
