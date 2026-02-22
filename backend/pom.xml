@@ -15,5 +15,6 @@
 
   <modules>
     <module>domain</module>
+    <module>application</module>
   </modules>
 </project>
