@@ -84,6 +84,45 @@ public enum DomainErrorCode {
     /**
      * Indicates that a Transaction was created with a null createdAt timestamp.
      */
-    TRANSACTION_CREATED_AT_NULL
+    TRANSACTION_CREATED_AT_NULL,
 
+    /**
+     * Indicates that a LifeGoal was created with a null id.
+     */
+    LIFEGOAL_ID_NULL,
+
+    /**
+     * Indicates that a LifeGoal was created with a null accountId.
+     */
+    LIFEGOAL_ACCOUNT_ID_NULL,
+
+    /**
+     * Indicates that a LifeGoal was created with a null or blank title.
+     */
+    LIFEGOAL_TITLE_NULL_OR_BLANK,
+
+    /**
+     * Indicates that a LifeGoal was created with a null or negative or zero target amount.
+     */
+    LIFEGOAL_TARGET_AMOUNT_NULL_OR_NEGATIVE_OR_ZERO,
+
+    /**
+     * Indicates that a LifeGoal was created with a null target date.
+     */    
+    LIFEGOAL_TARGET_DATE_NULL,
+
+    /**
+     * Indicates that a LifeGoal was created with a null currency.
+     */
+    LIFEGOAL_CURRENCY_NULL,
+
+    /**
+     * Indicates that a LifeGoal was created with a null createdAt timestamp.
+     */
+    LIFEGOAL_CREATED_AT_NULL,
+
+    /**
+     * Indicates that a LifeGoal was created with a null status.
+     */
+    LIFEGOAL_STATUS_NULL
 }
