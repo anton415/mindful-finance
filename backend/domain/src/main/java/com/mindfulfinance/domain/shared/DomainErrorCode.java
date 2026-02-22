@@ -54,5 +54,36 @@ public enum DomainErrorCode {
     /**
      * Indicates that an Account was created with a null createdAt timestamp.
      */
-    ACCOUNT_CREATED_AT_NULL
+    ACCOUNT_CREATED_AT_NULL,
+
+    /**
+     * Indicates that a Transaction was created with a null id.
+     */
+    TRANSACTION_ID_NULL,
+
+    /**
+     * Indicates that a Transaction was created with a null accountId.
+     */
+    TRANSACTION_ACCOUNT_ID_NULL,
+
+    /**
+     * Indicates that a Transaction was created with a null occurredOn date.
+     */    
+    TRANSACTION_OCCURRED_ON_NULL,
+
+    /**
+     * Indicates that a Transaction was created with a null direction.
+     */
+    TRANSACTION_DIRECTION_NULL,
+
+    /**
+     * Indicates that a Transaction was created with a null, negative, or zero amount.
+     */
+    TRANSACTION_AMOUNT_NULL_OR_NEGATIVE_OR_ZERO,
+
+    /**
+     * Indicates that a Transaction was created with a null createdAt timestamp.
+     */
+    TRANSACTION_CREATED_AT_NULL
+
 }
