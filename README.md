@@ -10,6 +10,12 @@ Most financial apps are designed to keep you addicted with flashing numbers and 
 - **Frontend:** React, Vite, TypeScript, Tailwind CSS.
 - **Architecture:** Hexagonal / Clean Architecture.
 
+## ✅ Running tests
+Prereqs: Java 21 + Maven.
+
+From repo root:
+`mvn -f backend/pom.xml test`
+
 ## 🧘 Principles of the System
 1. **Truth First:** No floating-point math for money. `BigDecimal` or nothing.
 2. **Context over Noise:** Show long-term trends, not daily market jitters.

@@ -10,6 +10,7 @@ import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_NAME_NULL
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_STATUS_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_TYPE_NULL;
 import com.mindfulfinance.domain.shared.DomainException;
+import com.mindfulfinance.domain.shared.Preconditions;
 
 /**
  * Represents a financial account with various attributes such as name, currency, type, status, and creation timestamp.
@@ -52,7 +53,7 @@ public record Account(
             throw new DomainException(ACCOUNT_CREATED_AT_NULL, "Account createdAt cannot be null", null);
         }
 
-        name = name.trim();
+        name = Preconditions.requireNonBlank(name, "name");
     }
 
     /**
