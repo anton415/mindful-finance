@@ -23,6 +23,8 @@ import static com.mindfulfinance.domain.shared.DomainErrorCode.LIFEGOAL_TITLE_NU
 import com.mindfulfinance.domain.shared.DomainException;
 
 public class LifeGoalTest {
+    private static final Instant CREATED_AT = Instant.parse("2026-01-01T00:00:00Z");
+
     @Test
     void testCreateLifeGoal() {
         // This test is a placeholder to ensure that the LifeGoal class can be instantiated without errors.
@@ -34,7 +36,7 @@ public class LifeGoalTest {
             LocalDate.of(2040, 1, 1),
             LifeGoalStatus.ACTIVE,
             "Save for retirement by 2040",
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(lifeGoal);
     }
@@ -48,7 +50,7 @@ public class LifeGoalTest {
             LocalDate.of(2025, 6, 1),
             LifeGoalStatus.ACTIVE,
             "   ", // Blank notes should be normalized to null
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(lifeGoal);
         assertNull(lifeGoal.notes()); // Notes should be normalized to null
@@ -63,7 +65,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ACTIVE,
             "Save for emergencies",
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(lifeGoal);
         assertEquals("Save for emergencies", lifeGoal.notes()); // Notes should be preserved
@@ -78,7 +80,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,
                 "Save for emergencies",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_TITLE_NULL_OR_BLANK, exception.code());
@@ -93,7 +95,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,
                 "Save for emergencies",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_TITLE_NULL_OR_BLANK, exception.code());
@@ -108,7 +110,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ACTIVE,
             "This goal is active",
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(activeGoal);
         assertTrue(activeGoal.isActive());
@@ -123,7 +125,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ACHIEVED,
             "This goal is achieved",
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(achievedGoal);
         assertFalse(achievedGoal.isActive());
@@ -138,7 +140,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ARCHIVED,
             "This goal is archived",
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(archivedGoal);
         assertFalse(archivedGoal.isActive());
@@ -153,7 +155,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ACTIVE,
             "  Trimmed Notes  ", // Notes should be trimmed
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(lifeGoal);
         assertEquals("Trimmed Title", lifeGoal.title()); // Title should be trimmed
@@ -169,7 +171,7 @@ public class LifeGoalTest {
             LocalDate.of(2023, 12, 31),
             LifeGoalStatus.ACTIVE,
             null, // Notes can be null
-            Instant.now()
+            CREATED_AT
         );
         assertNotNull(lifeGoal);
         assertNull(lifeGoal.notes()); // Notes should be null
@@ -184,7 +186,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_ID_NULL, exception.code());
@@ -199,7 +201,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,  
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_TARGET_AMOUNT_NULL_OR_NEGATIVE_OR_ZERO, exception.code());
@@ -214,7 +216,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_TARGET_AMOUNT_NULL_OR_NEGATIVE_OR_ZERO, exception.code());
@@ -229,7 +231,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 LifeGoalStatus.ACTIVE,      
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );  
         assertEquals(LIFEGOAL_TARGET_AMOUNT_NULL_OR_NEGATIVE_OR_ZERO, exception.code());
@@ -244,7 +246,7 @@ public class LifeGoalTest {
                 null, // Null targetDate should cause an exception
                 LifeGoalStatus.ACTIVE,
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_TARGET_DATE_NULL, exception.code());  
@@ -259,7 +261,7 @@ public class LifeGoalTest {
                 LocalDate.of(2023, 12, 31),
                 null, // Null status should cause an exception
                 "Valid notes",
-                Instant.now()
+                CREATED_AT
             )
         );
         assertEquals(LIFEGOAL_STATUS_NULL, exception.code());
