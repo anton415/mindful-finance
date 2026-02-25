@@ -16,5 +16,6 @@
   <modules>
     <module>domain</module>
     <module>application</module>
+    <module>api</module>
   </modules>
 </project>
