@@ -78,6 +78,14 @@ You write the code; each step ends with a **check** you can run.
 - Persistence is **in-memory only** for v0 (Postgres persistence arrives in Milestone 4).
 - API is unauthenticated for now (local-only developer MVP).
 
+## Progress notes
+- **2026-02-26:** Added thin transaction slice endpoints in `api`:
+  - `POST /accounts/{accountId}/transactions`
+  - `GET /accounts/{accountId}/transactions`
+- Transaction request shape: `occurredOn`, `direction`, `amount`, `memo`.
+- `amount` is converted to domain `Money` using the account currency.
+- Missing account currently throws `IllegalArgumentException`; consistent HTTP mapping (400/404/409) is deferred to the milestone error-handling step.
+
 ## Suggested follow-up issues (next milestones)
 - Add Postgres persistence adapter + migrations.
 - Add ingestion endpoint for bank exports (Phase 2).
