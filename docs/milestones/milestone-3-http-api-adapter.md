@@ -84,7 +84,10 @@ You write the code; each step ends with a **check** you can run.
   - `GET /accounts/{accountId}/transactions`
 - Transaction request shape: `occurredOn`, `direction`, `amount`, `memo`.
 - `amount` is converted to domain `Money` using the account currency.
-- Missing account currently throws `IllegalArgumentException`; consistent HTTP mapping (400/404/409) is deferred to the milestone error-handling step.
+- **2026-02-26:** Added centralized HTTP error mapping with `@RestControllerAdvice`:
+  - `400` for validation/parsing/domain request errors
+  - `404` for missing account
+  - `409` for conflict/state errors
 
 ## Suggested follow-up issues (next milestones)
 - Add Postgres persistence adapter + migrations.

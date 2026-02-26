@@ -66,7 +66,7 @@ public class AccountsController {
         AccountId parsedAccountId = parseAccountId(accountId);
         Account account = accountRepository
             .find(parsedAccountId)
-            .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+            .orElseThrow(() -> new AccountNotFoundException("Account not found"));
 
         Transaction tx = new Transaction(
             TransactionId.random(),
@@ -89,7 +89,7 @@ public class AccountsController {
         AccountId parsedAccountId = parseAccountId(accountId);
         accountRepository
             .find(parsedAccountId)
-            .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+            .orElseThrow(() -> new AccountNotFoundException("Account not found"));
 
         return transactionRepository.findByAccountId(parsedAccountId).stream()
             .map(tx -> new TransactionDto(
