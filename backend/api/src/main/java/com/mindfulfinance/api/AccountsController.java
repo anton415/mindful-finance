@@ -4,8 +4,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Currency;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
+import com.mindfulfinance.application.usecases.ComputeAccountBalance;
+import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
@@ -31,12 +36,22 @@ import com.mindfulfinance.domain.transaction.TransactionId;
 public class AccountsController {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final ComputeAccountBalance computeAccountBalance;
+    private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
 
-    public AccountsController(AccountRepository accountRepository, TransactionRepository transactionRepository) {
+    public AccountsController(
+        AccountRepository accountRepository,
+        TransactionRepository transactionRepository,
+        ComputeAccountBalance computeAccountBalance,
+        ComputeNetWorthByCurrency computeNetWorthByCurrency
+    ) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
+        this.computeAccountBalance = computeAccountBalance;
+        this.computeNetWorthByCurrency = computeNetWorthByCurrency;
     }
 
+    // Milestone 3: create account endpoint for the HTTP adapter v0.
     @PostMapping("/accounts")
     public ResponseEntity<CreateAccountResponse> createAccount(@RequestBody CreateAccountRequest req) {
         AccountId accountId = AccountId.random();
@@ -64,9 +79,7 @@ public class AccountsController {
         @RequestBody CreateTransactionRequest req
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        Account account = accountRepository
-            .find(parsedAccountId)
-            .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+        Account account = requireAccount(parsedAccountId);
 
         Transaction tx = new Transaction(
             TransactionId.random(),
@@ -87,9 +100,7 @@ public class AccountsController {
     @GetMapping("/accounts/{accountId}/transactions")
     public List<TransactionDto> getTransactions(@PathVariable("accountId") String accountId) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        accountRepository
-            .find(parsedAccountId)
-            .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+        requireAccount(parsedAccountId);
 
         return transactionRepository.findByAccountId(parsedAccountId).stream()
             .map(tx -> new TransactionDto(
@@ -103,8 +114,43 @@ public class AccountsController {
             .toList();
     }
 
+    // Milestone 3: expose application balance use case over HTTP.
+    @GetMapping("/accounts/{accountId}/balance")
+    public MoneyDto getBalance(@PathVariable("accountId") String accountId) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        requireAccount(parsedAccountId);
+        Money balance = computeAccountBalance.compute(parsedAccountId);
+        return toMoneyDto(balance);
+    }
+
+    // Milestone 3: net worth is grouped by currency (no FX conversion yet).
+    @GetMapping("/net-worth")
+    public Map<String, String> getNetWorth() {
+        return computeNetWorthByCurrency.compute().entrySet().stream()
+            .sorted(Map.Entry.comparingByKey((left, right) -> left.getCurrencyCode().compareTo(right.getCurrencyCode())))
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().getCurrencyCode(),
+                entry -> entry.getValue().amount().toPlainString(),
+                (left, right) -> right,
+                LinkedHashMap::new
+            ));
+    }
+
+    private Account requireAccount(AccountId accountId) {
+        return accountRepository
+            .find(accountId)
+            .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+    }
+
     private static AccountId parseAccountId(String accountId) {
         return new AccountId(UUID.fromString(accountId));
+    }
+
+    private static MoneyDto toMoneyDto(Money money) {
+        return new MoneyDto(
+            money.amount().toPlainString(),
+            money.currency().getCurrencyCode()
+        );
     }
 
     public record CreateAccountResponse(String accountId) {}
@@ -128,4 +174,6 @@ public class AccountsController {
         String currency,
         String memo
     ) {}
+
+    public record MoneyDto(String amount, String currency) {}
 }

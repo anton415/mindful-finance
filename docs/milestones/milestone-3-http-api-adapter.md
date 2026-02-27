@@ -68,11 +68,11 @@ You write the code; each step ends with a **check** you can run.
 - Checkpoint: `curl -s localhost:8080/health` returns `{"status":"ok"}`
 
 ## Acceptance criteria (copyable to a GitHub Issue)
-- [ ] `backend/api` module exists and builds with Java 21.
-- [ ] `backend/api` depends on `backend/application` (and indirectly `domain`).
-- [ ] Controllers exist for accounts + transactions + balance + net worth.
-- [ ] Error mapping is consistent (400/404/409).
-- [ ] `mvn -f backend/pom.xml test` passes.
+- [x] `backend/api` module exists and builds with Java 21.
+- [x] `backend/api` depends on `backend/application` (and indirectly `domain`).
+- [x] Controllers exist for accounts + transactions + balance + net worth.
+- [x] Error mapping is consistent (400/404/409).
+- [x] `mvn -f backend/pom.xml test` passes.
 
 ## Assumptions / defaults (explicit)
 - Persistence is **in-memory only** for v0 (Postgres persistence arrives in Milestone 4).
@@ -88,6 +88,10 @@ You write the code; each step ends with a **check** you can run.
   - `400` for validation/parsing/domain request errors
   - `404` for missing account
   - `409` for conflict/state errors
+- **2026-02-27:** Closed Milestone 3 endpoint gaps and test coverage:
+  - Added `GET /accounts/{accountId}/balance` using `ComputeAccountBalance`.
+  - Added `GET /net-worth` using `ComputeNetWorthByCurrency` (grouped by currency, no FX conversion).
+  - Extended adapter tests to cover new endpoints and explicit `400/404/409` error mapping behavior.
 
 ## Suggested follow-up issues (next milestones)
 - Add Postgres persistence adapter + migrations.

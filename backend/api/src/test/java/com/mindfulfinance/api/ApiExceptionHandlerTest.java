@@ -28,11 +28,38 @@ public class ApiExceptionHandlerTest {
             .andExpect(jsonPath("$.error").value("CONFLICT"));
     }
 
+    @Test
+    public void accountNotFoundException_returns404NotFound() throws Exception {
+        mockMvc.perform(get("/throw/not-found"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    public void illegalArgumentException_returns400BadRequest() throws Exception {
+        mockMvc.perform(get("/throw/bad-request"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+    }
+
     @RestController
     private static class ThrowingController {
+        // Milestone 3 requires 409 mapping for state/conflict failures.
         @GetMapping("/throw/conflict")
         public String conflict() {
             throw new IllegalStateException("duplicate request");
+        }
+
+        // Milestone 3 requires 404 mapping for missing aggregate references.
+        @GetMapping("/throw/not-found")
+        public String notFound() {
+            throw new AccountNotFoundException("Account not found");
+        }
+
+        // Milestone 3 requires 400 mapping for request and validation errors.
+        @GetMapping("/throw/bad-request")
+        public String badRequest() {
+            throw new IllegalArgumentException("Invalid value");
         }
     }
 }
