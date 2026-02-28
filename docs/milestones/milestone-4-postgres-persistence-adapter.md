@@ -4,7 +4,7 @@
 - **Goal:** persist accounts + transactions in PostgreSQL via an adapter that implements application ports, keeping `domain` + `application` clean.
 - **Done when:**
   - `mvn -f backend/pom.xml test` passes from repo root.
-  - A Postgres-backed adapter exists (suggested: `backend/persistence-postgres`) implementing the `application` repository ports.
+  - A Postgres-backed adapter exists (suggested: `backend/postgres`) implementing the `application` repository ports.
   - Migrations exist (suggested: Flyway) to create the schema.
   - API module can run end-to-end using Postgres locally.
 
@@ -13,19 +13,19 @@
 - **Out of scope:** performance tuning, multi-tenant, encryption at rest, FX conversion, ingestion logic.
 
 ## Open choices (pick one; recommended first)
-- **Migration tool:** Flyway (recommended) vs Liquibase.
-- **DB access:** Spring JDBC / `JdbcTemplate` (recommended to keep mapping explicit) vs Spring Data JPA.
+- **Migration tool:** Flyway.
+- **DB access:** Spring JDBC / `JdbcTemplate`.
 
 ## Repo / module layout
 Add:
-- `backend/persistence-postgres/pom.xml`
-- `backend/persistence-postgres/src/main/java/com/mindfulfinance/persistence/**`
-- `backend/persistence-postgres/src/test/java/com/mindfulfinance/persistence/**`
-- `backend/persistence-postgres/src/main/resources/db/migration/**`
+- `backend/postgres/pom.xml`
+- `backend/postgres/src/main/java/com/mindfulfinance/postgres/**`
+- `backend/postgres/src/test/java/com/mindfulfinance/postgres/**`
+- `backend/postgres/src/main/resources/db/migration/**`
 - `backend/docker-compose.yml` (or repo-root `docker-compose.yml`)
 
 Update:
-- `backend/pom.xml` (add module `persistence-postgres`)
+- `backend/pom.xml` (add module `postgres`)
 - `backend/api` module wiring to use the Postgres adapter
 
 ## Data model (v0)
@@ -41,7 +41,7 @@ Notes:
 You write the code; each step ends with a **check** you can run.
 
 1) **Add Postgres module**
-- Create `backend/persistence-postgres` and wire into `backend/pom.xml`.
+- Create `backend/postgres` and wire into `backend/pom.xml`.
 - Checkpoint: `mvn -f backend/pom.xml test`
 
 2) **Add migrations**
