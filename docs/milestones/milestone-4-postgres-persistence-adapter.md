@@ -58,7 +58,11 @@ You write the code; each step ends with a **check** you can run.
 
 5) **Wire API to Postgres**
 - Configure `backend/api` to use the Postgres adapter (Spring profiles recommended: `inmemory` vs `postgres`).
-- Checkpoint: `mvn -f backend/api/pom.xml spring-boot:run` + smoke endpoints.
+- Checkpoint:
+  - `docker compose -f backend/docker-compose.yml up -d`
+  - `mvn -f backend/pom.xml install`
+  - `mvn -f backend/api/pom.xml -Dspring-boot.run.profiles=postgres spring-boot:run`
+  - smoke endpoints.
 
 ## Acceptance criteria (copyable to a GitHub Issue)
 - [ ] Postgres schema migrations exist and create `accounts` + `transactions`.
@@ -69,6 +73,8 @@ You write the code; each step ends with a **check** you can run.
 
 ## Assumptions / defaults (explicit)
 - Local dev DB uses Docker Compose.
+- Local dev Postgres is exposed on host port `55432` to avoid collisions with an already-installed local PostgreSQL on `5432`.
+- Running `backend/api` standalone expects sibling module artifacts to be installed once via `mvn -f backend/pom.xml install`.
 - No FX conversion; currency codes stored as ISO-4217 (3 letters).
 
 ## Suggested follow-up issues (next milestones)

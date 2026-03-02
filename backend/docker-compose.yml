@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mindful-finance-postgres
+    environment:
+      POSTGRES_DB: mindfulfinance
+      POSTGRES_USER: mindfulfinance
+      POSTGRES_PASSWORD: mindfulfinance
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mindfulfinance -d mindfulfinance"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
