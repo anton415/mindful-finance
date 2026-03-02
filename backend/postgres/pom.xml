@@ -16,6 +16,7 @@
     <properties>
         <spring-boot.version>3.2.5</spring-boot.version>
         <testcontainers.version>1.21.4</testcontainers.version>
+        <flyway.version>11.11.0</flyway.version>
     </properties>
 
     <dependencyManagement>
@@ -50,6 +51,12 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <version>${flyway.version}</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
