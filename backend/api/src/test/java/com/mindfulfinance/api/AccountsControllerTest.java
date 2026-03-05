@@ -2,6 +2,7 @@ package com.mindfulfinance.api;
 
 import static org.hamcrest.Matchers.hasItem;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -327,6 +328,46 @@ public class AccountsControllerTest {
     }
 
     @Test
+    public void getMonthlyBurn_groupsOutflowTotalsByCurrencyWithinWindow() throws Exception {
+        String usdAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash USD\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        String eurAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash EUR\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"20.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-02-27\",\"direction\":\"OUTFLOW\",\"amount\":\"50.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", eurAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-12\",\"direction\":\"OUTFLOW\",\"amount\":\"15.00\",\"memo\":\"Taxi\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("20.00"))
+            .andExpect(jsonPath("$.EUR").value("15.00"));
+    }
+
+    @Test
     public void getMonthlySavings_returnsInflowMinusOutflowByCurrencyWithinWindow() throws Exception {
         String usdAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
             .contentType(MediaType.APPLICATION_JSON)
@@ -364,5 +405,46 @@ public class AccountsControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.USD").value("80.00"))
             .andExpect(jsonPath("$.EUR").value("-15.00"));
+    }
+
+    @Test
+    public void getMonthlySavings_withoutAsOf_usesCurrentDateWindow() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate inflowDate = today.minusDays(5);
+        LocalDate outflowDate = today.minusDays(4);
+        LocalDate outsideWindowDate = today.minusDays(31);
+
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash USD\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(String.format("{\"occurredOn\":\"%s\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}", inflowDate)))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(String.format("{\"occurredOn\":\"%s\",\"direction\":\"OUTFLOW\",\"amount\":\"40.00\",\"memo\":\"Rent\"}", outflowDate)))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(String.format("{\"occurredOn\":\"%s\",\"direction\":\"INFLOW\",\"amount\":\"25.00\",\"memo\":\"Outside window\"}", outsideWindowDate)))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-savings"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("60.00"));
+    }
+
+    @Test
+    public void getMonthlySavings_withInvalidAsOf_returns400() throws Exception {
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "31-03-2026"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
     }
 }

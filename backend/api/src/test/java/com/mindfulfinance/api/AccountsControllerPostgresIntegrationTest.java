@@ -159,6 +159,54 @@ public class AccountsControllerPostgresIntegrationTest {
     }
 
     @Test
+    public void monthly_burn_endpoint_with_invalid_as_of_returns_400() throws Exception {
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "31-03-2026"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
+    }
+
+    @Test
+    public void monthly_burn_endpoint_groups_by_currency_with_postgres_profile() throws Exception {
+        String usdAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash USD\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        String eurAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash EUR\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"20.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-02-27\",\"direction\":\"OUTFLOW\",\"amount\":\"50.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", eurAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-12\",\"direction\":\"OUTFLOW\",\"amount\":\"15.00\",\"memo\":\"Taxi\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("20.00"))
+            .andExpect(jsonPath("$.EUR").value("15.00"));
+    }
+
+    @Test
     public void monthly_savings_endpoint_works_with_postgres_profile() throws Exception {
         MvcResult accountResult = mockMvc.perform(post("/accounts")
             .contentType("application/json")
@@ -186,5 +234,53 @@ public class AccountsControllerPostgresIntegrationTest {
         mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.USD").value("65.00"));
+    }
+
+    @Test
+    public void monthly_savings_endpoint_groups_by_currency_with_postgres_profile() throws Exception {
+        String usdAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash USD\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        String eurAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash EUR\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"OUTFLOW\",\"amount\":\"20.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-02-27\",\"direction\":\"INFLOW\",\"amount\":\"40.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", eurAccountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-12\",\"direction\":\"OUTFLOW\",\"amount\":\"15.00\",\"memo\":\"Taxi\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("80.00"))
+            .andExpect(jsonPath("$.EUR").value("-15.00"));
+    }
+
+    @Test
+    public void monthly_savings_endpoint_with_invalid_as_of_returns_400() throws Exception {
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "31-03-2026"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
     }
 }
