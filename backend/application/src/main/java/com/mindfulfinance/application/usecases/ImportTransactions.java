@@ -68,8 +68,15 @@ public final class ImportTransactions {
             transaction.direction() == row.direction() &&
             transaction.amount().amount().compareTo(row.amount()) == 0 &&
             transaction.amount().currency().equals(row.currency()) &&
-            Objects.equals(transaction.memo(), normalizedMemo)
+            memoEqualsIgnoreCase(transaction.memo(), normalizedMemo)
         );
+    }
+
+    private static boolean memoEqualsIgnoreCase(String left, String right) {
+        if (Objects.equals(left, right)) return true;
+        if (left == null || right == null) return false;
+
+        return left.equalsIgnoreCase(right);
     }
 
     private static String normalizeMemo(String memo) {

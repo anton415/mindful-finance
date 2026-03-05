@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -36,7 +38,7 @@ class MigrationSmokeTest {
 
         var result = flyway.migrate();
 
-        assertThat(result.migrationsExecuted).isEqualTo(1);
+        assertEquals(2, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),

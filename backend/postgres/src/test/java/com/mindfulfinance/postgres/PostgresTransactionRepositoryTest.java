@@ -1,20 +1,17 @@
 package com.mindfulfinance.postgres;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
-import static com.mindfulfinance.domain.account.AccountType.CASH;
-import static com.mindfulfinance.domain.transaction.TransactionDirection.INFLOW;
-import static com.mindfulfinance.domain.transaction.TransactionDirection.OUTFLOW;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Currency;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -23,10 +20,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
+import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
+import static com.mindfulfinance.domain.account.AccountType.CASH;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.transaction.Transaction;
-import com.mindfulfinance.domain.transaction.TransactionId;
 import com.mindfulfinance.domain.transaction.TransactionDirection;
+import static com.mindfulfinance.domain.transaction.TransactionDirection.INFLOW;
+import static com.mindfulfinance.domain.transaction.TransactionDirection.OUTFLOW;
+import com.mindfulfinance.domain.transaction.TransactionId;
 
 @Testcontainers
 public class PostgresTransactionRepositoryTest {
@@ -181,5 +182,85 @@ public class PostgresTransactionRepositoryTest {
             memo,
             Instant.parse(createdAt)
         );
+    }
+
+    @Test
+    public void save_duplicate_logical_transaction_throws_duplicate_key() {
+        var account = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        accountRepository.save(account);
+
+        var first = transaction(
+            "33333333-3333-3333-3333-333333333333",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:00:00Z"
+        );
+        var duplicate = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:05:00Z"
+        );
+
+        transactionRepository.save(first);
+
+        assertThatThrownBy(() -> transactionRepository.save(duplicate))
+            .isInstanceOf(DuplicateKeyException.class);
+
+        assertThat(transactionRepository.findByAccountId(account.id()))
+            .containsExactly(first);
+    }
+
+    @Test
+    public void save_duplicate_logical_transaction_with_memo_case_difference_throws_duplicate_key() {
+        var account = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        accountRepository.save(account);
+
+        var first = transaction(
+            "33333333-3333-3333-3333-333333333333",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:00:00Z"
+        );
+        var duplicateWithDifferentCase = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "salary",
+            "2026-03-02T10:05:00Z"
+        );
+
+        transactionRepository.save(first);
+
+        assertThatThrownBy(() -> transactionRepository.save(duplicateWithDifferentCase))
+            .isInstanceOf(DuplicateKeyException.class);
+
+        assertThat(transactionRepository.findByAccountId(account.id()))
+            .containsExactly(first);
     }
 }

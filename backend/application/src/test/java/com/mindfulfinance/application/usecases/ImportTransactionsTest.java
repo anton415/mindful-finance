@@ -126,5 +126,51 @@ public class ImportTransactionsTest {
         assertEquals(1, transactions.findByAccountId(accountId).size());
     }
 
+    @Test
+    @DisplayName("Should treat memo case differences as duplicates during import")
+    void shouldTreatMemoCaseDifferencesAsDuplicatesDuringImport() {
+        AccountId accountId = AccountId.random();
+        Account account = new Account(
+            accountId,
+            "Cash",
+            Currency.getInstance("USD"),
+            CASH,
+            ACTIVE,
+            Instant.parse("2026-03-03T00:00:00Z")
+        );
+        accounts.save(account);
+
+        ImportTransactions useCase = new ImportTransactions(accounts, transactions);
+
+        ImportTransactions.Result first = useCase.importRows(
+            accountId,
+            List.of(
+                new ImportTransactions.Row(
+                    LocalDate.of(2026, 3, 1),
+                    TransactionDirection.INFLOW,
+                    new BigDecimal("100.00"),
+                    Currency.getInstance("USD"),
+                    "Salary"
+                )
+            )
+        );
+        ImportTransactions.Result second = useCase.importRows(
+            accountId,
+            List.of(
+                new ImportTransactions.Row(
+                    LocalDate.of(2026, 3, 1),
+                    TransactionDirection.INFLOW,
+                    new BigDecimal("100.00"),
+                    Currency.getInstance("USD"),
+                    "salary"
+                )
+            )
+        );
+
+        assertEquals(1, first.importedCount());
+        assertEquals(0, second.importedCount());
+        assertEquals(1, transactions.findByAccountId(accountId).size());
+    }
+
 
 }

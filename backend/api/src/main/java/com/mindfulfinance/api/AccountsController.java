@@ -10,18 +10,22 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
@@ -38,17 +42,20 @@ public class AccountsController {
     private final TransactionRepository transactionRepository;
     private final ComputeAccountBalance computeAccountBalance;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
+    private final ImportTransactions importTransactions;
 
     public AccountsController(
         AccountRepository accountRepository,
         TransactionRepository transactionRepository,
         ComputeAccountBalance computeAccountBalance,
-        ComputeNetWorthByCurrency computeNetWorthByCurrency
+        ComputeNetWorthByCurrency computeNetWorthByCurrency,
+        ImportTransactions importTransactions
     ) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.computeAccountBalance = computeAccountBalance;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
+        this.importTransactions = importTransactions;
     }
 
     // Milestone 3: create account endpoint for the HTTP adapter v0.
@@ -114,6 +121,24 @@ public class AccountsController {
             .toList();
     }
 
+    @PostMapping(value = "/imports/transactions/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ImportTransactionsCsvResponse importTransactionsCsv(
+        @RequestParam("accountId") String accountId,
+        @RequestParam("file") MultipartFile file
+    ) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        requireAccount(parsedAccountId);
+
+        List<ImportTransactions.Row> rows = TransactionsCsvParser.parse(file);
+        ImportTransactions.Result result = importTransactions.importRows(parsedAccountId, rows);
+
+        return new ImportTransactionsCsvResponse(
+            rows.size(),
+            result.importedCount(),
+            rows.size() - result.importedCount()
+        );
+    }
+
     // Milestone 3: expose application balance use case over HTTP.
     @GetMapping("/accounts/{accountId}/balance")
     public MoneyDto getBalance(@PathVariable("accountId") String accountId) {
@@ -176,4 +201,6 @@ public class AccountsController {
     ) {}
 
     public record MoneyDto(String amount, String currency) {}
+
+    public record ImportTransactionsCsvResponse(int receivedRows, int importedCount, int skippedDuplicates) {}
 }

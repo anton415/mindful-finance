@@ -1,6 +1,7 @@
 package com.mindfulfinance.api;
 
 import static org.hamcrest.Matchers.hasItem;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,9 +9,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -166,5 +169,124 @@ public class AccountsControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.USD").value("80.00"))
             .andExpect(jsonPath("$.EUR").value("50.00"));
+    }
+
+    @Test
+    public void importTransactionsCsv_forExistingAccount_returnsSummaryAndCreatesTransactions() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,INFLOW,100.00,USD,Salary
+            2026-03-02,OUTFLOW,12.50,USD,Coffee
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(file)
+            .param("accountId", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.receivedRows").value(2))
+            .andExpect(jsonPath("$.importedCount").value(2))
+            .andExpect(jsonPath("$.skippedDuplicates").value(0));
+
+        mockMvc.perform(get("/accounts/{accountId}/transactions", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    public void importTransactionsCsv_repeatedImport_returnsZeroImportedOnSecondRun() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        MockMultipartFile firstUpload = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,INFLOW,100.00,USD,Salary
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+        MockMultipartFile secondUpload = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,INFLOW,100.00,USD,Salary
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(firstUpload)
+            .param("accountId", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.importedCount").value(1));
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(secondUpload)
+            .param("accountId", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.receivedRows").value(1))
+            .andExpect(jsonPath("$.importedCount").value(0))
+            .andExpect(jsonPath("$.skippedDuplicates").value(1));
+    }
+
+    @Test
+    public void importTransactionsCsv_withInvalidDirection_returns400() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,SIDEWAYS,100.00,USD,Salary
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(file)
+            .param("accountId", accountId))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Row 2 has invalid direction 'SIDEWAYS'"));
+    }
+
+    @Test
+    public void importTransactionsCsv_forMissingAccount_returns404() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,INFLOW,100.00,USD,Salary
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(file)
+            .param("accountId", UUID.randomUUID().toString()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 }

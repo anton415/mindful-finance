@@ -16,6 +16,7 @@ import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
 import com.mindfulfinance.postgres.PostgresTransactionRepository;
 
@@ -78,5 +79,10 @@ public class ApiWiringConfig {
     @Bean
     public ComputeNetWorthByCurrency computeNetWorthByCurrency(AccountRepository accountRepository, TransactionRepository transactionRepository) {
         return new ComputeNetWorthByCurrency(accountRepository, transactionRepository);
+    }
+
+    @Bean
+    public ImportTransactions importTransactions(AccountRepository accountRepository, TransactionRepository transactionRepository) {
+        return new ImportTransactions(accountRepository, transactionRepository);
     }
 }
