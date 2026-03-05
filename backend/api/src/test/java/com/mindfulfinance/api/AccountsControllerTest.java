@@ -289,4 +289,40 @@ public class AccountsControllerTest {
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
+
+    @Test
+    public void getMonthlyBurn_returnsOutflowTotalsByCurrencyWithinWindow() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"20.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-02-27\",\"direction\":\"OUTFLOW\",\"amount\":\"50.00\",\"memo\":\"Old\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("20.00"));
+    }
+
+    @Test
+    public void getMonthlyBurn_withInvalidAsOf_returns400() throws Exception {
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "31-03-2026"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
+    }
 }

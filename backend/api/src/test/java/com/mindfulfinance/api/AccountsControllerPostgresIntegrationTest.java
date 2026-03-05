@@ -121,4 +121,29 @@ public class AccountsControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$[0].amount").value("100.00"))
             .andExpect(jsonPath("$.length()").value(1));
     }
+
+    @Test
+    public void monthly_burn_endpoint_works_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-02-20\",\"direction\":\"OUTFLOW\",\"amount\":\"15.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("25.00"));
+    }
 }

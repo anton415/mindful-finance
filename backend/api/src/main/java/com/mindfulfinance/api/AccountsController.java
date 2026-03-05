@@ -3,6 +3,7 @@ package com.mindfulfinance.api;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
+import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.domain.account.Account;
@@ -41,6 +43,7 @@ public class AccountsController {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final ComputeAccountBalance computeAccountBalance;
+    private final ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
 
@@ -48,12 +51,14 @@ public class AccountsController {
         AccountRepository accountRepository,
         TransactionRepository transactionRepository,
         ComputeAccountBalance computeAccountBalance,
+        ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
         ImportTransactions importTransactions
     ) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.computeAccountBalance = computeAccountBalance;
+        this.computeMonthlyBurnByCurrency = computeMonthlyBurnByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
     }
@@ -161,6 +166,22 @@ public class AccountsController {
             ));
     }
 
+    @GetMapping("/peace/monthly-burn")
+    public Map<String, String> getMonthlyBurn(
+        @RequestParam(value = "asOf", required = false) String asOf
+    ) {
+        LocalDate asOfDate = parseAsOfDate(asOf);
+
+        return computeMonthlyBurnByCurrency.compute(asOfDate).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey((left, right) -> left.getCurrencyCode().compareTo(right.getCurrencyCode())))
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().getCurrencyCode(),
+                entry -> entry.getValue().amount().toPlainString(),
+                (left, right) -> right,
+                LinkedHashMap::new
+            ));
+    }
+
     private Account requireAccount(AccountId accountId) {
         return accountRepository
             .find(accountId)
@@ -169,6 +190,15 @@ public class AccountsController {
 
     private static AccountId parseAccountId(String accountId) {
         return new AccountId(UUID.fromString(accountId));
+    }
+
+    private static LocalDate parseAsOfDate(String asOf) {
+        if (asOf == null || asOf.isBlank()) return LocalDate.now();
+        try {
+            return LocalDate.parse(asOf);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid asOf date. Expected format: YYYY-MM-DD");
+        }
     }
 
     private static MoneyDto toMoneyDto(Money money) {
