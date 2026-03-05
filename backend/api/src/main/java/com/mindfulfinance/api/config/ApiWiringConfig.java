@@ -16,6 +16,7 @@ import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
+import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
@@ -85,6 +86,11 @@ public class ApiWiringConfig {
     @Bean
     public ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency(AccountRepository accountRepository, TransactionRepository transactionRepository) {
         return new ComputeMonthlyBurnByCurrency(accountRepository, transactionRepository);
+    }
+
+    @Bean
+    public ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency(AccountRepository accountRepository, TransactionRepository transactionRepository) {
+        return new ComputeMonthlySavingsByCurrency(accountRepository, transactionRepository);
     }
 
     @Bean

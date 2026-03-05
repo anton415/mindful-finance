@@ -325,4 +325,44 @@ public class AccountsControllerTest {
             .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
     }
+
+    @Test
+    public void getMonthlySavings_returnsInflowMinusOutflowByCurrencyWithinWindow() throws Exception {
+        String usdAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash USD\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        String eurAccountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash EUR\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"OUTFLOW\",\"amount\":\"20.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", usdAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-02-27\",\"direction\":\"INFLOW\",\"amount\":\"40.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", eurAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-12\",\"direction\":\"OUTFLOW\",\"amount\":\"15.00\",\"memo\":\"Taxi\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("80.00"))
+            .andExpect(jsonPath("$.EUR").value("-15.00"));
+    }
 }

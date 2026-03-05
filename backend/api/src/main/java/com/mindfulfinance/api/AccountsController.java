@@ -26,6 +26,7 @@ import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
+import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.domain.account.Account;
@@ -44,6 +45,7 @@ public class AccountsController {
     private final TransactionRepository transactionRepository;
     private final ComputeAccountBalance computeAccountBalance;
     private final ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency;
+    private final ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
 
@@ -52,6 +54,7 @@ public class AccountsController {
         TransactionRepository transactionRepository,
         ComputeAccountBalance computeAccountBalance,
         ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
+        ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
         ImportTransactions importTransactions
     ) {
@@ -59,6 +62,7 @@ public class AccountsController {
         this.transactionRepository = transactionRepository;
         this.computeAccountBalance = computeAccountBalance;
         this.computeMonthlyBurnByCurrency = computeMonthlyBurnByCurrency;
+        this.computeMonthlySavingsByCurrency = computeMonthlySavingsByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
     }
@@ -173,6 +177,22 @@ public class AccountsController {
         LocalDate asOfDate = parseAsOfDate(asOf);
 
         return computeMonthlyBurnByCurrency.compute(asOfDate).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey((left, right) -> left.getCurrencyCode().compareTo(right.getCurrencyCode())))
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().getCurrencyCode(),
+                entry -> entry.getValue().amount().toPlainString(),
+                (left, right) -> right,
+                LinkedHashMap::new
+            ));
+    }
+
+    @GetMapping("/peace/monthly-savings")
+    public Map<String, String> getMonthlySavings(
+        @RequestParam(value = "asOf", required = false) String asOf
+    ) {
+        LocalDate asOfDate = parseAsOfDate(asOf);
+
+        return computeMonthlySavingsByCurrency.compute(asOfDate).entrySet().stream()
             .sorted(Map.Entry.comparingByKey((left, right) -> left.getCurrencyCode().compareTo(right.getCurrencyCode())))
             .collect(Collectors.toMap(
                 entry -> entry.getKey().getCurrencyCode(),

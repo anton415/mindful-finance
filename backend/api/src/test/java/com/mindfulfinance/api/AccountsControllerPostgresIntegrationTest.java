@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -41,6 +43,15 @@ public class AccountsControllerPostgresIntegrationTest {
 
     @Autowired
     MockMvc mockMvc;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM transactions");
+        jdbcTemplate.update("DELETE FROM accounts");
+    }
 
     @Test
     public void account_and_transaction_endpoints_work_with_postgres_profile() throws Exception {
@@ -145,5 +156,35 @@ public class AccountsControllerPostgresIntegrationTest {
         mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.USD").value("25.00"));
+    }
+
+    @Test
+    public void monthly_savings_endpoint_works_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-12\",\"direction\":\"OUTFLOW\",\"amount\":\"35.00\",\"memo\":\"Rent\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-02-20\",\"direction\":\"INFLOW\",\"amount\":\"50.00\",\"memo\":\"Outside window\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("65.00"));
     }
 }
