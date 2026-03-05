@@ -47,10 +47,10 @@ You write the code; each step ends with a **check** you can run.
 - Checkpoint: manual smoke test with a small CSV.
 
 ## Acceptance criteria (copyable to a GitHub Issue)
-- [ ] CSV import works end-to-end via API.
-- [ ] Import is idempotent (repeat import does not duplicate).
-- [ ] 2–3 peace metrics exist as application use cases with unit tests.
-- [ ] `mvn -f backend/pom.xml test` passes.
+- [x] CSV import works end-to-end via API.
+- [x] Import is idempotent (repeat import does not duplicate).
+- [x] 2–3 peace metrics exist as application use cases with unit tests.
+- [x] `mvn -f backend/pom.xml test` passes.
 
 ## Assumptions / defaults (explicit)
 - Import is per-account (you pass `accountId` along with the file).
