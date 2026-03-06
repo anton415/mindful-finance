@@ -11,6 +11,10 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
 - **Milestone 3–4:** Adapters — HTTP API + PostgreSQL persistence.
 - **Milestone 5:** Ingestion + “Peace” calculations.
 - **Milestone 6:** Calm UI (React MVP).
+- **Milestone 7:** Safe data management (account/transaction CRUD).
+- **Milestone 8:** Recurring transactions + templates.
+- **Milestone 9:** Goals + planning flows.
+- **Milestone 10:** Richer imports + preview/rules.
 
 ## Milestone index
 - **Milestone 1 — Domain Kernel (Truth Engine v0)**  
@@ -25,3 +29,11 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
   Spec: `milestone-5-ingestion-and-peace-calculator.md` • Tracking: https://github.com/anton415/mindful-finance/issues/12
 - **Milestone 6 — Calm Interface (React MVP v0)**  
   Spec: `milestone-6-calm-interface-react-mvp.md` • Tracking: https://github.com/anton415/mindful-finance/issues/13
+- **Milestone 7 — Safe Data Management (CRUD v1)**  
+  Spec: `milestone-7-safe-data-management-crud.md` • Tracking: https://github.com/anton415/mindful-finance/issues/14
+- **Milestone 8 — Recurring Transactions & Templates (v1)**  
+  Spec: `milestone-8-recurring-transactions-and-templates.md` • Tracking: https://github.com/anton415/mindful-finance/issues/19
+- **Milestone 9 — Goals & Planning (v1)**  
+  Spec: `milestone-9-goals-and-planning.md` • Tracking: https://github.com/anton415/mindful-finance/issues/23
+- **Milestone 10 — Import Rules & Preview (v1)**  
+  Spec: `milestone-10-import-rules-and-preview.md` • Tracking: https://github.com/anton415/mindful-finance/issues/27
