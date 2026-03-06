@@ -37,11 +37,11 @@ You write the code; each step ends with a **check** you can run.
 - Checkpoint: `npm -C frontend run dev` + browse pages with live backend running.
 
 ## Acceptance criteria (copyable to a GitHub Issue)
-- [ ] `frontend/` exists (React + Vite + TS + Tailwind).
-- [ ] UI shows accounts, transactions, and net worth.
-- [ ] UI shows at least 1–2 peace metrics.
-- [ ] Calm defaults: no noisy alerts, readable spacing/typography.
-- [ ] Frontend build succeeds (`npm -C frontend run build`).
+- [x] `frontend/` exists (React + Vite + TS + Tailwind).
+- [x] UI shows accounts, transactions, and net worth.
+- [x] UI shows at least 1–2 peace metrics.
+- [x] Calm defaults: no noisy alerts, readable spacing/typography.
+- [x] Frontend build succeeds (`npm -C frontend run build`).
 
 ## Assumptions / defaults (explicit)
 - Single-user local MVP (no auth).
@@ -50,3 +50,13 @@ You write the code; each step ends with a **check** you can run.
 ## Suggested follow-up issues (next milestones)
 - Add auth + multi-user data separation.
 - Add richer visualization + goal tracking UI.
+
+## Task notes
+- Slice 3a/3b implementation uses a tab-based single-screen layout (`Dashboard` + `Accounts`) instead of route-based pages to keep MVP complexity low.
+- Route-based navigation can be introduced in the Account detail slice once URL-deep-link behavior is needed.
+- Slice 3c adds account detail behavior inside the `Accounts` tab: account selection + transactions list + simple filters (`direction`, `memo contains`).
+- Follow-up fix: accounts loading loop resolved by removing self-canceling effect dependency; accounts reloads are now driven by explicit reload tick events.
+- Follow-up fix: `Create account` form added in Accounts view (name + currency + type) and wired to `POST /accounts`.
+- Next slice: `Create transaction` form added in Account detail (date + direction + amount + memo) and wired to `POST /accounts/{accountId}/transactions`, with immediate list refresh.
+- Next slice: UI localized to Russian and navigation deep-linking added via URL query params (`tab`, `accountId`) so the selected view/account survives refresh and is shareable.
+- Next slice: CSV import form added in Account detail and wired to `POST /imports/transactions/csv` (multipart), including import summary (`received/imported/skipped`) and automatic refresh of transactions + account balances.
