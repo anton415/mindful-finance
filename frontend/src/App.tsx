@@ -37,6 +37,11 @@ interface NavigationState {
 }
 
 const ACCOUNT_TYPE_OPTIONS: AccountType[] = ['CASH', 'DEPOSIT', 'FUND', 'IIS', 'BROKERAGE']
+const ACCOUNT_CURRENCY_OPTIONS: string[] = getAccountCurrencyOptions()
+const DEFAULT_ACCOUNT_CURRENCY =
+  ACCOUNT_CURRENCY_OPTIONS.includes('USD') && ACCOUNT_CURRENCY_OPTIONS.length > 0
+    ? 'USD'
+    : (ACCOUNT_CURRENCY_OPTIONS[0] ?? 'USD')
 const DEFAULT_NAVIGATION_STATE: NavigationState = { tab: 'dashboard', accountId: null }
 
 function App() {
@@ -502,7 +507,7 @@ function AccountsView({
   onRetryTransactions,
 }: AccountsViewProps) {
   const [newAccountName, setNewAccountName] = useState<string>('')
-  const [newAccountCurrency, setNewAccountCurrency] = useState<string>('USD')
+  const [newAccountCurrency, setNewAccountCurrency] = useState<string>(DEFAULT_ACCOUNT_CURRENCY)
   const [newAccountType, setNewAccountType] = useState<AccountType>('CASH')
   const [newTransactionDate, setNewTransactionDate] = useState<string>(todayIsoDate())
   const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
@@ -526,8 +531,7 @@ function AccountsView({
     )
   }
 
-  const currencyCandidate = newAccountCurrency.trim().toUpperCase()
-  const isCurrencyValid = /^[A-Z]{3}$/.test(currencyCandidate)
+  const isCurrencyValid = ACCOUNT_CURRENCY_OPTIONS.includes(newAccountCurrency)
   const canCreate =
     newAccountName.trim().length > 0 && isCurrencyValid && createAccountStatus !== 'submitting'
 
@@ -557,7 +561,7 @@ function AccountsView({
 
     const created = await onCreateAccount({
       name: newAccountName.trim(),
-      currency: currencyCandidate,
+      currency: newAccountCurrency,
       type: newAccountType,
     })
 
@@ -640,14 +644,17 @@ function AccountsView({
             />
 
             <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                type="text"
+              <select
                 value={newAccountCurrency}
-                onChange={(event) => setNewAccountCurrency(event.target.value.toUpperCase())}
-                placeholder="Валюта (USD)"
-                maxLength={3}
+                onChange={(event) => setNewAccountCurrency(event.target.value)}
                 className="block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-              />
+              >
+                {ACCOUNT_CURRENCY_OPTIONS.map((currencyCode) => (
+                  <option key={currencyCode} value={currencyCode}>
+                    {currencyCode}
+                  </option>
+                ))}
+              </select>
 
               <select
                 value={newAccountType}
@@ -656,7 +663,7 @@ function AccountsView({
               >
                 {ACCOUNT_TYPE_OPTIONS.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {toAccountTypeLabel(type)}
                   </option>
                 ))}
               </select>
@@ -664,9 +671,7 @@ function AccountsView({
           </div>
 
           {!isCurrencyValid ? (
-            <p className="mt-2 text-xs text-amber-700">
-              Валюта должна быть в формате 3 букв (например, USD).
-            </p>
+            <p className="mt-2 text-xs text-amber-700">Выберите валюту из списка.</p>
           ) : null}
 
           {createAccountStatus === 'error' && createAccountErrorMessage ? (
@@ -766,8 +771,8 @@ function AccountsView({
                     }
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   >
-                    <option value="OUTFLOW">Расход</option>
-                    <option value="INFLOW">Доход</option>
+                    <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
+                    <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
                   </select>
                 </label>
               </div>
@@ -1069,6 +1074,10 @@ function formatIsoDateRu(isoDate: string): string {
 }
 
 function toDirectionLabel(direction: TransactionDirection): string {
+  return toDirectionSelectLabel(direction)
+}
+
+function toDirectionSelectLabel(direction: TransactionDirection): string {
   return direction === 'INFLOW' ? 'Доход' : 'Расход'
 }
 
@@ -1088,6 +1097,21 @@ function toAccountStatusLabel(status: AccountStatus): string {
     return 'Активный'
   }
   return status
+}
+
+function getAccountCurrencyOptions(): string[] {
+  const fallbackOptions = ['USD', 'EUR', 'RUB', 'GBP', 'CHF', 'CNY', 'JPY', 'KZT', 'TRY']
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: 'calendar' | 'collation' | 'currency' | 'numberingSystem' | 'timeZone' | 'unit') => string[]
+  }
+  const dynamicOptions = intlWithSupportedValues.supportedValuesOf?.('currency')
+  if (!dynamicOptions || dynamicOptions.length === 0) {
+    return fallbackOptions
+  }
+
+  return [...new Set(dynamicOptions.map((currencyCode) => currencyCode.toUpperCase()))].sort((left, right) =>
+    left.localeCompare(right),
+  )
 }
 
 function readNavigationFromUrl(): NavigationState {

@@ -60,3 +60,4 @@ You write the code; each step ends with a **check** you can run.
 - Next slice: `Create transaction` form added in Account detail (date + direction + amount + memo) and wired to `POST /accounts/{accountId}/transactions`, with immediate list refresh.
 - Next slice: UI localized to Russian and navigation deep-linking added via URL query params (`tab`, `accountId`) so the selected view/account survives refresh and is shareable.
 - Next slice: CSV import form added in Account detail and wired to `POST /imports/transactions/csv` (multipart), including import summary (`received/imported/skipped`) and automatic refresh of transactions + account balances.
+- Next slice: account creation now uses a currency dropdown (instead of free text), and account type / transaction direction selections render Russian labels while preserving API enum values.
