@@ -71,7 +71,10 @@ docker compose -f backend/docker-compose.yml down
 3. **Calm UI:** без навязчивых уведомлений; информация показывается по запросу.
 4. **Логика важнее импульса:** подход как в шахматах — оценивать позицию, а не реагировать на последний ход.
 
-## 🚀 Дорожная карта
-- [ ] Фаза 1: Ядро Truth Engine (доменная логика backend)
-- [ ] Фаза 2: Загрузка данных и Peace Calculator
-- [ ] Фаза 3: Calm Interface (React MVP)
+## 🗺 Планирование
+Актуальные milestones и задачи ведутся в GitHub:
+
+- Milestones: https://github.com/anton415/mindful-finance/milestones
+- Issues: https://github.com/anton415/mindful-finance/issues
+
+Спеки этапов проекта лежат в `docs/milestones/`.
