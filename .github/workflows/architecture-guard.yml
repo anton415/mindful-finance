@@ -1,0 +1,36 @@
+name: Architecture Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  framework-boundary:
+    name: Framework boundary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Ensure domain and application poms stay framework-free
+        run: |
+          set -euo pipefail
+
+          if grep -nE 'org\.springframework|spring-boot|jakarta\.persistence|javax\.persistence' \
+            backend/domain/pom.xml backend/application/pom.xml; then
+            echo "Framework dependency leaked into domain/application pom."
+            exit 1
+          fi
+
+      - name: Ensure domain and application sources stay framework-free
+        run: |
+          set -euo pipefail
+
+          if grep -R -nE '^import (org\.springframework|jakarta\.persistence|javax\.persistence)\.' \
+            backend/domain/src/main/java backend/application/src/main/java; then
+            echo "Framework import leaked into domain/application source."
+            exit 1
+          fi

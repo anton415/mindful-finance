@@ -17,6 +17,7 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
 - **Milestone 10:** Richer imports + preview/rules.
 - **Milestone 11:** Russian FIRE engine + backend refactor.
 - **Milestone 12:** Closed beta launch on Yandex Cloud.
+- **Milestone 13:** Engineering automation + bots.
 
 ## Milestone index
 - **Milestone 1 — Domain Kernel (Truth Engine v0)**  
@@ -43,3 +44,5 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
   Spec: `milestone-11-russian-fire-engine-and-backend-refactor.md` • Tracking: https://github.com/anton415/mindful-finance/issues/31
 - **Milestone 12 — Closed Beta Launch on Yandex Cloud (v1)**  
   Spec: `milestone-12-closed-beta-yandex-cloud.md` • Tracking: https://github.com/anton415/mindful-finance/issues/41
+- **Milestone 13 — Engineering Automation & Bots (v1)**  
+  Spec: `milestone-13-engineering-automation-and-bots.md` • Tracking: https://github.com/anton415/mindful-finance/issues/48
