@@ -1,53 +1,77 @@
 # 🌿 Mindful Finance
 
-**The Calm Architect's approach to financial freedom.**
+**Подход Calm Architect к финансовой свободе.**
 
-## 🎯 The Vision
-Most financial apps are designed to keep you addicted with flashing numbers and constant alerts. **Mindful Finance** is built for the "End Game." It prioritizes data integrity (The Truth) and psychological peace (The Calm).
+## 🎯 Видение
+Большинство финансовых приложений специально удерживают внимание мигающими цифрами и постоянными уведомлениями. **Mindful Finance** создаётся для долгосрочной стратегии и конечного результата. В приоритете — целостность данных (Truth) и психологическое спокойствие (Calm).
 
-## 🛠 The Tech Stack
+## 🛠 Технологический стек
 - **Backend:** Java 21, Spring Boot 3.x, PostgreSQL.
 - **Frontend:** React, Vite, TypeScript, Tailwind CSS.
-- **Architecture:** Hexagonal / Clean Architecture.
+- **Архитектура:** Hexagonal / Clean Architecture.
 
-## ✅ Running tests
-Prereqs: Java 21 + Maven.
+## ✅ Запуск тестов
+Требования: Java 21 и Maven.
 
-From repo root:
+Из корня репозитория:
 `mvn -f backend/pom.xml test`
 
-## 🐘 Local PostgreSQL Workflow
-Prereqs: Java 21, Maven, Docker.
+## 🐘 Локальный запуск с PostgreSQL (БД + API + Frontend)
+Требования: Java 21, Maven, Docker, Node.js и npm.
 
-Start Postgres:
+1. Запустите PostgreSQL:
 ```bash
 docker compose -f backend/docker-compose.yml up -d
+docker compose -f backend/docker-compose.yml ps
 ```
 
-The local database is exposed on `localhost:55432` to avoid conflicts with an already-installed PostgreSQL on `5432`.
-
-If you run the `api` module by itself, install backend modules once from repo root so Maven can resolve sibling artifacts:
+2. Если запускаете модуль `api` отдельно, один раз установите backend-модули из корня репозитория:
 ```bash
 mvn -f backend/pom.xml install
 ```
 
-Run the API with the Postgres profile:
+3. Запустите API с профилем `postgres`:
 ```bash
 mvn -f backend/api/pom.xml -Dspring-boot.run.profiles=postgres spring-boot:run
 ```
 
-Stop local Postgres:
+4. Проверьте, что API поднялся:
+```bash
+curl http://localhost:8080/health
+```
+Ожидаемый ответ:
+```json
+{"status":"ok"}
+```
+
+5. В отдельном терминале запустите frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Локальная база данных доступна на `localhost:55432`, чтобы не конфликтовать с PostgreSQL на `5432`.
+
+По умолчанию frontend использует `VITE_API_BASE_URL=/api`, а Vite-прокси перенаправляет запросы на `http://localhost:8080`.
+
+При необходимости параметры подключения к БД можно переопределить переменными окружения:
+- `MINDFUL_FINANCE_DB_URL`
+- `MINDFUL_FINANCE_DB_USERNAME`
+- `MINDFUL_FINANCE_DB_PASSWORD`
+
+Остановить локальный PostgreSQL:
 ```bash
 docker compose -f backend/docker-compose.yml down
 ```
 
-## 🧘 Principles of the System
-1. **Truth First:** No floating-point math for money. `BigDecimal` or nothing.
-2. **Context over Noise:** Show long-term trends, not daily market jitters.
-3. **Calm UI:** No intrusive notifications. Information is served only when requested.
-4. **Logic-Driven:** Inspired by Chess strategy—evaluate the position, don't just react to the last move.
+## 🧘 Принципы системы
+1. **Сначала Truth:** никаких float/double для денег. Только `BigDecimal`.
+2. **Контекст важнее шума:** акцент на долгосрочных трендах, а не на дневных колебаниях.
+3. **Calm UI:** без навязчивых уведомлений; информация показывается по запросу.
+4. **Логика важнее импульса:** подход как в шахматах — оценивать позицию, а не реагировать на последний ход.
 
-## 🚀 Roadmap
-- [ ] Phase 1: Core Truth Engine (Backend Domain Logic)
-- [ ] Phase 2: Ingestion & Peace Calculator
-- [ ] Phase 3: The Calm Interface (React MVP)
+## 🚀 Дорожная карта
+- [ ] Фаза 1: Ядро Truth Engine (доменная логика backend)
+- [ ] Фаза 2: Загрузка данных и Peace Calculator
+- [ ] Фаза 3: Calm Interface (React MVP)
