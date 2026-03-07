@@ -20,9 +20,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language:
-          - java-kotlin
-          - javascript-typescript
+        include:
+          - language: java-kotlin
+            build_mode: manual
+          - language: javascript-typescript
+            build_mode: none
 
     steps:
       - name: Checkout repository
@@ -32,7 +34,7 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          build-mode: manual
+          build-mode: ${{ matrix.build_mode }}
 
       - name: Set up JDK 21
         if: matrix.language == 'java-kotlin'
