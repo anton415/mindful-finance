@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
+import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 
@@ -16,6 +17,13 @@ public final class InMemoryPersonalFinanceCardRepository implements PersonalFina
     @Override
     public Optional<PersonalFinanceCard> find(PersonalFinanceCardId id) {
         return Optional.ofNullable(store.get(id));
+    }
+
+    @Override
+    public Optional<PersonalFinanceCard> findByLinkedAccountId(AccountId linkedAccountId) {
+        return store.values().stream()
+            .filter(card -> card.linkedAccountId().equals(linkedAccountId))
+            .findFirst();
     }
 
     @Override

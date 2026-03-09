@@ -17,10 +17,8 @@ public final class PostgresIncomeForecastRepository implements IncomeForecastRep
 
     private static final RowMapper<IncomeForecast> ROW_MAPPER = (rs, rowNum) -> new IncomeForecast(
         new PersonalFinanceCardId(rs.getObject("card_id", UUID.class)),
-        rs.getInt("year"),
-        rs.getInt("start_month"),
         new Money(rs.getBigDecimal("salary_amount"), RUB),
-        new Money(rs.getBigDecimal("bonus_amount"), RUB)
+        rs.getBigDecimal("bonus_percent")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -30,16 +28,15 @@ public final class PostgresIncomeForecastRepository implements IncomeForecastRep
     }
 
     @Override
-    public Optional<IncomeForecast> findByCardAndYear(PersonalFinanceCardId cardId, int year) {
+    public Optional<IncomeForecast> findByCardId(PersonalFinanceCardId cardId) {
         return jdbcTemplate.query(
             """
-                SELECT card_id, year, start_month, salary_amount, bonus_amount
+                SELECT card_id, salary_amount, bonus_percent
                 FROM personal_finance_income_forecasts
-                WHERE card_id = ? AND year = ?
+                WHERE card_id = ?
                 """,
             ROW_MAPPER,
-            cardId.value(),
-            year
+            cardId.value()
         ).stream().findFirst();
     }
 
@@ -47,30 +44,26 @@ public final class PostgresIncomeForecastRepository implements IncomeForecastRep
     public void upsert(IncomeForecast forecast) {
         jdbcTemplate.update(
             """
-                INSERT INTO personal_finance_income_forecasts (card_id, year, start_month, salary_amount, bonus_amount)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (card_id, year) DO UPDATE SET
-                    start_month = EXCLUDED.start_month,
+                INSERT INTO personal_finance_income_forecasts (card_id, salary_amount, bonus_percent)
+                VALUES (?, ?, ?)
+                ON CONFLICT (card_id) DO UPDATE SET
                     salary_amount = EXCLUDED.salary_amount,
-                    bonus_amount = EXCLUDED.bonus_amount
+                    bonus_percent = EXCLUDED.bonus_percent
                 """,
             forecast.cardId().value(),
-            forecast.year(),
-            forecast.startMonth(),
             forecast.salaryAmount().amount(),
-            forecast.bonusAmount().amount()
+            forecast.bonusPercent()
         );
     }
 
     @Override
-    public void delete(PersonalFinanceCardId cardId, int year) {
+    public void delete(PersonalFinanceCardId cardId) {
         jdbcTemplate.update(
             """
                 DELETE FROM personal_finance_income_forecasts
-                WHERE card_id = ? AND year = ?
+                WHERE card_id = ?
                 """,
-            cardId.value(),
-            year
+            cardId.value()
         );
     }
 }

@@ -39,7 +39,7 @@ class MigrationSmokeTest {
         flyway.clean();
         var result = flyway.migrate();
 
-        assertEquals(4, result.migrationsExecuted);
+        assertEquals(5, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),
@@ -78,6 +78,7 @@ class MigrationSmokeTest {
 
             assertThat(loadColumnTypes(connection, "personal_finance_cards"))
                 .containsEntry("id", "uuid")
+                .containsEntry("linked_account_id", "uuid")
                 .containsEntry("created_at", "timestamp with time zone");
 
             assertThat(loadColumnTypes(connection, "personal_finance_monthly_income_actuals"))
@@ -128,8 +129,10 @@ class MigrationSmokeTest {
             postgres.getUsername(),
             postgres.getPassword())) {
             assertThat(countRows(connection, "personal_finance_cards")).isEqualTo(1);
+            assertThat(countRows(connection, "accounts")).isEqualTo(1);
             assertThat(countRows(connection, "personal_finance_monthly_expense_actuals")).isEqualTo(1);
             assertThat(countRows(connection, "personal_finance_monthly_income_actuals")).isEqualTo(1);
+            assertThat(countRows(connection, "transactions")).isEqualTo(2);
 
             try (var statement = connection.prepareStatement("""
                 SELECT name FROM personal_finance_cards

@@ -23,43 +23,39 @@ public class IncomeForecastTest {
     void total_returns_salary_plus_bonus() {
         IncomeForecast forecast = new IncomeForecast(
             CARD_ID,
-            2026,
-            4,
             new Money(new BigDecimal("205000.00"), RUB),
-            new Money(new BigDecimal("61500.00"), RUB)
+            new BigDecimal("30.00")
         );
 
         assertEquals(0, forecast.totalAmount().amount().compareTo(new BigDecimal("266500.00")));
+        assertEquals(0, forecast.bonusAmount().amount().compareTo(new BigDecimal("61500.00")));
         assertFalse(forecast.isEmpty());
     }
 
     @Test
-    void constructor_rejects_invalid_start_month_and_amounts() {
-        DomainException invalidMonthException = assertThrows(DomainException.class, () -> new IncomeForecast(
-            CARD_ID,
-            2026,
-            13,
-            Money.zero(RUB),
-            Money.zero(RUB)
-        ));
-        assertEquals("Start month must be between 1 and 12", invalidMonthException.getMessage());
-
+    void constructor_rejects_invalid_amounts_and_bonus_percent() {
         DomainException negativeException = assertThrows(DomainException.class, () -> new IncomeForecast(
             CARD_ID,
-            2026,
-            4,
             new Money(new BigDecimal("-1.00"), RUB),
-            Money.zero(RUB)
+            BigDecimal.ZERO
         ));
         assertEquals("Income forecast amount must be non-negative RUB", negativeException.getMessage());
 
         DomainException nonRubException = assertThrows(DomainException.class, () -> new IncomeForecast(
             CARD_ID,
-            2026,
-            4,
             new Money(new BigDecimal("1.00"), USD),
-            Money.zero(RUB)
+            BigDecimal.ZERO
         ));
         assertEquals("Income forecast amount must be non-negative RUB", nonRubException.getMessage());
+
+        DomainException invalidBonusPercentException = assertThrows(DomainException.class, () -> new IncomeForecast(
+            CARD_ID,
+            new Money(new BigDecimal("1.00"), RUB),
+            new BigDecimal("-0.01")
+        ));
+        assertEquals(
+            "Income forecast bonus percent must be non-negative with up to 2 decimals",
+            invalidBonusPercentException.getMessage()
+        );
     }
 }

@@ -23,14 +23,12 @@ public final class SaveIncomeForecast {
 
         IncomeForecast forecast = new IncomeForecast(
             command.cardId(),
-            command.year(),
-            command.startMonth(),
             new Money(orZero(command.salaryAmount()), RUB),
-            new Money(orZero(command.bonusAmount()), RUB)
+            orZero(command.bonusPercent())
         );
 
         if (forecast.isEmpty()) {
-            repository.delete(command.cardId(), command.year());
+            repository.delete(command.cardId());
             return forecast;
         }
 
@@ -44,9 +42,7 @@ public final class SaveIncomeForecast {
 
     public record Command(
         PersonalFinanceCardId cardId,
-        int year,
-        int startMonth,
         BigDecimal salaryAmount,
-        BigDecimal bonusAmount
+        BigDecimal bonusPercent
     ) {}
 }

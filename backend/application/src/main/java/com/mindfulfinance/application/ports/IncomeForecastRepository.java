@@ -6,9 +6,9 @@ import com.mindfulfinance.domain.personalfinance.IncomeForecast;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 
 public interface IncomeForecastRepository {
-    Optional<IncomeForecast> findByCardAndYear(PersonalFinanceCardId cardId, int year);
+    Optional<IncomeForecast> findByCardId(PersonalFinanceCardId cardId);
 
     void upsert(IncomeForecast forecast);
 
-    void delete(PersonalFinanceCardId cardId, int year);
+    void delete(PersonalFinanceCardId cardId);
 }

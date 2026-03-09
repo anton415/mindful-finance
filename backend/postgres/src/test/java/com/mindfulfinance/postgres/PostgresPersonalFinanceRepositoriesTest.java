@@ -1,6 +1,7 @@
 package com.mindfulfinance.postgres;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Currency;
 import java.util.Map;
@@ -16,6 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseActual;
@@ -63,11 +65,41 @@ public class PostgresPersonalFinanceRepositoriesTest {
     }
 
     @Test
-    void repositories_are_card_scoped_and_support_upsert_order_and_delete() {
+    void repositories_are_card_scoped_and_support_upsert_lookup_and_delete() {
         PersonalFinanceCardId firstCardId = new PersonalFinanceCardId(UUID.fromString("4fd714c7-52eb-49e1-9def-74666757f8d0"));
         PersonalFinanceCardId secondCardId = new PersonalFinanceCardId(UUID.fromString("7f2353d6-6b27-4fe6-9c13-5151605bcba8"));
-        cardRepository.save(new PersonalFinanceCard(firstCardId, "Основная карта", Instant.parse("2026-01-01T00:00:00Z")));
-        cardRepository.save(new PersonalFinanceCard(secondCardId, "Резерв", Instant.parse("2026-01-02T00:00:00Z")));
+        AccountId firstLinkedAccountId = new AccountId(UUID.fromString("1d0aef39-a0ba-4fe7-8b34-82d5d727c41a"));
+        AccountId secondLinkedAccountId = new AccountId(UUID.fromString("ac03f92b-f0f4-41e4-a302-a8b1cb15e17d"));
+
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword()
+        ));
+        jdbcTemplate.update(
+            """
+                INSERT INTO accounts (id, name, currency, type, status, created_at)
+                VALUES (?, 'Основная карта', 'RUB', 'CASH', 'ACTIVE', ?),
+                       (?, 'Резерв', 'RUB', 'CASH', 'ACTIVE', ?)
+                """,
+            firstLinkedAccountId.value(),
+            Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")),
+            secondLinkedAccountId.value(),
+            Timestamp.from(Instant.parse("2026-01-02T00:00:00Z"))
+        );
+
+        cardRepository.save(new PersonalFinanceCard(
+            firstCardId,
+            "Основная карта",
+            firstLinkedAccountId,
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+        cardRepository.save(new PersonalFinanceCard(
+            secondCardId,
+            "Резерв",
+            secondLinkedAccountId,
+            Instant.parse("2026-01-02T00:00:00Z")
+        ));
 
         expenseActualRepository.upsert(new MonthlyExpenseActual(
             firstCardId,
@@ -96,8 +128,6 @@ public class PostgresPersonalFinanceRepositoriesTest {
 
         expenseLimitRepository.upsert(new MonthlyExpenseLimit(
             firstCardId,
-            2026,
-            1,
             Map.of(PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("500.00"), RUB))
         ));
         incomeActualRepository.upsert(new MonthlyIncomeActual(
@@ -108,30 +138,31 @@ public class PostgresPersonalFinanceRepositoriesTest {
         ));
         incomeForecastRepository.upsert(new IncomeForecast(
             firstCardId,
-            2026,
-            4,
             new Money(new BigDecimal("1000.00"), RUB),
-            new Money(new BigDecimal("200.00"), RUB)
+            new BigDecimal("20.00")
         ));
 
         assertThat(cardRepository.findAll()).hasSize(2);
+        assertThat(cardRepository.findByLinkedAccountId(firstLinkedAccountId)).isPresent();
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(2);
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026).get(0).month()).isEqualTo(1);
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026).get(1).categoryAmounts()
             .get(PersonalExpenseCategory.RESTAURANTS).amount()).isEqualByComparingTo("300.00");
         assertThat(expenseActualRepository.findByCardAndYear(secondCardId, 2026)).hasSize(1);
-        assertThat(expenseLimitRepository.findByCardAndYear(firstCardId, 2026)).hasSize(1);
+        assertThat(expenseLimitRepository.findByCardId(firstCardId)).isPresent();
         assertThat(incomeActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(1);
-        assertThat(incomeForecastRepository.findByCardAndYear(firstCardId, 2026)).isPresent();
+        assertThat(incomeForecastRepository.findByCardId(firstCardId)).isPresent();
+        assertThat(incomeForecastRepository.findByCardId(firstCardId).orElseThrow().bonusPercent())
+            .isEqualByComparingTo("20.00");
 
         expenseActualRepository.delete(firstCardId, 2026, 1);
-        expenseLimitRepository.delete(firstCardId, 2026, 1);
+        expenseLimitRepository.delete(firstCardId);
         incomeActualRepository.delete(firstCardId, 2026, 3);
-        incomeForecastRepository.delete(firstCardId, 2026);
+        incomeForecastRepository.delete(firstCardId);
 
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(1);
-        assertThat(expenseLimitRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
+        assertThat(expenseLimitRepository.findByCardId(firstCardId)).isEmpty();
         assertThat(incomeActualRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
-        assertThat(incomeForecastRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
+        assertThat(incomeForecastRepository.findByCardId(firstCardId)).isEmpty();
     }
 }

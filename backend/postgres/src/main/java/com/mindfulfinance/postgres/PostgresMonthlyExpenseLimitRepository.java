@@ -3,8 +3,8 @@ package com.mindfulfinance.postgres;
 import java.math.BigDecimal;
 import java.util.Currency;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,8 +32,6 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
         amounts.put(PersonalExpenseCategory.EDUCATION, new Money(rs.getBigDecimal("education"), RUB));
         return new MonthlyExpenseLimit(
             new PersonalFinanceCardId(rs.getObject("card_id", UUID.class)),
-            rs.getInt("year"),
-            rs.getInt("month"),
             amounts
         );
     };
@@ -45,19 +43,17 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
     }
 
     @Override
-    public List<MonthlyExpenseLimit> findByCardAndYear(PersonalFinanceCardId cardId, int year) {
+    public Optional<MonthlyExpenseLimit> findByCardId(PersonalFinanceCardId cardId) {
         return jdbcTemplate.query(
             """
-                SELECT card_id, year, month, restaurants, groceries, personal, utilities, transport,
+                SELECT card_id, restaurants, groceries, personal, utilities, transport,
                        gifts, investments, entertainment, education
                 FROM personal_finance_monthly_expense_limits
-                WHERE card_id = ? AND year = ?
-                ORDER BY month
+                WHERE card_id = ?
                 """,
             ROW_MAPPER,
-            cardId.value(),
-            year
-        );
+            cardId.value()
+        ).stream().findFirst();
     }
 
     @Override
@@ -65,11 +61,11 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
         jdbcTemplate.update(
             """
                 INSERT INTO personal_finance_monthly_expense_limits (
-                    card_id, year, month, restaurants, groceries, personal, utilities, transport,
-                    gifts, investments, entertainment, education
+                    card_id, restaurants, groceries, personal, utilities, transport, gifts, investments,
+                    entertainment, education
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (card_id, year, month) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (card_id) DO UPDATE SET
                     restaurants = EXCLUDED.restaurants,
                     groceries = EXCLUDED.groceries,
                     personal = EXCLUDED.personal,
@@ -81,8 +77,6 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
                     education = EXCLUDED.education
                 """,
             summary.cardId().value(),
-            summary.year(),
-            summary.month(),
             amount(summary, PersonalExpenseCategory.RESTAURANTS),
             amount(summary, PersonalExpenseCategory.GROCERIES),
             amount(summary, PersonalExpenseCategory.PERSONAL),
@@ -96,15 +90,13 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
     }
 
     @Override
-    public void delete(PersonalFinanceCardId cardId, int year, int month) {
+    public void delete(PersonalFinanceCardId cardId) {
         jdbcTemplate.update(
             """
                 DELETE FROM personal_finance_monthly_expense_limits
-                WHERE card_id = ? AND year = ? AND month = ?
+                WHERE card_id = ?
                 """,
-            cardId.value(),
-            year,
-            month
+            cardId.value()
         );
     }
 

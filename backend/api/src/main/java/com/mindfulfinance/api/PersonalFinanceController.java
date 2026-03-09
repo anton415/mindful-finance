@@ -19,10 +19,9 @@ import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
-import com.mindfulfinance.application.usecases.SaveIncomeForecast;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
-import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
+import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
@@ -36,9 +35,8 @@ public class PersonalFinanceController {
     private final CreatePersonalFinanceCard createPersonalFinanceCard;
     private final GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot;
     private final SaveMonthlyExpenseActual saveMonthlyExpenseActual;
-    private final SaveMonthlyExpenseLimit saveMonthlyExpenseLimit;
     private final SaveMonthlyIncomeActual saveMonthlyIncomeActual;
-    private final SaveIncomeForecast saveIncomeForecast;
+    private final SavePersonalFinanceSettings savePersonalFinanceSettings;
 
     public PersonalFinanceController(
         PersonalFinanceCardRepository cardRepository,
@@ -46,18 +44,16 @@ public class PersonalFinanceController {
         CreatePersonalFinanceCard createPersonalFinanceCard,
         GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot,
         SaveMonthlyExpenseActual saveMonthlyExpenseActual,
-        SaveMonthlyExpenseLimit saveMonthlyExpenseLimit,
         SaveMonthlyIncomeActual saveMonthlyIncomeActual,
-        SaveIncomeForecast saveIncomeForecast
+        SavePersonalFinanceSettings savePersonalFinanceSettings
     ) {
         this.cardRepository = cardRepository;
         this.listPersonalFinanceCards = listPersonalFinanceCards;
         this.createPersonalFinanceCard = createPersonalFinanceCard;
         this.getCardPersonalFinanceSnapshot = getCardPersonalFinanceSnapshot;
         this.saveMonthlyExpenseActual = saveMonthlyExpenseActual;
-        this.saveMonthlyExpenseLimit = saveMonthlyExpenseLimit;
         this.saveMonthlyIncomeActual = saveMonthlyIncomeActual;
-        this.saveIncomeForecast = saveIncomeForecast;
+        this.savePersonalFinanceSettings = savePersonalFinanceSettings;
     }
 
     @GetMapping("/personal-finance/cards")
@@ -100,26 +96,7 @@ public class PersonalFinanceController {
             cardId,
             validateYear(request.year()),
             month,
-            toExpenseCategoryAmounts(request)
-        ));
-
-        return ResponseEntity.noContent().build();
-    }
-
-    @PutMapping("/personal-finance/cards/{cardId}/expenses/limits/{month}")
-    public ResponseEntity<Void> updateMonthlyExpenseLimit(
-        @PathVariable("cardId") String rawCardId,
-        @PathVariable("month") int month,
-        @RequestBody UpdateMonthlyExpenseRequest request
-    ) {
-        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
-        validateMonth(month);
-
-        saveMonthlyExpenseLimit.save(new SaveMonthlyExpenseLimit.Command(
-            cardId,
-            validateYear(request.year()),
-            month,
-            toExpenseCategoryAmounts(request)
+            toExpenseCategoryAmounts(request.categoryAmounts(), "Category amounts must not be null")
         ));
 
         return ResponseEntity.noContent().build();
@@ -147,24 +124,22 @@ public class PersonalFinanceController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/personal-finance/cards/{cardId}/income/forecast/{year}")
-    public ResponseEntity<Void> updateIncomeForecast(
+    @PutMapping("/personal-finance/cards/{cardId}/settings")
+    public ResponseEntity<Void> updateSettings(
         @PathVariable("cardId") String rawCardId,
-        @PathVariable("year") int year,
-        @RequestBody UpdateIncomeForecastRequest request
+        @RequestBody UpdateCardSettingsRequest request
     ) {
         PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
-        validateYear(year);
         if (request == null) {
             throw new IllegalArgumentException("Request body must not be null");
         }
 
-        saveIncomeForecast.save(new SaveIncomeForecast.Command(
+        savePersonalFinanceSettings.save(new SavePersonalFinanceSettings.Command(
             cardId,
-            year,
-            request.startMonth(),
+            request.baselineAmount(),
+            toExpenseCategoryAmounts(request.limitCategoryAmounts(), "Limit category amounts must not be null"),
             request.salaryAmount(),
-            request.bonusAmount()
+            request.bonusPercent()
         ));
 
         return ResponseEntity.noContent().build();
@@ -205,14 +180,15 @@ public class PersonalFinanceController {
     }
 
     private static Map<PersonalExpenseCategory, BigDecimal> toExpenseCategoryAmounts(
-        UpdateMonthlyExpenseRequest request
+        Map<String, BigDecimal> rawCategoryAmounts,
+        String nullMessage
     ) {
-        if (request == null || request.categoryAmounts() == null) {
-            throw new IllegalArgumentException("Category amounts must not be null");
+        if (rawCategoryAmounts == null) {
+            throw new IllegalArgumentException(nullMessage);
         }
 
         Map<PersonalExpenseCategory, BigDecimal> result = new LinkedHashMap<>();
-        for (Map.Entry<String, BigDecimal> entry : request.categoryAmounts().entrySet()) {
+        for (Map.Entry<String, BigDecimal> entry : rawCategoryAmounts.entrySet()) {
             if (entry.getKey() == null || entry.getKey().isBlank()) {
                 throw new IllegalArgumentException("Expense category code must not be blank");
             }
@@ -262,8 +238,15 @@ public class PersonalFinanceController {
                     ))
                     .toList(),
                 snapshot.income().annualTotal().amount().toPlainString(),
-                snapshot.income().averageMonthlyTotal().amount().toPlainString(),
-                toForecastDto(snapshot.income().forecast())
+                snapshot.income().averageMonthlyTotal().amount().toPlainString()
+            ),
+            new SettingsSectionDto(
+                snapshot.settings().linkedAccountId().value().toString(),
+                snapshot.settings().currentBalance().amount().toPlainString(),
+                snapshot.settings().baselineAmount().amount().toPlainString(),
+                toStringAmountMap(snapshot.settings().recurringLimitCategoryAmounts()),
+                snapshot.settings().recurringLimitTotal().amount().toPlainString(),
+                toForecastDto(snapshot.settings().incomeForecast())
             )
         );
     }
@@ -272,6 +255,7 @@ public class PersonalFinanceController {
         return new PersonalFinanceCardDto(
             card.id().value().toString(),
             card.name(),
+            card.linkedAccountId().value().toString(),
             card.createdAt().toString()
         );
     }
@@ -282,8 +266,8 @@ public class PersonalFinanceController {
         }
 
         return new IncomeForecastDto(
-            forecast.startMonth(),
             forecast.salaryAmount().amount().toPlainString(),
+            forecast.bonusPercent().toPlainString(),
             forecast.bonusAmount().amount().toPlainString(),
             forecast.totalAmount().amount().toPlainString()
         );
@@ -321,7 +305,12 @@ public class PersonalFinanceController {
 
     public record UpdateMonthlyIncomeActualRequest(int year, BigDecimal totalAmount) {}
 
-    public record UpdateIncomeForecastRequest(int startMonth, BigDecimal salaryAmount, BigDecimal bonusAmount) {}
+    public record UpdateCardSettingsRequest(
+        BigDecimal baselineAmount,
+        Map<String, BigDecimal> limitCategoryAmounts,
+        BigDecimal salaryAmount,
+        BigDecimal bonusPercent
+    ) {}
 
     public record PersonalFinanceSnapshotDto(
         List<PersonalFinanceCardDto> cards,
@@ -330,10 +319,11 @@ public class PersonalFinanceController {
         String currency,
         List<ExpenseCategoryDto> categories,
         ExpensesSectionDto expenses,
-        IncomeSectionDto income
+        IncomeSectionDto income,
+        SettingsSectionDto settings
     ) {}
 
-    public record PersonalFinanceCardDto(String id, String name, String createdAt) {}
+    public record PersonalFinanceCardDto(String id, String name, String linkedAccountId, String createdAt) {}
 
     public record ExpenseCategoryDto(String code, String label) {}
 
@@ -357,8 +347,7 @@ public class PersonalFinanceController {
     public record IncomeSectionDto(
         List<IncomeMonthDto> months,
         String annualTotal,
-        String averageMonthlyTotal,
-        IncomeForecastDto forecast
+        String averageMonthlyTotal
     ) {}
 
     public record IncomeMonthDto(
@@ -367,9 +356,18 @@ public class PersonalFinanceController {
         String status
     ) {}
 
+    public record SettingsSectionDto(
+        String linkedAccountId,
+        String currentBalance,
+        String baselineAmount,
+        Map<String, String> recurringLimitCategoryAmounts,
+        String recurringLimitTotal,
+        IncomeForecastDto incomeForecast
+    ) {}
+
     public record IncomeForecastDto(
-        int startMonth,
         String salaryAmount,
+        String bonusPercent,
         String bonusAmount,
         String totalAmount
     ) {}

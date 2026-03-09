@@ -96,4 +96,16 @@ public final class PostgresTransactionRepository implements TransactionRepositor
             throw new IllegalStateException("Transaction not found");
         }
     }
+
+    @Override
+    public void delete(AccountId accountId, TransactionId transactionId) {
+        jdbcTemplate.update(
+            """
+                DELETE FROM transactions
+                WHERE id = ? AND account_id = ?
+                """,
+            transactionId.value(),
+            accountId.value()
+        );
+    }
 }

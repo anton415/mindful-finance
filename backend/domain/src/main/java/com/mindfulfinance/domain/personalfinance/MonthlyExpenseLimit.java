@@ -8,15 +8,11 @@ import java.util.Map;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.MONTHLY_EXPENSE_LIMIT_AMOUNT_INVALID;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.MONTHLY_EXPENSE_LIMIT_CARD_ID_INVALID;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.MONTHLY_EXPENSE_LIMIT_CATEGORY_AMOUNTS_INVALID;
-import static com.mindfulfinance.domain.shared.DomainErrorCode.MONTHLY_EXPENSE_LIMIT_MONTH_INVALID;
-import static com.mindfulfinance.domain.shared.DomainErrorCode.MONTHLY_EXPENSE_LIMIT_YEAR_INVALID;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.shared.DomainException;
 
 public record MonthlyExpenseLimit(
     PersonalFinanceCardId cardId,
-    int year,
-    int month,
     Map<PersonalExpenseCategory, Money> categoryAmounts
 ) {
     private static final Currency RUB = Currency.getInstance("RUB");
@@ -27,20 +23,6 @@ public record MonthlyExpenseLimit(
                 MONTHLY_EXPENSE_LIMIT_CARD_ID_INVALID,
                 "Card id must not be null",
                 null
-            );
-        }
-        if (year < 1 || year > 9999) {
-            throw new DomainException(
-                MONTHLY_EXPENSE_LIMIT_YEAR_INVALID,
-                "Year must be between 1 and 9999",
-                Map.of("year", year)
-            );
-        }
-        if (month < 1 || month > 12) {
-            throw new DomainException(
-                MONTHLY_EXPENSE_LIMIT_MONTH_INVALID,
-                "Month must be between 1 and 12",
-                Map.of("month", month)
             );
         }
         if (categoryAmounts == null) {
@@ -74,8 +56,8 @@ public record MonthlyExpenseLimit(
         categoryAmounts = Collections.unmodifiableMap(normalized);
     }
 
-    public static MonthlyExpenseLimit empty(PersonalFinanceCardId cardId, int year, int month) {
-        return new MonthlyExpenseLimit(cardId, year, month, Map.of());
+    public static MonthlyExpenseLimit empty(PersonalFinanceCardId cardId) {
+        return new MonthlyExpenseLimit(cardId, Map.of());
     }
 
     public Money total() {

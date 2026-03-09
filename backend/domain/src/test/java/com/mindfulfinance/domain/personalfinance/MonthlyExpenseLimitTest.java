@@ -23,8 +23,6 @@ public class MonthlyExpenseLimitTest {
     void constructor_computes_total() {
         MonthlyExpenseLimit summary = new MonthlyExpenseLimit(
             CARD_ID,
-            2026,
-            2,
             Map.of(
                 PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("1500.00"), RUB),
                 PersonalExpenseCategory.GROCERIES, new Money(new BigDecimal("2500.00"), RUB)
@@ -38,16 +36,12 @@ public class MonthlyExpenseLimitTest {
     void constructor_rejects_negative_or_non_rub_amounts() {
         DomainException negativeException = assertThrows(DomainException.class, () -> new MonthlyExpenseLimit(
             CARD_ID,
-            2026,
-            2,
             Map.of(PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("-1.00"), RUB))
         ));
         assertEquals("Expense limit amount must be non-negative RUB", negativeException.getMessage());
 
         DomainException nonRubException = assertThrows(DomainException.class, () -> new MonthlyExpenseLimit(
             CARD_ID,
-            2026,
-            2,
             Map.of(PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("1.00"), USD))
         ));
         assertEquals("Expense limit amount must be non-negative RUB", nonRubException.getMessage());

@@ -4,14 +4,15 @@ import type {
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
+  PersonalFinanceIncomeForecastDto,
   PersonalFinanceSnapshotDto,
-  UpdateIncomeForecastRequest,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceSettingsRequest,
 } from '../../api'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-export type PersonalFinanceTab = 'expenses' | 'income'
+export type PersonalFinanceTab = 'expenses' | 'income' | 'settings'
 
 interface PersonalFinanceViewProps {
   status: LoadStatus
@@ -27,9 +28,8 @@ interface PersonalFinanceViewProps {
   onRetry: () => void
   onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
-  onSaveExpenseLimit: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
   onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
-  onSaveIncomeForecast: (request: UpdateIncomeForecastRequest) => Promise<boolean>
+  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
 }
 
 const MONTH_LABELS = [
@@ -61,9 +61,8 @@ export function PersonalFinanceView({
   onRetry,
   onCreateCard,
   onSaveExpenseActual,
-  onSaveExpenseLimit,
   onSaveIncomeActual,
-  onSaveIncomeForecast,
+  onSaveSettings,
 }: PersonalFinanceViewProps) {
   const [newCardName, setNewCardName] = useState<string>('')
   const [createCardStatus, setCreateCardStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -116,8 +115,8 @@ export function PersonalFinanceView({
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
               <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                Годовой manual review по выбранной карте: фактические расходы, лимиты, фактический
-                доход и прогноз на будущие месяцы.
+                Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
+                лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
               </p>
             </div>
 
@@ -206,14 +205,16 @@ export function PersonalFinanceView({
             isActive={activeTab === 'income'}
             onClick={() => onSelectTab('income')}
           />
+          <NestedTabButton
+            label="Настройки"
+            isActive={activeTab === 'settings'}
+            onClick={() => onSelectTab('settings')}
+          />
         </nav>
       </section>
 
       {!hasCards ? (
-        <InlineStatus
-          tone="neutral"
-          message="Добавьте первую карту, чтобы вести yearly review расходов и доходов."
-        />
+        <InlineStatus tone="neutral" message="Добавьте первую карту, чтобы начать review по месяцам." />
       ) : !snapshot ? (
         <InlineStatus tone="neutral" message="Выберите карту, чтобы загрузить данные." />
       ) : activeTab === 'expenses' ? (
@@ -221,14 +222,18 @@ export function PersonalFinanceView({
           key={`expenses-${snapshot.card.id}-${snapshot.year}`}
           snapshot={snapshot}
           onSaveExpenseActual={onSaveExpenseActual}
-          onSaveExpenseLimit={onSaveExpenseLimit}
         />
-      ) : (
+      ) : activeTab === 'income' ? (
         <IncomeTab
           key={`income-${snapshot.card.id}-${snapshot.year}`}
           snapshot={snapshot}
           onSaveIncomeActual={onSaveIncomeActual}
-          onSaveIncomeForecast={onSaveIncomeForecast}
+        />
+      ) : (
+        <SettingsTab
+          key={`settings-${snapshot.card.id}-${snapshot.year}-${snapshot.settings.currentBalance}`}
+          snapshot={snapshot}
+          onSaveSettings={onSaveSettings}
         />
       )}
     </div>
@@ -238,53 +243,36 @@ export function PersonalFinanceView({
 interface ExpensesTabProps {
   snapshot: PersonalFinanceSnapshotDto
   onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
-  onSaveExpenseLimit: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
 }
 
-function ExpensesTab({ snapshot, onSaveExpenseActual, onSaveExpenseLimit }: ExpensesTabProps) {
+function ExpensesTab({ snapshot, onSaveExpenseActual }: ExpensesTabProps) {
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
-
   const selectedMonthData =
     snapshot.expenses.months.find((month) => month.month === selectedMonth) ?? snapshot.expenses.months[0]
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,720px)_minmax(0,1fr)]">
-      <section className="space-y-4">
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
         <MonthSelectorCard
           title="Месяц для ввода"
-          description="Факт расходов и лимиты сохраняются отдельно, но всегда для одного и того же месяца."
+          description="Выберите месяц, для которого сохраняется фактический расход."
           selectedMonth={selectedMonth}
           onSelectMonth={setSelectedMonth}
         />
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ExpenseEntryFormCard
-            key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
-            title="Фактические расходы"
-            description="Введите итоговые суммы по категориям из банковского приложения за месяц."
-            submitLabel="Сохранить факт"
-            month={selectedMonth}
-            year={snapshot.year}
-            currency={snapshot.currency}
-            categories={snapshot.categories}
-            initialValues={selectedMonthData.actualCategoryAmounts}
-            onSave={onSaveExpenseActual}
-          />
-
-          <ExpenseEntryFormCard
-            key={`limit-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.limitCategoryAmounts, snapshot.categories)}`}
-            title="Лимиты по категориям"
-            description="Лимиты помогают сразу видеть перерасход. Нули очищают месяц."
-            submitLabel="Сохранить лимиты"
-            month={selectedMonth}
-            year={snapshot.year}
-            currency={snapshot.currency}
-            categories={snapshot.categories}
-            initialValues={selectedMonthData.limitCategoryAmounts}
-            onSave={onSaveExpenseLimit}
-          />
-        </div>
-      </section>
+        <ExpenseEntryFormCard
+          key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
+          title="Фактические расходы"
+          description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
+          submitLabel="Сохранить факт"
+          month={selectedMonth}
+          year={snapshot.year}
+          currency={snapshot.currency}
+          categories={snapshot.categories}
+          initialValues={selectedMonthData.actualCategoryAmounts}
+          onSave={onSaveExpenseActual}
+        />
+      </div>
 
       <ExpenseReviewTable snapshot={snapshot} />
     </div>
@@ -294,42 +282,328 @@ function ExpensesTab({ snapshot, onSaveExpenseActual, onSaveExpenseLimit }: Expe
 interface IncomeTabProps {
   snapshot: PersonalFinanceSnapshotDto
   onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
-  onSaveIncomeForecast: (request: UpdateIncomeForecastRequest) => Promise<boolean>
 }
 
-function IncomeTab({ snapshot, onSaveIncomeActual, onSaveIncomeForecast }: IncomeTabProps) {
-  const [selectedActualMonth, setSelectedActualMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
-
-  const selectedActualMonthData =
-    snapshot.income.months.find((month) => month.month === selectedActualMonth) ?? snapshot.income.months[0]
-  const forecastMonthOptions = forecastMonthNumbers(snapshot.year)
+function IncomeTab({ snapshot, onSaveIncomeActual }: IncomeTabProps) {
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
+  const selectedMonthData =
+    snapshot.income.months.find((month) => month.month === selectedMonth) ?? snapshot.income.months[0]
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,720px)_minmax(0,1fr)]">
-      <section className="space-y-4">
-        <IncomeActualFormCard
-          key={`actual-income-${snapshot.card.id}-${snapshot.year}-${selectedActualMonth}-${selectedActualMonthData.totalAmount}-${selectedActualMonthData.status ?? 'EMPTY'}`}
-          year={snapshot.year}
-          currency={snapshot.currency}
-          selectedMonth={selectedActualMonth}
-          onSelectMonth={setSelectedActualMonth}
-          initialAmount={selectedActualMonthData.status === 'ACTUAL' ? selectedActualMonthData.totalAmount : ''}
-          onSave={onSaveIncomeActual}
-        />
+    <div className="space-y-4">
+      <IncomeActualFormCard
+        key={`actual-income-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
+        year={snapshot.year}
+        currency={snapshot.currency}
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
+        onSave={onSaveIncomeActual}
+      />
 
-        <IncomeForecastFormCard
-          key={`income-forecast-${snapshot.card.id}-${snapshot.year}-${snapshot.income.forecast?.startMonth ?? 'none'}-${snapshot.income.forecast?.salaryAmount ?? '0'}-${snapshot.income.forecast?.bonusAmount ?? '0'}`}
-          year={snapshot.year}
-          currency={snapshot.currency}
-          monthOptions={forecastMonthOptions}
-          initialStartMonth={resolveForecastStartMonth(snapshot.year, snapshot.income.forecast?.startMonth)}
-          initialSalaryAmount={snapshot.income.forecast?.salaryAmount ?? ''}
-          initialBonusAmount={snapshot.income.forecast?.bonusAmount ?? ''}
-          onSave={onSaveIncomeForecast}
+      <RecurringIncomeSummaryCard
+        currency={snapshot.currency}
+        forecast={snapshot.settings.incomeForecast}
+      />
+
+      <IncomeReviewTable snapshot={snapshot} />
+    </div>
+  )
+}
+
+interface SettingsTabProps {
+  snapshot: PersonalFinanceSnapshotDto
+  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+}
+
+function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
+  const [baselineAmount, setBaselineAmount] = useState<string>(
+    toDraftAmount(snapshot.settings.baselineAmount),
+  )
+  const [salaryAmount, setSalaryAmount] = useState<string>(
+    toDraftAmount(snapshot.settings.incomeForecast?.salaryAmount ?? '0.00'),
+  )
+  const [bonusPercent, setBonusPercent] = useState<string>(
+    toDraftAmount(snapshot.settings.incomeForecast?.bonusPercent ?? '0.00'),
+  )
+  const [limitValues, setLimitValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
+    toExpenseDraftValues(snapshot.settings.recurringLimitCategoryAmounts, snapshot.categories),
+  )
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const areBaseValuesValid =
+    isValidNonNegativeAmountValue(baselineAmount) &&
+    isValidNonNegativeAmountValue(salaryAmount) &&
+    isValidNonNegativeAmountValue(bonusPercent)
+  const areLimitsValid = snapshot.categories.every((category) =>
+    isValidNonNegativeAmountValue(limitValues[category.code]),
+  )
+  const canSave = areBaseValuesValid && areLimitsValid && status !== 'submitting'
+  const recurringLimitTotal = sumDecimalAmountStrings(
+    snapshot.categories.map((category) => toDecimalAmountString(limitValues[category.code])),
+  )
+  const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!canSave) {
+      return
+    }
+
+    setStatus('submitting')
+    setErrorMessage(null)
+
+    const saved = await onSaveSettings({
+      baselineAmount: toDecimalAmountString(baselineAmount),
+      limitCategoryAmounts: snapshot.categories.reduce(
+        (result, category) => ({
+          ...result,
+          [category.code]: toDecimalAmountString(limitValues[category.code]),
+        }),
+        {} as Record<PersonalExpenseCategoryCode, string>,
+      ),
+      salaryAmount: toDecimalAmountString(salaryAmount),
+      bonusPercent: toDecimalAmountString(bonusPercent),
+    })
+
+    if (saved) {
+      setStatus('idle')
+      return
+    }
+
+    setStatus('error')
+    setErrorMessage('Не удалось сохранить настройки.')
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="grid gap-4 lg:grid-cols-3">
+        <MetricTile
+          label="Текущий баланс карты"
+          value={formatAmountWithCurrency(snapshot.settings.currentBalance, snapshot.currency)}
+          hint="Считается из baseline и фактических доходов/расходов."
+        />
+        <MetricTile
+          label="Связанный счёт"
+          value={snapshot.settings.linkedAccountId}
+          hint="Этот cash account виден в Инвестициях, но редактируется только отсюда."
+        />
+        <MetricTile
+          label="Повторяющийся лимит"
+          value={formatAmountWithCurrency(recurringLimitTotal, snapshot.currency)}
+          hint="Одинаковый месячный лимит по всем категориям."
         />
       </section>
 
-      <IncomeReviewTable snapshot={snapshot} />
+      <form
+        className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4"
+        onSubmit={(event) => {
+          void handleSubmit(event)
+        }}
+      >
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Настройки карты</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Эти значения задаются один раз и переиспользуются для каждого месяца любого выбранного года.
+          </p>
+        </div>
+
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm text-slate-600">
+              Начальный баланс карты
+              <input
+                type="text"
+                inputMode="decimal"
+                value={baselineAmount}
+                onChange={(event) => setBaselineAmount(normalizeAmountInput(event.target.value))}
+                placeholder="0.00"
+                className={inputClassName(isValidNonNegativeAmountValue(baselineAmount))}
+              />
+            </label>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сейчас на карте</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatAmountWithCurrency(snapshot.settings.currentBalance, snapshot.currency)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Меняется от фактических monthly income и expense записей.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Лимиты по категориям</h4>
+              <p className="mt-1 text-sm text-slate-600">
+                Эти лимиты попадают в каждую строку годовой таблицы расходов.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Итого лимит</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {formatAmountWithCurrency(recurringLimitTotal, snapshot.currency)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {snapshot.categories.map((category) => (
+              <label key={category.code} className="text-sm text-slate-600">
+                {category.label}
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={limitValues[category.code]}
+                  onChange={(event) =>
+                    setLimitValues((current) => ({
+                      ...current,
+                      [category.code]: normalizeAmountInput(event.target.value),
+                    }))
+                  }
+                  placeholder="0.00"
+                  className={inputClassName(isValidNonNegativeAmountValue(limitValues[category.code]))}
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Прогноз доходов</h4>
+              <p className="mt-1 text-sm text-slate-600">
+                Оклад заполняется рублями, премия заполняется процентами. Прогноз используется только
+                там, где нет факта.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Прогноз в месяц</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {formatAmountWithCurrency(monthlyForecast, snapshot.currency)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="text-sm text-slate-600">
+              Оклад (RUB)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={salaryAmount}
+                onChange={(event) => setSalaryAmount(normalizeAmountInput(event.target.value))}
+                placeholder="0.00"
+                className={inputClassName(isValidNonNegativeAmountValue(salaryAmount))}
+              />
+            </label>
+
+            <label className="text-sm text-slate-600">
+              Премия (%)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={bonusPercent}
+                onChange={(event) => setBonusPercent(normalizeAmountInput(event.target.value))}
+                placeholder="0.00"
+                className={inputClassName(isValidNonNegativeAmountValue(bonusPercent))}
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <MetricTile
+              label="Оклад"
+              value={formatAmountWithCurrency(toDecimalAmountString(salaryAmount), snapshot.currency)}
+            />
+            <MetricTile
+              label="Премия"
+              value={`${formatAmount(toDecimalAmountString(bonusPercent))}%`}
+            />
+            <MetricTile
+              label="Расчётная премия"
+              value={formatAmountWithCurrency(calculateBonusAmount(salaryAmount, bonusPercent), snapshot.currency)}
+            />
+          </div>
+        </section>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="text-sm text-slate-600">
+            Только фактические доходы и расходы двигают баланс linked account.
+          </div>
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {status === 'submitting' ? 'Сохраняем...' : 'Сохранить настройки'}
+          </button>
+        </div>
+
+        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
+        {!areBaseValuesValid || !areLimitsValid ? (
+          <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
+        ) : null}
+      </form>
+    </div>
+  )
+}
+
+function RecurringIncomeSummaryCard({
+  currency,
+  forecast,
+}: {
+  currency: string
+  forecast: PersonalFinanceIncomeForecastDto | null
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4">
+      <h3 className="text-base font-semibold text-slate-900">Повторяющийся прогноз доходов</h3>
+      {forecast ? (
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <MetricTile
+            label="Оклад"
+            value={formatAmountWithCurrency(forecast.salaryAmount, currency)}
+          />
+          <MetricTile label="Премия" value={`${formatAmount(forecast.bonusPercent)}%`} />
+          <MetricTile
+            label="Премия в рублях"
+            value={formatAmountWithCurrency(forecast.bonusAmount, currency)}
+          />
+          <MetricTile
+            label="Прогноз в месяц"
+            value={formatAmountWithCurrency(forecast.totalAmount, currency)}
+          />
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-slate-600">
+          Прогноз ещё не задан. Его можно настроить на вкладке настроек.
+        </p>
+      )}
+    </section>
+  )
+}
+
+function MetricTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string
+  hint?: string
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-1 break-all text-sm font-semibold text-slate-900">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   )
 }
@@ -395,9 +669,6 @@ function ExpenseEntryFormCard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const hasInvalidValues = categories.some((category) => !isValidNonNegativeAmountValue(draftValues[category.code]))
-  const isDirty = categories.some(
-    (category) => toDecimalAmountString(draftValues[category.code]) !== initialValues[category.code],
-  )
   const total = sumDecimalAmountStrings(
     categories.map((category) => toDecimalAmountString(draftValues[category.code])),
   )
@@ -430,7 +701,7 @@ function ExpenseEntryFormCard({
     }
 
     setStatus('error')
-    setErrorMessage('Не удалось сохранить форму.')
+    setErrorMessage('Не удалось сохранить фактические расходы.')
   }
 
   return (
@@ -452,7 +723,7 @@ function ExpenseEntryFormCard({
           void handleSubmit(event)
         }}
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {categories.map((category) => (
             <label key={category.code} className="text-sm text-slate-600">
               {category.label}
@@ -467,11 +738,7 @@ function ExpenseEntryFormCard({
                   }))
                 }
                 placeholder="0.00"
-                className={`mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
-                  isValidNonNegativeAmountValue(draftValues[category.code])
-                    ? 'border-slate-200 text-slate-900'
-                    : 'border-rose-300 text-rose-700'
-                }`}
+                className={inputClassName(isValidNonNegativeAmountValue(draftValues[category.code]))}
               />
             </label>
           ))}
@@ -497,25 +764,18 @@ function ExpenseEntryFormCard({
         {hasInvalidValues ? (
           <p className="text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
         ) : null}
-        {!isDirty ? (
-          <p className="text-xs text-slate-500">Форма уже совпадает с сохранёнными значениями.</p>
-        ) : null}
       </form>
     </section>
   )
 }
 
-interface ExpenseReviewTableProps {
-  snapshot: PersonalFinanceSnapshotDto
-}
-
-function ExpenseReviewTable({ snapshot }: ExpenseReviewTableProps) {
+function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица расходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          В каждой ячейке показаны факт и лимит. Перерасход подсвечивается.
+          Факт вводится по месяцам, а лимит повторяется из настроек для каждой строки одинаково.
         </p>
       </div>
 
@@ -674,18 +934,22 @@ function IncomeActualFormCard({
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-slate-900">Фактический доход</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        По умолчанию форма открывает текущий месяц выбранного года и сохраняет только итоговую сумму.
-      </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Фактический доход</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Сохраняется только итоговая сумма за выбранный месяц.
+          </p>
+        </div>
+      </div>
 
       <form
-        className="mt-4 space-y-3"
+        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)_auto]"
         onSubmit={(event) => {
           void handleSubmit(event)
         }}
       >
-        <label className="block text-sm text-slate-600">
+        <label className="text-sm text-slate-600">
           Месяц
           <select
             value={selectedMonth}
@@ -700,7 +964,7 @@ function IncomeActualFormCard({
           </select>
         </label>
 
-        <label className="block text-sm text-slate-600">
+        <label className="text-sm text-slate-600">
           Итоговый доход
           <input
             type="text"
@@ -708,195 +972,43 @@ function IncomeActualFormCard({
             value={amount}
             onChange={(event) => setAmount(normalizeAmountInput(event.target.value))}
             placeholder="0.00"
-            className={`mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
-              isValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
-            }`}
+            className={inputClassName(isValid)}
           />
         </label>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
-              {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
-            </p>
-          </div>
+        <div className="flex items-end">
           <button
             type="submit"
             disabled={!isValid || status === 'submitting'}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 lg:w-auto"
           >
             {status === 'submitting' ? 'Сохраняем...' : 'Сохранить факт'}
           </button>
         </div>
-
-        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
-        {!isValid ? (
-          <p className="text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
-        ) : null}
       </form>
+
+      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
+        <p className="mt-1 text-lg font-semibold text-slate-900">
+          {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
+        </p>
+      </div>
+
+      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {!isValid ? (
+        <p className="mt-3 text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
+      ) : null}
     </section>
   )
 }
 
-interface IncomeForecastFormCardProps {
-  year: number
-  currency: string
-  monthOptions: number[]
-  initialStartMonth: number
-  initialSalaryAmount: string
-  initialBonusAmount: string
-  onSave: (request: UpdateIncomeForecastRequest) => Promise<boolean>
-}
-
-function IncomeForecastFormCard({
-  year,
-  currency,
-  monthOptions,
-  initialStartMonth,
-  initialSalaryAmount,
-  initialBonusAmount,
-  onSave,
-}: IncomeForecastFormCardProps) {
-  const [startMonth, setStartMonth] = useState<number>(initialStartMonth)
-  const [salaryAmount, setSalaryAmount] = useState<string>(normalizeAmountInput(initialSalaryAmount))
-  const [bonusAmount, setBonusAmount] = useState<string>(normalizeAmountInput(initialBonusAmount))
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  const isSalaryValid = isValidNonNegativeAmountValue(salaryAmount)
-  const isBonusValid = isValidNonNegativeAmountValue(bonusAmount)
-  const totalAmount = sumDecimalAmountStrings([
-    toDecimalAmountString(salaryAmount),
-    toDecimalAmountString(bonusAmount),
-  ])
-  const canSave = isSalaryValid && isBonusValid && monthOptions.length > 0 && status !== 'submitting'
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-
-    if (!canSave) {
-      return
-    }
-
-    setStatus('submitting')
-    setErrorMessage(null)
-    const saved = await onSave({
-      startMonth,
-      salaryAmount: toDecimalAmountString(salaryAmount),
-      bonusAmount: toDecimalAmountString(bonusAmount),
-    })
-
-    if (saved) {
-      setStatus('idle')
-      return
-    }
-
-    setStatus('error')
-    setErrorMessage('Не удалось сохранить прогноз доходов.')
-  }
-
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-slate-900">Прогноз доходов</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        Оклад и премия задают прогноз для будущих месяцев выбранного года. Фактические месяцы не
-        затираются.
-      </p>
-
-      {monthOptions.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-          Для {year} года будущих месяцев больше нет. Переключите год, чтобы задать новый прогноз.
-        </div>
-      ) : (
-        <form
-          className="mt-4 space-y-3"
-          onSubmit={(event) => {
-            void handleSubmit(event)
-          }}
-        >
-          <label className="block text-sm text-slate-600">
-            Начать с месяца
-            <select
-              value={startMonth}
-              onChange={(event) => setStartMonth(Number(event.target.value))}
-              className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
-            >
-              {monthOptions.map((month) => (
-                <option key={month} value={month}>
-                  {toMonthLabel(month)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm text-slate-600">
-              Оклад
-              <input
-                type="text"
-                inputMode="decimal"
-                value={salaryAmount}
-                onChange={(event) => setSalaryAmount(normalizeAmountInput(event.target.value))}
-                placeholder="0.00"
-                className={`mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
-                  isSalaryValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
-                }`}
-              />
-            </label>
-
-            <label className="text-sm text-slate-600">
-              Премия
-              <input
-                type="text"
-                inputMode="decimal"
-                value={bonusAmount}
-                onChange={(event) => setBonusAmount(normalizeAmountInput(event.target.value))}
-                placeholder="0.00"
-                className={`mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
-                  isBonusValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
-                }`}
-              />
-            </label>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Прогноз в месяц</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">
-                {formatAmountWithCurrency(totalAmount, currency)}
-              </p>
-            </div>
-            <button
-              type="submit"
-              disabled={!canSave}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {status === 'submitting' ? 'Сохраняем...' : 'Сохранить прогноз'}
-            </button>
-          </div>
-
-          {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
-          {!isSalaryValid || !isBonusValid ? (
-            <p className="text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
-          ) : null}
-        </form>
-      )}
-    </section>
-  )
-}
-
-interface IncomeReviewTableProps {
-  snapshot: PersonalFinanceSnapshotDto
-}
-
-function IncomeReviewTable({ snapshot }: IncomeReviewTableProps) {
+function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица доходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Таблица только для review: факт и прогноз показаны в едином monthly income.
+          Если факт не задан, строка заполняется повторяющимся прогнозом из настроек.
         </p>
       </div>
 
@@ -947,7 +1059,7 @@ function IncomeReviewTable({ snapshot }: IncomeReviewTableProps) {
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
                 {formatAmount(snapshot.income.averageMonthlyTotal)}
               </td>
-              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">По заполненным месяцам</td>
+              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">По всем месяцам года</td>
             </tr>
           </tfoot>
         </table>
@@ -1029,40 +1141,18 @@ function InlineStatus({
   )
 }
 
+function inputClassName(isValid: boolean): string {
+  return `mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
+    isValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
+  }`
+}
+
 function toMonthLabel(month: number): string {
   return MONTH_LABELS[month - 1] ?? String(month)
 }
 
 function defaultActualMonth(year: number): number {
   return year === currentYear() ? currentMonthNumber() : 1
-}
-
-function defaultForecastStartMonth(year: number): number {
-  if (year !== currentYear()) {
-    return 1
-  }
-
-  return Math.min(currentMonthNumber() + 1, 12)
-}
-
-function resolveForecastStartMonth(year: number, startMonth: number | undefined): number {
-  if (startMonth && forecastMonthNumbers(year).includes(startMonth)) {
-    return startMonth
-  }
-  return defaultForecastStartMonth(year)
-}
-
-function forecastMonthNumbers(year: number): number[] {
-  if (year !== currentYear()) {
-    return Array.from({ length: 12 }, (_, index) => index + 1)
-  }
-
-  const start = currentMonthNumber() + 1
-  if (start > 12) {
-    return []
-  }
-
-  return Array.from({ length: 12 - start + 1 }, (_, index) => start + index)
 }
 
 function currentYear(): number {
@@ -1087,10 +1177,14 @@ function toExpenseDraftValues(
   return categories.reduce(
     (result, category) => ({
       ...result,
-      [category.code]: values[category.code] === '0.00' ? '' : values[category.code],
+      [category.code]: toDraftAmount(values[category.code]),
     }),
     {} as Record<PersonalExpenseCategoryCode, string>,
   )
+}
+
+function toDraftAmount(value: string): string {
+  return value === '0.00' ? '' : value
 }
 
 function normalizeAmountInput(value: string): string {
@@ -1122,6 +1216,19 @@ function toDecimalAmountString(value: string): string {
 function sumDecimalAmountStrings(values: string[]): string {
   const total = values.reduce((sum, value) => sum + Number.parseFloat(value || '0'), 0)
   return total.toFixed(2)
+}
+
+function calculateBonusAmount(salaryAmount: string, bonusPercent: string): string {
+  const salary = Number.parseFloat(toDecimalAmountString(salaryAmount))
+  const bonus = Number.parseFloat(toDecimalAmountString(bonusPercent))
+  return ((salary * bonus) / 100).toFixed(2)
+}
+
+function calculateForecastAmount(salaryAmount: string, bonusPercent: string): string {
+  return sumDecimalAmountStrings([
+    toDecimalAmountString(salaryAmount),
+    calculateBonusAmount(salaryAmount, bonusPercent),
+  ])
 }
 
 function formatAmount(value: string): string {

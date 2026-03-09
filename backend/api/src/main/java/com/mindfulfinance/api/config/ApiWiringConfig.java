@@ -36,6 +36,7 @@ import com.mindfulfinance.application.usecases.SaveIncomeForecast;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
+import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
 import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
 import com.mindfulfinance.postgres.PostgresIncomeForecastRepository;
@@ -188,9 +189,10 @@ public class ApiWiringConfig {
 
     @Bean
     public CreatePersonalFinanceCard createPersonalFinanceCard(
-        PersonalFinanceCardRepository personalFinanceCardRepository
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository
     ) {
-        return new CreatePersonalFinanceCard(personalFinanceCardRepository);
+        return new CreatePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
     }
 
     @Bean
@@ -202,9 +204,15 @@ public class ApiWiringConfig {
 
     @Bean
     public SaveMonthlyExpenseActual saveMonthlyExpenseActual(
-        MonthlyExpenseActualRepository monthlyExpenseActualRepository
+        MonthlyExpenseActualRepository monthlyExpenseActualRepository,
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        TransactionRepository transactionRepository
     ) {
-        return new SaveMonthlyExpenseActual(monthlyExpenseActualRepository);
+        return new SaveMonthlyExpenseActual(
+            monthlyExpenseActualRepository,
+            personalFinanceCardRepository,
+            transactionRepository
+        );
     }
 
     @Bean
@@ -216,9 +224,15 @@ public class ApiWiringConfig {
 
     @Bean
     public SaveMonthlyIncomeActual saveMonthlyIncomeActual(
-        MonthlyIncomeActualRepository monthlyIncomeActualRepository
+        MonthlyIncomeActualRepository monthlyIncomeActualRepository,
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        TransactionRepository transactionRepository
     ) {
-        return new SaveMonthlyIncomeActual(monthlyIncomeActualRepository);
+        return new SaveMonthlyIncomeActual(
+            monthlyIncomeActualRepository,
+            personalFinanceCardRepository,
+            transactionRepository
+        );
     }
 
     @Bean
@@ -229,19 +243,36 @@ public class ApiWiringConfig {
     }
 
     @Bean
+    public SavePersonalFinanceSettings savePersonalFinanceSettings(
+        MonthlyExpenseLimitRepository monthlyExpenseLimitRepository,
+        IncomeForecastRepository incomeForecastRepository,
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        TransactionRepository transactionRepository
+    ) {
+        return new SavePersonalFinanceSettings(
+            monthlyExpenseLimitRepository,
+            incomeForecastRepository,
+            personalFinanceCardRepository,
+            transactionRepository
+        );
+    }
+
+    @Bean
     public GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot(
         PersonalFinanceCardRepository personalFinanceCardRepository,
         MonthlyExpenseActualRepository monthlyExpenseActualRepository,
         MonthlyExpenseLimitRepository monthlyExpenseLimitRepository,
         MonthlyIncomeActualRepository monthlyIncomeActualRepository,
-        IncomeForecastRepository incomeForecastRepository
+        IncomeForecastRepository incomeForecastRepository,
+        TransactionRepository transactionRepository
     ) {
         return new GetCardPersonalFinanceSnapshot(
             personalFinanceCardRepository,
             monthlyExpenseActualRepository,
             monthlyExpenseLimitRepository,
             monthlyIncomeActualRepository,
-            incomeForecastRepository
+            incomeForecastRepository,
+            transactionRepository
         );
     }
 }

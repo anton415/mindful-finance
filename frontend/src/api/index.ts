@@ -33,11 +33,12 @@ export type {
   PersonalFinanceIncomeDto,
   PersonalFinanceIncomeMonthDto,
   PersonalFinanceIncomeMonthStatus,
+  PersonalFinanceSettingsDto,
   PersonalFinanceSnapshotDto,
   TransactionDirection,
   TransactionDto,
-  UpdateIncomeForecastRequest,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'

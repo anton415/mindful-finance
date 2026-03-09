@@ -10,6 +10,7 @@ export interface AccountDto {
   currency: CurrencyCode
   type: AccountType
   status: string
+  linkedPersonalFinanceCardId: string | null
 }
 
 export interface CreateAccountRequest {
@@ -83,6 +84,7 @@ export interface PersonalExpenseCategoryDto {
 export interface PersonalFinanceCardDto {
   id: string
   name: string
+  linkedAccountId: string
   createdAt: string
 }
 
@@ -120,8 +122,8 @@ export interface PersonalFinanceIncomeMonthDto {
 }
 
 export interface PersonalFinanceIncomeForecastDto {
-  startMonth: number
   salaryAmount: DecimalAmount
+  bonusPercent: DecimalAmount
   bonusAmount: DecimalAmount
   totalAmount: DecimalAmount
 }
@@ -130,7 +132,15 @@ export interface PersonalFinanceIncomeDto {
   months: PersonalFinanceIncomeMonthDto[]
   annualTotal: DecimalAmount
   averageMonthlyTotal: DecimalAmount
-  forecast: PersonalFinanceIncomeForecastDto | null
+}
+
+export interface PersonalFinanceSettingsDto {
+  linkedAccountId: string
+  currentBalance: DecimalAmount
+  baselineAmount: DecimalAmount
+  recurringLimitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  recurringLimitTotal: DecimalAmount
+  incomeForecast: PersonalFinanceIncomeForecastDto | null
 }
 
 export interface PersonalFinanceSnapshotDto {
@@ -141,6 +151,7 @@ export interface PersonalFinanceSnapshotDto {
   categories: PersonalExpenseCategoryDto[]
   expenses: PersonalFinanceExpensesDto
   income: PersonalFinanceIncomeDto
+  settings: PersonalFinanceSettingsDto
 }
 
 export interface UpdateMonthlyExpenseRequest {
@@ -153,10 +164,11 @@ export interface UpdateMonthlyIncomeActualRequest {
   totalAmount: DecimalAmount
 }
 
-export interface UpdateIncomeForecastRequest {
-  startMonth: number
+export interface UpdatePersonalFinanceSettingsRequest {
+  baselineAmount: DecimalAmount
+  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
   salaryAmount: DecimalAmount
-  bonusAmount: DecimalAmount
+  bonusPercent: DecimalAmount
 }
 
 export interface ApiErrorDto {

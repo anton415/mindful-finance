@@ -1,21 +1,20 @@
 package com.mindfulfinance.domain.personalfinance;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Currency;
 import java.util.Map;
 
 import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_AMOUNT_INVALID;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_BONUS_PERCENT_INVALID;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_CARD_ID_INVALID;
-import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_START_MONTH_INVALID;
-import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_YEAR_INVALID;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.shared.DomainException;
 
 public record IncomeForecast(
     PersonalFinanceCardId cardId,
-    int year,
-    int startMonth,
     Money salaryAmount,
-    Money bonusAmount
+    BigDecimal bonusPercent
 ) {
     private static final Currency RUB = Currency.getInstance("RUB");
 
@@ -27,26 +26,27 @@ public record IncomeForecast(
                 null
             );
         }
-        if (year < 1 || year > 9999) {
-            throw new DomainException(
-                INCOME_FORECAST_YEAR_INVALID,
-                "Year must be between 1 and 9999",
-                Map.of("year", year)
-            );
-        }
-        if (startMonth < 1 || startMonth > 12) {
-            throw new DomainException(
-                INCOME_FORECAST_START_MONTH_INVALID,
-                "Start month must be between 1 and 12",
-                Map.of("startMonth", startMonth)
-            );
-        }
         validateAmount("salary", salaryAmount);
-        validateAmount("bonus", bonusAmount);
+        if (bonusPercent == null || bonusPercent.signum() < 0 || bonusPercent.scale() > 2) {
+            throw new DomainException(
+                INCOME_FORECAST_BONUS_PERCENT_INVALID,
+                "Income forecast bonus percent must be non-negative with up to 2 decimals",
+                Map.of("bonusPercent", bonusPercent)
+            );
+        }
+
+        bonusPercent = bonusPercent.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public Money bonusAmount() {
+        BigDecimal bonusAmount = salaryAmount.amount()
+            .multiply(bonusPercent)
+            .divide(new BigDecimal("100"), RUB.getDefaultFractionDigits(), RoundingMode.HALF_UP);
+        return new Money(bonusAmount, RUB);
     }
 
     public Money totalAmount() {
-        return salaryAmount.add(bonusAmount);
+        return salaryAmount.add(bonusAmount());
     }
 
     public boolean isEmpty() {

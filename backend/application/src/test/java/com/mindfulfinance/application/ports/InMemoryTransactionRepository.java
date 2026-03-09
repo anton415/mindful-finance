@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.transaction.Transaction;
+import com.mindfulfinance.domain.transaction.TransactionId;
 
 /**
  * In-memory implementation of the TransactionRepository for testing purposes.
@@ -39,5 +40,15 @@ public final class InMemoryTransactionRepository implements TransactionRepositor
         }
 
         throw new IllegalStateException("Transaction not found");
+    }
+
+    @Override
+    public void delete(AccountId accountId, TransactionId transactionId) {
+        List<Transaction> transactions = byAccount.get(accountId);
+        if (transactions == null) {
+            return;
+        }
+
+        transactions.removeIf(transaction -> transaction.id().equals(transactionId));
     }
 }

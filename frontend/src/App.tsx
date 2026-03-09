@@ -14,9 +14,9 @@ import {
   type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
-  type UpdateIncomeForecastRequest,
   type UpdateMonthlyExpenseRequest,
   type UpdateMonthlyIncomeActualRequest,
+  type UpdatePersonalFinanceSettingsRequest,
   type UpdateTransactionRequest,
 } from './api'
 import { PersonalFinanceView, type PersonalFinanceTab } from './features/personal-finance/PersonalFinanceView'
@@ -404,6 +404,13 @@ function App() {
     setDashboardReloadTick((tick) => tick + 1)
   }
 
+  const refreshPersonalFinanceDerivedViews = (): void => {
+    setPersonalFinanceReloadTick((tick) => tick + 1)
+    setAccountsReloadTick((tick) => tick + 1)
+    setTransactionsReloadTick((tick) => tick + 1)
+    setDashboardReloadTick((tick) => tick + 1)
+  }
+
   const handleCreateTransaction = async (
     accountId: string,
     request: CreateTransactionRequest,
@@ -459,7 +466,7 @@ function App() {
     try {
       const created = await apiClient.createPersonalFinanceCard(request)
       setSelectedPersonalFinanceCardId(created.cardId)
-      setPersonalFinanceReloadTick((tick) => tick + 1)
+      refreshPersonalFinanceDerivedViews()
       return true
     } catch (error) {
       setPersonalFinanceErrorMessage(toErrorMessage(error))
@@ -477,24 +484,7 @@ function App() {
 
     try {
       await apiClient.updateMonthlyExpenseActual(selectedPersonalFinanceCardId, month, request)
-      setPersonalFinanceReloadTick((tick) => tick + 1)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  const handleSaveExpenseLimit = async (
-    month: number,
-    request: UpdateMonthlyExpenseRequest,
-  ): Promise<boolean> => {
-    if (!selectedPersonalFinanceCardId) {
-      return false
-    }
-
-    try {
-      await apiClient.updateMonthlyExpenseLimit(selectedPersonalFinanceCardId, month, request)
-      setPersonalFinanceReloadTick((tick) => tick + 1)
+      refreshPersonalFinanceDerivedViews()
       return true
     } catch {
       return false
@@ -515,44 +505,32 @@ function App() {
         month,
         request,
       )
-      setPersonalFinanceReloadTick((tick) => tick + 1)
+      refreshPersonalFinanceDerivedViews()
       return true
     } catch {
       return false
     }
   }
 
-  const handleSaveIncomeForecast = async (request: UpdateIncomeForecastRequest): Promise<boolean> => {
+  const handleSavePersonalFinanceSettings = async (
+    request: UpdatePersonalFinanceSettingsRequest,
+  ): Promise<boolean> => {
     if (!selectedPersonalFinanceCardId) {
       return false
     }
 
     try {
-      await apiClient.updateIncomeForecast(
-        selectedPersonalFinanceCardId,
-        selectedPersonalFinanceYear,
-        request,
-      )
-      setPersonalFinanceReloadTick((tick) => tick + 1)
+      await apiClient.updatePersonalFinanceSettings(selectedPersonalFinanceCardId, request)
+      refreshPersonalFinanceDerivedViews()
       return true
     } catch {
       return false
     }
   }
 
-  const isPersonalFinanceView = activeView === 'personal-finance'
-
   return (
-    <main
-      className={`min-h-screen w-full px-4 py-8 sm:px-6 sm:py-10 ${
-        isPersonalFinanceView ? '' : 'mx-auto max-w-5xl sm:py-14'
-      }`}
-    >
-      <section
-        className={`rounded-2xl border border-slate-200 bg-white/85 shadow-sm backdrop-blur ${
-          isPersonalFinanceView ? 'w-full p-5 lg:p-8' : 'p-8'
-        }`}
-      >
+    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
+      <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -613,9 +591,8 @@ function App() {
               }}
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
-              onSaveExpenseLimit={handleSaveExpenseLimit}
               onSaveIncomeActual={handleSaveIncomeActual}
-              onSaveIncomeForecast={handleSaveIncomeForecast}
+              onSaveSettings={handleSavePersonalFinanceSettings}
             />
           ) : (
             <AccountsView
@@ -820,8 +797,10 @@ function AccountsView({
   const transactionMemoCandidate = newTransactionMemo.trim()
   const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
   const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
+  const isLinkedPersonalFinanceAccount = selectedAccount?.linkedPersonalFinanceCardId !== null
   const canCreateTransaction =
     selectedAccount !== null &&
+    !isLinkedPersonalFinanceAccount &&
     isTransactionDateValid &&
     isTransactionAmountValid &&
     createTransactionStatus !== 'submitting'
@@ -835,11 +814,15 @@ function AccountsView({
   const canUpdateTransaction =
     selectedAccount !== null &&
     activeEditingTransactionId !== null &&
+    !isLinkedPersonalFinanceAccount &&
     isEditingTransactionDateValid &&
     isEditingTransactionAmountValid &&
     updateTransactionStatus !== 'submitting'
   const canImportCsv =
-    selectedAccount !== null && csvFile !== null && csvImportStatus !== 'submitting'
+    selectedAccount !== null &&
+    !isLinkedPersonalFinanceAccount &&
+    csvFile !== null &&
+    csvImportStatus !== 'submitting'
 
   const handleCreateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -898,6 +881,10 @@ function AccountsView({
   }
 
   const handleStartEditingTransaction = (transaction: TransactionDto): void => {
+    if (isLinkedPersonalFinanceAccount) {
+      return
+    }
+
     setEditingTransactionAccountId(selectedAccountId)
     setEditingTransactionId(transaction.id)
     setEditingTransactionDate(transaction.occurredOn)
@@ -1033,7 +1020,8 @@ function AccountsView({
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{account.name}</p>
                       <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                        {toAccountTypeLabel(account.type)} · {toAccountStatusLabel(account.status)}
+                        {toAccountTypeLabel(account.type)} ·{' '}
+                        {account.linkedPersonalFinanceCardId ? 'Личные финансы' : toAccountStatusLabel(account.status)}
                       </p>
                     </div>
                     <div className="text-right">
@@ -1066,134 +1054,146 @@ function AccountsView({
               </div>
             </div>
 
-            <form
-              className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
-              onSubmit={(event) => {
-                void handleCreateTransactionSubmit(event)
-              }}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Добавить транзакцию
-              </p>
+            {isLinkedPersonalFinanceAccount ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Режим просмотра</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Этот счёт привязан к карте из раздела личных финансов. Баланс и транзакции
+                  обновляются из monthly income, monthly expense и baseline в настройках карты.
+                </p>
+              </div>
+            ) : (
+              <>
+                <form
+                  className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
+                  onSubmit={(event) => {
+                    void handleCreateTransactionSubmit(event)
+                  }}
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Добавить транзакцию
+                  </p>
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <label className="text-xs text-slate-600">
-                  Дата
-                  <input
-                    type="date"
-                    value={newTransactionDate}
-                    onChange={(event) => setNewTransactionDate(event.target.value)}
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs text-slate-600">
+                      Дата
+                      <input
+                        type="date"
+                        value={newTransactionDate}
+                        onChange={(event) => setNewTransactionDate(event.target.value)}
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
 
-                <label className="text-xs text-slate-600">
-                  Направление
-                  <select
-                    value={newTransactionDirection}
-                    onChange={(event) =>
-                      setNewTransactionDirection(event.target.value as TransactionDirection)
-                    }
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                    <label className="text-xs text-slate-600">
+                      Направление
+                      <select
+                        value={newTransactionDirection}
+                        onChange={(event) =>
+                          setNewTransactionDirection(event.target.value as TransactionDirection)
+                        }
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      >
+                        <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
+                        <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+                    <label className="text-xs text-slate-600">
+                      Сумма
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={newTransactionAmount}
+                        onChange={(event) => setNewTransactionAmount(event.target.value)}
+                        placeholder="0,00"
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
+
+                    <label className="text-xs text-slate-600">
+                      Описание
+                      <input
+                        type="text"
+                        value={newTransactionMemo}
+                        onChange={(event) => setNewTransactionMemo(event.target.value)}
+                        placeholder="Продукты"
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
+                  </div>
+
+                  {!isTransactionAmountValid && newTransactionAmount.trim().length > 0 ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Сумма должна быть положительной и содержать не более 2 знаков после запятой.
+                    </p>
+                  ) : null}
+
+                  {createTransactionStatus === 'error' && createTransactionErrorMessage ? (
+                    <p className="mt-2 text-xs text-amber-700">{createTransactionErrorMessage}</p>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    disabled={!canCreateTransaction}
+                    className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
-                    <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
-                  </select>
-                </label>
-              </div>
+                    {createTransactionStatus === 'submitting' ? 'Добавляем...' : 'Добавить транзакцию'}
+                  </button>
+                </form>
 
-              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
-                <label className="text-xs text-slate-600">
-                  Сумма
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={newTransactionAmount}
-                    onChange={(event) => setNewTransactionAmount(event.target.value)}
-                    placeholder="0,00"
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
+                <form
+                  className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
+                  onSubmit={(event) => {
+                    void handleImportCsvSubmit(event)
+                  }}
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Импорт из CSV</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Формат заголовка: <code>occurred_on,direction,amount,currency,memo</code>
+                  </p>
 
-                <label className="text-xs text-slate-600">
-                  Описание
-                  <input
-                    type="text"
-                    value={newTransactionMemo}
-                    onChange={(event) => setNewTransactionMemo(event.target.value)}
-                    placeholder="Продукты"
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
-              </div>
+                  <label className="mt-3 block text-xs text-slate-600">
+                    Файл
+                    <input
+                      ref={csvFileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700"
+                    />
+                  </label>
 
-              {!isTransactionAmountValid && newTransactionAmount.trim().length > 0 ? (
-                <p className="mt-2 text-xs text-amber-700">
-                  Сумма должна быть положительной и содержать не более 2 знаков после запятой.
-                </p>
-              ) : null}
+                  {csvFile ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Выбран файл: <span className="font-medium text-slate-700">{csvFile.name}</span>
+                    </p>
+                  ) : null}
 
-              {createTransactionStatus === 'error' && createTransactionErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{createTransactionErrorMessage}</p>
-              ) : null}
+                  {csvImportStatus === 'error' && csvImportErrorMessage ? (
+                    <p className="mt-2 text-xs text-amber-700">{csvImportErrorMessage}</p>
+                  ) : null}
 
-              <button
-                type="submit"
-                disabled={!canCreateTransaction}
-                className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {createTransactionStatus === 'submitting' ? 'Добавляем...' : 'Добавить транзакцию'}
-              </button>
-            </form>
+                  {csvImportStatus === 'success' && csvImportResult ? (
+                    <p className="mt-2 text-xs text-emerald-700">
+                      Импорт завершен: получено {csvImportResult.receivedRows}, добавлено{' '}
+                      {csvImportResult.importedCount}, пропущено дубликатов{' '}
+                      {csvImportResult.skippedDuplicates}.
+                    </p>
+                  ) : null}
 
-            <form
-              className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
-              onSubmit={(event) => {
-                void handleImportCsvSubmit(event)
-              }}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Импорт из CSV</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Формат заголовка: <code>occurred_on,direction,amount,currency,memo</code>
-              </p>
-
-              <label className="mt-3 block text-xs text-slate-600">
-                Файл
-                <input
-                  ref={csvFileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700"
-                />
-              </label>
-
-              {csvFile ? (
-                <p className="mt-2 text-xs text-slate-500">
-                  Выбран файл: <span className="font-medium text-slate-700">{csvFile.name}</span>
-                </p>
-              ) : null}
-
-              {csvImportStatus === 'error' && csvImportErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{csvImportErrorMessage}</p>
-              ) : null}
-
-              {csvImportStatus === 'success' && csvImportResult ? (
-                <p className="mt-2 text-xs text-emerald-700">
-                  Импорт завершен: получено {csvImportResult.receivedRows}, добавлено{' '}
-                  {csvImportResult.importedCount}, пропущено дубликатов{' '}
-                  {csvImportResult.skippedDuplicates}.
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={!canImportCsv}
-                className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {csvImportStatus === 'submitting' ? 'Импортируем...' : 'Импортировать CSV'}
-              </button>
-            </form>
+                  <button
+                    type="submit"
+                    disabled={!canImportCsv}
+                    className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {csvImportStatus === 'submitting' ? 'Импортируем...' : 'Импортировать CSV'}
+                  </button>
+                </form>
+              </>
+            )}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-600">
@@ -1375,13 +1375,15 @@ function AccountsView({
                               >
                                 {formatSignedAmount(transaction.amount, transaction.direction)}
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditingTransaction(transaction)}
-                                className="mt-2 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600"
-                              >
-                                Редактировать
-                              </button>
+                              {!isLinkedPersonalFinanceAccount ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditingTransaction(transaction)}
+                                  className="mt-2 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                >
+                                  Редактировать
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         )}
@@ -1605,7 +1607,12 @@ function readNavigationFromUrl(): NavigationState {
   const financeCardIdRaw = params.get('financeCardId')
   const accountId = accountIdRaw && accountIdRaw.trim().length > 0 ? accountIdRaw : null
   const financeCardId = financeCardIdRaw && financeCardIdRaw.trim().length > 0 ? financeCardIdRaw : null
-  const financeTab: PersonalFinanceTab = financeTabParam === 'income' ? 'income' : 'expenses'
+  const financeTab: PersonalFinanceTab =
+    financeTabParam === 'settings'
+      ? 'settings'
+      : financeTabParam === 'income'
+        ? 'income'
+        : 'expenses'
   const financeYear = toNavigationYear(financeYearParam)
 
   const tab: ViewTab =

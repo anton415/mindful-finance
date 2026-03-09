@@ -1,14 +1,14 @@
 package com.mindfulfinance.application.ports;
 
-import java.util.List;
+import java.util.Optional;
 
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseLimit;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 
 public interface MonthlyExpenseLimitRepository {
-    List<MonthlyExpenseLimit> findByCardAndYear(PersonalFinanceCardId cardId, int year);
+    Optional<MonthlyExpenseLimit> findByCardId(PersonalFinanceCardId cardId);
 
     void upsert(MonthlyExpenseLimit summary);
 
-    void delete(PersonalFinanceCardId cardId, int year, int month);
+    void delete(PersonalFinanceCardId cardId);
 }

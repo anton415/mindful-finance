@@ -73,12 +73,29 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.income.months", hasSize(12)))
             .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"))
             .andExpect(jsonPath("$.expenses.annualLimitTotal").value("0.00"))
-            .andExpect(jsonPath("$.income.annualTotal").value("0.00"));
+            .andExpect(jsonPath("$.income.annualTotal").value("0.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("0.00"))
+            .andExpect(jsonPath("$.settings.baselineAmount").value("0.00"));
     }
 
     @Test
-    void expense_actual_and_limit_upserts_update_single_month_without_duplicates() throws Exception {
+    void expense_actual_and_settings_upserts_update_single_month_without_duplicates() throws Exception {
         String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "1000.00",
+                  "limitCategoryAmounts": {
+                    "RESTAURANTS": "180.00",
+                    "GROCERIES": "210.00"
+                  },
+                  "salaryAmount": "0.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
 
         mockMvc.perform(put("/personal-finance/cards/{cardId}/expenses/actual/2", cardId)
             .contentType("application/json")
@@ -88,19 +105,6 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                   "categoryAmounts": {
                     "RESTAURANTS": "100.00",
                     "GROCERIES": "200.00"
-                  }
-                }
-                """))
-            .andExpect(status().isNoContent());
-
-        mockMvc.perform(put("/personal-finance/cards/{cardId}/expenses/limits/2", cardId)
-            .contentType("application/json")
-            .content("""
-                {
-                  "year": 2026,
-                  "categoryAmounts": {
-                    "RESTAURANTS": "180.00",
-                    "GROCERIES": "210.00"
                   }
                 }
                 """))
@@ -128,12 +132,26 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.expenses.months[1].limitCategoryAmounts.GROCERIES").value("210.00"))
             .andExpect(jsonPath("$.expenses.months[1].actualTotal").value("400.00"))
             .andExpect(jsonPath("$.expenses.months[1].limitTotal").value("390.00"))
-            .andExpect(jsonPath("$.expenses.annualActualTotal").value("400.00"));
+            .andExpect(jsonPath("$.expenses.annualActualTotal").value("400.00"))
+            .andExpect(jsonPath("$.expenses.annualLimitTotal").value("4680.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("600.00"));
     }
 
     @Test
-    void income_actual_and_forecast_use_single_month_total_and_status() throws Exception {
+    void income_actual_and_recurring_forecast_use_single_month_total_and_status() throws Exception {
         String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "0.00",
+                  "limitCategoryAmounts": {},
+                  "salaryAmount": "205000.00",
+                  "bonusPercent": "30.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
 
         mockMvc.perform(put("/personal-finance/cards/{cardId}/income/actual/3", cardId)
             .contentType("application/json")
@@ -145,27 +163,19 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isNoContent());
 
-        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/forecast/2026", cardId)
-            .contentType("application/json")
-            .content("""
-                {
-                  "startMonth": 4,
-                  "salaryAmount": "205000.00",
-                  "bonusAmount": "61500.00"
-                }
-                """))
-            .andExpect(status().isNoContent());
-
         mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.income.months[0].totalAmount").value("266500.00"))
+            .andExpect(jsonPath("$.income.months[0].status").value("FORECAST"))
             .andExpect(jsonPath("$.income.months[2].totalAmount").value("266500.00"))
             .andExpect(jsonPath("$.income.months[2].status").value("ACTUAL"))
-            .andExpect(jsonPath("$.income.months[3].totalAmount").value("266500.00"))
-            .andExpect(jsonPath("$.income.months[3].status").value("FORECAST"))
-            .andExpect(jsonPath("$.income.forecast.startMonth").value(4))
-            .andExpect(jsonPath("$.income.forecast.totalAmount").value("266500.00"))
-            .andExpect(jsonPath("$.income.annualTotal").value("2665000.00"))
-            .andExpect(jsonPath("$.income.averageMonthlyTotal").value("266500.00"));
+            .andExpect(jsonPath("$.settings.incomeForecast.salaryAmount").value("205000.00"))
+            .andExpect(jsonPath("$.settings.incomeForecast.bonusPercent").value("30.00"))
+            .andExpect(jsonPath("$.settings.incomeForecast.bonusAmount").value("61500.00"))
+            .andExpect(jsonPath("$.settings.incomeForecast.totalAmount").value("266500.00"))
+            .andExpect(jsonPath("$.income.annualTotal").value("3198000.00"))
+            .andExpect(jsonPath("$.income.averageMonthlyTotal").value("266500.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("266500.00"));
     }
 
     @Test
@@ -199,17 +209,18 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Income actual amount must be non-negative RUB"));
 
-        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/forecast/2026", cardId)
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
             .contentType("application/json")
             .content("""
                 {
-                  "startMonth": 0,
+                  "baselineAmount": "0.00",
+                  "limitCategoryAmounts": {},
                   "salaryAmount": "1.00",
-                  "bonusAmount": "0.00"
+                  "bonusPercent": "-0.01"
                 }
                 """))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value("Start month must be between 1 and 12"));
+            .andExpect(jsonPath("$.message").value("Income forecast bonus percent must be non-negative with up to 2 decimals"));
     }
 
     private String createCard(String name) throws Exception {

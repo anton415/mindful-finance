@@ -15,6 +15,7 @@ import com.mindfulfinance.application.ports.MonthlyExpenseActualRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
 import com.mindfulfinance.application.ports.MonthlyIncomeActualRepository;
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
+import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseActual;
@@ -23,6 +24,7 @@ import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
+import com.mindfulfinance.domain.transaction.Transaction;
 
 public final class GetCardPersonalFinanceSnapshot {
     private static final Currency RUB = Currency.getInstance("RUB");
@@ -32,19 +34,22 @@ public final class GetCardPersonalFinanceSnapshot {
     private final MonthlyExpenseLimitRepository expenseLimitRepository;
     private final MonthlyIncomeActualRepository incomeActualRepository;
     private final IncomeForecastRepository incomeForecastRepository;
+    private final TransactionRepository transactionRepository;
 
     public GetCardPersonalFinanceSnapshot(
         PersonalFinanceCardRepository cardRepository,
         MonthlyExpenseActualRepository expenseActualRepository,
         MonthlyExpenseLimitRepository expenseLimitRepository,
         MonthlyIncomeActualRepository incomeActualRepository,
-        IncomeForecastRepository incomeForecastRepository
+        IncomeForecastRepository incomeForecastRepository,
+        TransactionRepository transactionRepository
     ) {
         this.cardRepository = cardRepository;
         this.expenseActualRepository = expenseActualRepository;
         this.expenseLimitRepository = expenseLimitRepository;
         this.incomeActualRepository = incomeActualRepository;
         this.incomeForecastRepository = incomeForecastRepository;
+        this.transactionRepository = transactionRepository;
     }
 
     public Result get(PersonalFinanceCardId cardId, int year) {
@@ -57,21 +62,28 @@ public final class GetCardPersonalFinanceSnapshot {
         Map<Integer, MonthlyExpenseActual> expenseActualsByMonth = toExpenseActualMap(
             expenseActualRepository.findByCardAndYear(cardId, year)
         );
-        Map<Integer, MonthlyExpenseLimit> expenseLimitsByMonth = toExpenseLimitMap(
-            expenseLimitRepository.findByCardAndYear(cardId, year)
-        );
         Map<Integer, MonthlyIncomeActual> incomeActualsByMonth = toIncomeActualMap(
             incomeActualRepository.findByCardAndYear(cardId, year)
         );
-        IncomeForecast forecast = incomeForecastRepository.findByCardAndYear(cardId, year).orElse(null);
+        MonthlyExpenseLimit expenseLimit = expenseLimitRepository.findByCardId(cardId)
+            .orElse(MonthlyExpenseLimit.empty(cardId));
+        IncomeForecast forecast = incomeForecastRepository.findByCardId(cardId).orElse(null);
+        PersonalFinanceLinkedAccountLedger linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(
+            cardRepository,
+            transactionRepository
+        );
+
+        Map<PersonalExpenseCategory, Money> recurringLimitAmounts = expenseLimit.categoryAmounts();
+        Money recurringLimitMonthlyTotal = expenseLimit.total();
+        Money currentBalance = computeBalance(selectedCard.linkedAccountId());
+        Money baselineAmount = linkedAccountLedger.baselineAmount(cardId);
 
         List<ExpenseMonth> expenseMonths = new ArrayList<>();
         List<IncomeMonth> incomeMonths = new ArrayList<>();
         EnumMap<PersonalExpenseCategory, Money> actualTotalsByCategory = zeroByCategory();
-        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = zeroByCategory();
+        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = multiplyByYear(recurringLimitAmounts);
 
         Money annualExpenseActualTotal = Money.zero(RUB);
-        Money annualExpenseLimitTotal = Money.zero(RUB);
         Money annualIncomeTotal = Money.zero(RUB);
         int filledExpenseMonths = 0;
         int filledIncomeMonths = 0;
@@ -81,37 +93,27 @@ public final class GetCardPersonalFinanceSnapshot {
                 month,
                 MonthlyExpenseActual.empty(cardId, year, month)
             );
-            MonthlyExpenseLimit expenseLimit = expenseLimitsByMonth.getOrDefault(
-                month,
-                MonthlyExpenseLimit.empty(cardId, year, month)
-            );
 
             Money actualTotal = expenseActual.total();
-            Money limitTotal = expenseLimit.total();
             if (!actualTotal.isZero()) {
                 filledExpenseMonths++;
             }
 
             annualExpenseActualTotal = annualExpenseActualTotal.add(actualTotal);
-            annualExpenseLimitTotal = annualExpenseLimitTotal.add(limitTotal);
 
             for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
                 actualTotalsByCategory.put(
                     category,
                     actualTotalsByCategory.get(category).add(expenseActual.categoryAmounts().get(category))
                 );
-                limitTotalsByCategory.put(
-                    category,
-                    limitTotalsByCategory.get(category).add(expenseLimit.categoryAmounts().get(category))
-                );
             }
 
             expenseMonths.add(new ExpenseMonth(
                 month,
                 expenseActual.categoryAmounts(),
-                expenseLimit.categoryAmounts(),
+                recurringLimitAmounts,
                 actualTotal,
-                limitTotal
+                recurringLimitMonthlyTotal
             ));
 
             MonthlyIncomeActual incomeActual = incomeActualsByMonth.get(month);
@@ -121,7 +123,7 @@ public final class GetCardPersonalFinanceSnapshot {
             if (incomeActual != null && !incomeActual.isEmpty()) {
                 incomeTotal = incomeActual.totalAmount();
                 status = IncomeMonthStatus.ACTUAL;
-            } else if (forecast != null && month >= forecast.startMonth() && !forecast.totalAmount().isZero()) {
+            } else if (forecast != null && !forecast.totalAmount().isZero()) {
                 incomeTotal = forecast.totalAmount();
                 status = IncomeMonthStatus.FORECAST;
             }
@@ -144,16 +146,31 @@ public final class GetCardPersonalFinanceSnapshot {
                 toOrderedTotalsMap(actualTotalsByCategory),
                 toOrderedTotalsMap(limitTotalsByCategory),
                 annualExpenseActualTotal,
-                annualExpenseLimitTotal,
+                multiplyByMonths(recurringLimitMonthlyTotal, 12),
                 average(annualExpenseActualTotal, filledExpenseMonths)
             ),
             new Income(
                 List.copyOf(incomeMonths),
                 annualIncomeTotal,
-                average(annualIncomeTotal, filledIncomeMonths),
+                average(annualIncomeTotal, filledIncomeMonths)
+            ),
+            new Settings(
+                selectedCard.linkedAccountId(),
+                currentBalance,
+                baselineAmount,
+                recurringLimitAmounts,
+                recurringLimitMonthlyTotal,
                 forecast
             )
         );
+    }
+
+    private Money computeBalance(com.mindfulfinance.domain.account.AccountId accountId) {
+        Money balance = Money.zero(RUB);
+        for (Transaction transaction : transactionRepository.findByAccountId(accountId)) {
+            balance = balance.add(transaction.signedAmount());
+        }
+        return balance;
     }
 
     private static void validateYear(int year) {
@@ -170,17 +187,21 @@ public final class GetCardPersonalFinanceSnapshot {
         return totals;
     }
 
+    private static EnumMap<PersonalExpenseCategory, Money> multiplyByYear(Map<PersonalExpenseCategory, Money> monthlyTotals) {
+        EnumMap<PersonalExpenseCategory, Money> totals = new EnumMap<>(PersonalExpenseCategory.class);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            totals.put(category, multiplyByMonths(monthlyTotals.get(category), 12));
+        }
+        return totals;
+    }
+
+    private static Money multiplyByMonths(Money amount, int months) {
+        return new Money(amount.amount().multiply(BigDecimal.valueOf(months)), amount.currency());
+    }
+
     private static Map<Integer, MonthlyExpenseActual> toExpenseActualMap(List<MonthlyExpenseActual> summaries) {
         Map<Integer, MonthlyExpenseActual> result = new LinkedHashMap<>();
         for (MonthlyExpenseActual summary : summaries) {
-            result.put(summary.month(), summary);
-        }
-        return result;
-    }
-
-    private static Map<Integer, MonthlyExpenseLimit> toExpenseLimitMap(List<MonthlyExpenseLimit> summaries) {
-        Map<Integer, MonthlyExpenseLimit> result = new LinkedHashMap<>();
-        for (MonthlyExpenseLimit summary : summaries) {
             result.put(summary.month(), summary);
         }
         return result;
@@ -221,7 +242,8 @@ public final class GetCardPersonalFinanceSnapshot {
         Currency currency,
         List<PersonalExpenseCategory> categories,
         Expenses expenses,
-        Income income
+        Income income,
+        Settings settings
     ) {}
 
     public record Expenses(
@@ -244,14 +266,22 @@ public final class GetCardPersonalFinanceSnapshot {
     public record Income(
         List<IncomeMonth> months,
         Money annualTotal,
-        Money averageMonthlyTotal,
-        IncomeForecast forecast
+        Money averageMonthlyTotal
     ) {}
 
     public record IncomeMonth(
         int month,
         Money totalAmount,
         IncomeMonthStatus status
+    ) {}
+
+    public record Settings(
+        com.mindfulfinance.domain.account.AccountId linkedAccountId,
+        Money currentBalance,
+        Money baselineAmount,
+        Map<PersonalExpenseCategory, Money> recurringLimitCategoryAmounts,
+        Money recurringLimitTotal,
+        IncomeForecast incomeForecast
     ) {}
 
     public enum IncomeMonthStatus {

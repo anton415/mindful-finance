@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.mindfulfinance.application.ports.AccountRepository;
+import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
@@ -44,6 +45,7 @@ import com.mindfulfinance.domain.transaction.TransactionId;
 @RestController
 public class AccountsController {
     private final AccountRepository accountRepository;
+    private final PersonalFinanceCardRepository personalFinanceCardRepository;
     private final TransactionRepository transactionRepository;
     private final ComputeAccountBalance computeAccountBalance;
     private final ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency;
@@ -54,6 +56,7 @@ public class AccountsController {
 
     public AccountsController(
         AccountRepository accountRepository,
+        PersonalFinanceCardRepository personalFinanceCardRepository,
         TransactionRepository transactionRepository,
         ComputeAccountBalance computeAccountBalance,
         ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
@@ -63,6 +66,7 @@ public class AccountsController {
         UpdateTransaction updateTransaction
     ) {
         this.accountRepository = accountRepository;
+        this.personalFinanceCardRepository = personalFinanceCardRepository;
         this.transactionRepository = transactionRepository;
         this.computeAccountBalance = computeAccountBalance;
         this.computeMonthlyBurnByCurrency = computeMonthlyBurnByCurrency;
@@ -89,7 +93,10 @@ public class AccountsController {
                 account.name(),
                 account.currency().getCurrencyCode(),
                 account.type().name(),
-                account.status().name()
+                account.status().name(),
+                personalFinanceCardRepository.findByLinkedAccountId(account.id())
+                    .map(card -> card.id().value().toString())
+                    .orElse(null)
             ))
             .toList();
     }
@@ -101,6 +108,7 @@ public class AccountsController {
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
         Account account = requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
 
         Transaction tx = new Transaction(
             TransactionId.random(),
@@ -143,6 +151,7 @@ public class AccountsController {
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
         Account account = requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
         TransactionId parsedTransactionId = parseTransactionId(transactionId);
 
         boolean updated = updateTransaction.update(new UpdateTransaction.Command(
@@ -169,6 +178,7 @@ public class AccountsController {
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
         requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
 
         List<ImportTransactions.Row> rows = TransactionsCsvParser.parse(file);
         ImportTransactions.Result result = importTransactions.importRows(parsedAccountId, rows);
@@ -240,6 +250,12 @@ public class AccountsController {
             .orElseThrow(() -> new AccountNotFoundException("Account not found"));
     }
 
+    private void rejectLinkedPersonalFinanceAccount(AccountId accountId) {
+        if (personalFinanceCardRepository.findByLinkedAccountId(accountId).isPresent()) {
+            throw new IllegalStateException("Linked personal finance accounts are read-only in Investments");
+        }
+    }
+
     private static AccountId parseAccountId(String accountId) {
         return new AccountId(UUID.fromString(accountId));
     }
@@ -266,7 +282,14 @@ public class AccountsController {
 
     public record CreateAccountResponse(String accountId) {}
 
-    public record AccountDto(String id, String name, String currency, String type, String status) {}
+    public record AccountDto(
+        String id,
+        String name,
+        String currency,
+        String type,
+        String status,
+        String linkedPersonalFinanceCardId
+    ) {}
 
     public record CreateTransactionRequest(
         LocalDate occurredOn,

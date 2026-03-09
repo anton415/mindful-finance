@@ -1,10 +1,10 @@
 import { createHttpClient, type HttpClientConfig } from './http'
 import type {
   AccountDto,
-  CreatePersonalFinanceCardRequest,
-  CreatePersonalFinanceCardResponse,
   CreateAccountRequest,
   CreateAccountResponse,
+  CreatePersonalFinanceCardRequest,
+  CreatePersonalFinanceCardResponse,
   CreateTransactionRequest,
   CreateTransactionResponse,
   CurrencyTotalsDto,
@@ -14,9 +14,9 @@ import type {
   PersonalFinanceCardDto,
   PersonalFinanceSnapshotDto,
   TransactionDto,
-  UpdateIncomeForecastRequest,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'
 
@@ -60,22 +60,15 @@ export interface ApiClient {
     request: UpdateMonthlyExpenseRequest,
     signal?: AbortSignal,
   ): Promise<void>
-  updateMonthlyExpenseLimit(
-    cardId: string,
-    month: number,
-    request: UpdateMonthlyExpenseRequest,
-    signal?: AbortSignal,
-  ): Promise<void>
   updateMonthlyIncomeActual(
     cardId: string,
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
     signal?: AbortSignal,
   ): Promise<void>
-  updateIncomeForecast(
+  updatePersonalFinanceSettings(
     cardId: string,
-    year: number,
-    request: UpdateIncomeForecastRequest,
+    request: UpdatePersonalFinanceSettingsRequest,
     signal?: AbortSignal,
   ): Promise<void>
 }
@@ -200,19 +193,6 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       )
     },
 
-    updateMonthlyExpenseLimit(
-      cardId: string,
-      month: number,
-      request: UpdateMonthlyExpenseRequest,
-      signal?: AbortSignal,
-    ): Promise<void> {
-      return http.putJson<void, UpdateMonthlyExpenseRequest>(
-        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/expenses/limits/${toRequiredMonth(month)}`,
-        request,
-        { signal },
-      )
-    },
-
     updateMonthlyIncomeActual(
       cardId: string,
       month: number,
@@ -226,14 +206,13 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       )
     },
 
-    updateIncomeForecast(
+    updatePersonalFinanceSettings(
       cardId: string,
-      year: number,
-      request: UpdateIncomeForecastRequest,
+      request: UpdatePersonalFinanceSettingsRequest,
       signal?: AbortSignal,
     ): Promise<void> {
-      return http.putJson<void, UpdateIncomeForecastRequest>(
-        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/income/forecast/${toRequiredYear(year)}`,
+      return http.putJson<void, UpdatePersonalFinanceSettingsRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/settings`,
         request,
         { signal },
       )
@@ -259,26 +238,25 @@ function toRequiredAccountId(accountId: string): string {
   return toRequiredIdentifier(accountId, 'accountId')
 }
 
-function toRequiredYear(year: number): string {
-  if (!Number.isInteger(year) || year < 1 || year > 9999) {
-    throw new Error('year must be an integer between 1 and 9999')
-  }
-
-  return String(year)
-}
-
-function toRequiredMonth(month: number): string {
-  if (!Number.isInteger(month) || month < 1 || month > 12) {
-    throw new Error('month must be an integer between 1 and 12')
-  }
-
-  return String(month)
-}
-
 function toRequiredIdentifier(value: string, fieldName: string): string {
   const trimmed = value.trim()
   if (trimmed.length === 0) {
     throw new Error(`${fieldName} must not be blank`)
   }
+
   return trimmed
+}
+
+function toRequiredMonth(month: number): string {
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error('month must be between 1 and 12')
+  }
+  return String(month)
+}
+
+function toRequiredYear(year: number): string {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) {
+    throw new Error('year must be between 1 and 9999')
+  }
+  return String(year)
 }

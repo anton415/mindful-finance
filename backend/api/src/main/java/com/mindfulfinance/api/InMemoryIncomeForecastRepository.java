@@ -12,21 +12,21 @@ public final class InMemoryIncomeForecastRepository implements IncomeForecastRep
     private final Map<String, IncomeForecast> store = new LinkedHashMap<>();
 
     @Override
-    public Optional<IncomeForecast> findByCardAndYear(PersonalFinanceCardId cardId, int year) {
-        return Optional.ofNullable(store.get(key(cardId, year)));
+    public Optional<IncomeForecast> findByCardId(PersonalFinanceCardId cardId) {
+        return Optional.ofNullable(store.get(key(cardId)));
     }
 
     @Override
     public void upsert(IncomeForecast forecast) {
-        store.put(key(forecast.cardId(), forecast.year()), forecast);
+        store.put(key(forecast.cardId()), forecast);
     }
 
     @Override
-    public void delete(PersonalFinanceCardId cardId, int year) {
-        store.remove(key(cardId, year));
+    public void delete(PersonalFinanceCardId cardId) {
+        store.remove(key(cardId));
     }
 
-    private static String key(PersonalFinanceCardId cardId, int year) {
-        return cardId.value() + ":" + year;
+    private static String key(PersonalFinanceCardId cardId) {
+        return cardId.value().toString();
     }
 }

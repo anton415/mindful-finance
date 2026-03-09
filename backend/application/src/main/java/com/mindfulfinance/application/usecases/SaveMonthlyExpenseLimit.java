@@ -31,9 +31,9 @@ public final class SaveMonthlyExpenseLimit {
             amounts.put(category, new Money(rawAmount, RUB));
         }
 
-        MonthlyExpenseLimit summary = new MonthlyExpenseLimit(command.cardId(), command.year(), command.month(), amounts);
+        MonthlyExpenseLimit summary = new MonthlyExpenseLimit(command.cardId(), amounts);
         if (summary.isEmpty()) {
-            repository.delete(command.cardId(), command.year(), command.month());
+            repository.delete(command.cardId());
             return summary;
         }
 
@@ -43,8 +43,6 @@ public final class SaveMonthlyExpenseLimit {
 
     public record Command(
         PersonalFinanceCardId cardId,
-        int year,
-        int month,
         Map<PersonalExpenseCategory, BigDecimal> categoryAmounts
     ) {}
 }
