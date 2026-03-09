@@ -24,4 +24,5 @@ export type {
   MoneyDto,
   TransactionDirection,
   TransactionDto,
+  UpdateTransactionRequest,
 } from './types'

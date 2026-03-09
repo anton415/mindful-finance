@@ -25,4 +25,21 @@ public final class InMemoryTransactionRepository implements TransactionRepositor
     public void save(Transaction tx) {
         byAccount.computeIfAbsent(tx.accountId(), e -> new ArrayList<>()).add(tx);
     }
+
+    @Override
+    public void update(Transaction tx) {
+        List<Transaction> transactions = byAccount.get(tx.accountId());
+        if (transactions == null) {
+            throw new IllegalStateException("Transaction not found");
+        }
+
+        for (int index = 0; index < transactions.size(); index++) {
+            if (transactions.get(index).id().equals(tx.id())) {
+                transactions.set(index, tx);
+                return;
+            }
+        }
+
+        throw new IllegalStateException("Transaction not found");
+    }
 }

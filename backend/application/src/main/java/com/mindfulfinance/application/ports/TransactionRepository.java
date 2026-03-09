@@ -18,4 +18,9 @@ public interface TransactionRepository {
      * Saves a transaction to the repository.
      */
     void save(Transaction transaction);
+
+    /**
+     * Updates an existing transaction in the repository.
+     */
+    void update(Transaction transaction);
 }

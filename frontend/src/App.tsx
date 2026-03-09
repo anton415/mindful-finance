@@ -11,6 +11,7 @@ import {
   type MoneyDto,
   type TransactionDirection,
   type TransactionDto,
+  type UpdateTransactionRequest,
 } from './api'
 
 interface DashboardData {
@@ -50,6 +51,7 @@ function App() {
   const [dashboardStatus, setDashboardStatus] = useState<LoadStatus>('idle')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null)
+  const [dashboardReloadTick, setDashboardReloadTick] = useState<number>(0)
 
   const [accountsStatus, setAccountsStatus] = useState<LoadStatus>('idle')
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([])
@@ -119,7 +121,7 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [])
+  }, [dashboardReloadTick])
 
   useEffect(() => {
     if (activeView !== 'accounts') {
@@ -234,7 +236,7 @@ function App() {
       }
 
       if (normalizedMemoFilter.length > 0) {
-        return transaction.memo.toLowerCase().includes(normalizedMemoFilter)
+        return normalizeTransactionMemo(transaction.memo).toLowerCase().includes(normalizedMemoFilter)
       }
 
       return true
@@ -283,6 +285,12 @@ function App() {
     }
   }
 
+  const refreshTransactionDerivedViews = (): void => {
+    setTransactionsReloadTick((tick) => tick + 1)
+    setAccountsReloadTick((tick) => tick + 1)
+    setDashboardReloadTick((tick) => tick + 1)
+  }
+
   const handleCreateTransaction = async (
     accountId: string,
     request: CreateTransactionRequest,
@@ -294,8 +302,7 @@ function App() {
       await apiClient.createTransaction(accountId, request)
       setCreateTransactionStatus('idle')
       setCreateTransactionErrorMessage(null)
-      setTransactionsReloadTick((tick) => tick + 1)
-      setAccountsReloadTick((tick) => tick + 1)
+      refreshTransactionDerivedViews()
       return true
     } catch (error) {
       setCreateTransactionStatus('error')
@@ -314,8 +321,7 @@ function App() {
       setCsvImportStatus('success')
       setCsvImportErrorMessage(null)
       setCsvImportResult(response)
-      setTransactionsReloadTick((tick) => tick + 1)
-      setAccountsReloadTick((tick) => tick + 1)
+      refreshTransactionDerivedViews()
       return true
     } catch (error) {
       setCsvImportStatus('error')
@@ -323,6 +329,15 @@ function App() {
       setCsvImportResult(null)
       return false
     }
+  }
+
+  const handleUpdateTransaction = async (
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+  ): Promise<void> => {
+    await apiClient.updateTransaction(accountId, transactionId, request)
+    refreshTransactionDerivedViews()
   }
 
   return (
@@ -362,7 +377,10 @@ function App() {
               status={dashboardStatus}
               dashboard={dashboard}
               errorMessage={dashboardErrorMessage}
-              onRetry={() => window.location.reload()}
+              onRetry={() => {
+                setDashboardErrorMessage(null)
+                setDashboardReloadTick((tick) => tick + 1)
+              }}
             />
           ) : (
             <AccountsView
@@ -385,6 +403,7 @@ function App() {
               createTransactionStatus={createTransactionStatus}
               createTransactionErrorMessage={createTransactionErrorMessage}
               onCreateTransaction={handleCreateTransaction}
+              onUpdateTransaction={handleUpdateTransaction}
               csvImportStatus={csvImportStatus}
               csvImportErrorMessage={csvImportErrorMessage}
               csvImportResult={csvImportResult}
@@ -469,6 +488,11 @@ interface AccountsViewProps {
   createTransactionStatus: CreateTransactionStatus
   createTransactionErrorMessage: string | null
   onCreateTransaction: (accountId: string, request: CreateTransactionRequest) => Promise<boolean>
+  onUpdateTransaction: (
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+  ) => Promise<void>
   csvImportStatus: CsvImportStatus
   csvImportErrorMessage: string | null
   csvImportResult: ImportTransactionsCsvResponse | null
@@ -498,6 +522,7 @@ function AccountsView({
   createTransactionStatus,
   createTransactionErrorMessage,
   onCreateTransaction,
+  onUpdateTransaction,
   csvImportStatus,
   csvImportErrorMessage,
   csvImportResult,
@@ -513,8 +538,28 @@ function AccountsView({
   const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
   const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
   const [newTransactionMemo, setNewTransactionMemo] = useState<string>('')
+  const [editingTransactionAccountId, setEditingTransactionAccountId] = useState<string | null>(null)
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
+  const [editingTransactionDate, setEditingTransactionDate] = useState<string>(todayIsoDate())
+  const [editingTransactionDirection, setEditingTransactionDirection] =
+    useState<TransactionDirection>('OUTFLOW')
+  const [editingTransactionAmount, setEditingTransactionAmount] = useState<string>('')
+  const [editingTransactionMemo, setEditingTransactionMemo] = useState<string>('')
+  const [updateTransactionStatus, setUpdateTransactionStatus] = useState<CreateTransactionStatus>('idle')
+  const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] = useState<string | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const csvFileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const resetEditingTransaction = (): void => {
+    setEditingTransactionAccountId(null)
+    setEditingTransactionId(null)
+    setEditingTransactionDate(todayIsoDate())
+    setEditingTransactionDirection('OUTFLOW')
+    setEditingTransactionAmount('')
+    setEditingTransactionMemo('')
+    setUpdateTransactionStatus('idle')
+    setUpdateTransactionErrorMessage(null)
+  }
 
   if (status === 'loading' || status === 'idle') {
     return <StatusCard tone="neutral" message="Загружаем счета и балансы..." />
@@ -536,19 +581,28 @@ function AccountsView({
     newAccountName.trim().length > 0 && isCurrencyValid && createAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
-  const transactionAmountCandidateRaw = newTransactionAmount.trim()
-  const transactionAmountCandidate = transactionAmountCandidateRaw.replace(',', '.')
+  const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
   const transactionMemoCandidate = newTransactionMemo.trim()
-  const isTransactionDateValid = /^\d{4}-\d{2}-\d{2}$/.test(transactionDateCandidate)
-  const isTransactionAmountValid =
-    /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(transactionAmountCandidate) &&
-    Number(transactionAmountCandidate) > 0
+  const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
+  const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
   const canCreateTransaction =
     selectedAccount !== null &&
     isTransactionDateValid &&
     isTransactionAmountValid &&
-    transactionMemoCandidate.length > 0 &&
     createTransactionStatus !== 'submitting'
+  const editingTransactionDateCandidate = editingTransactionDate.trim()
+  const editingTransactionAmountCandidate = normalizeAmountInput(editingTransactionAmount)
+  const editingTransactionMemoCandidate = editingTransactionMemo.trim()
+  const isEditingTransactionDateValid = isValidIsoDateValue(editingTransactionDateCandidate)
+  const isEditingTransactionAmountValid = isValidPositiveAmountValue(editingTransactionAmountCandidate)
+  const activeEditingTransactionId =
+    editingTransactionAccountId === selectedAccountId ? editingTransactionId : null
+  const canUpdateTransaction =
+    selectedAccount !== null &&
+    activeEditingTransactionId !== null &&
+    isEditingTransactionDateValid &&
+    isEditingTransactionAmountValid &&
+    updateTransactionStatus !== 'submitting'
   const canImportCsv =
     selectedAccount !== null && csvFile !== null && csvImportStatus !== 'submitting'
 
@@ -608,8 +662,44 @@ function AccountsView({
     }
   }
 
+  const handleStartEditingTransaction = (transaction: TransactionDto): void => {
+    setEditingTransactionAccountId(selectedAccountId)
+    setEditingTransactionId(transaction.id)
+    setEditingTransactionDate(transaction.occurredOn)
+    setEditingTransactionDirection(transaction.direction)
+    setEditingTransactionAmount(transaction.amount)
+    setEditingTransactionMemo(normalizeTransactionMemo(transaction.memo))
+    setUpdateTransactionStatus('idle')
+    setUpdateTransactionErrorMessage(null)
+  }
+
+  const handleUpdateTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!selectedAccount || !activeEditingTransactionId || !canUpdateTransaction) {
+      return
+    }
+
+    setUpdateTransactionStatus('submitting')
+    setUpdateTransactionErrorMessage(null)
+
+    try {
+      await onUpdateTransaction(selectedAccount.id, activeEditingTransactionId, {
+        occurredOn: editingTransactionDateCandidate,
+        direction: editingTransactionDirection,
+        amount: editingTransactionAmountCandidate,
+        memo: editingTransactionMemoCandidate,
+      })
+      resetEditingTransaction()
+    } catch (error) {
+      setUpdateTransactionStatus('error')
+      setUpdateTransactionErrorMessage(toErrorMessage(error))
+    }
+  }
+
   const handleSelectAccountClick = (accountId: string): void => {
     onSelectAccount(accountId)
+    resetEditingTransaction()
     setNewTransactionDate(todayIsoDate())
     setNewTransactionDirection('OUTFLOW')
     setNewTransactionAmount('')
@@ -922,35 +1012,147 @@ function AccountsView({
 
               {transactionsStatus === 'ready' && filteredTransactions.length > 0 ? (
                 <ul className="space-y-2">
-                  {filteredTransactions.map((transaction) => (
-                    <li
-                      key={transaction.id}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">{transaction.memo}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {formatIsoDateRu(transaction.occurredOn)} · {toDirectionLabel(transaction.direction)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">
-                            {transaction.currency}
-                          </p>
-                          <p
-                            className={`mt-1 text-sm font-semibold ${
-                              transaction.direction === 'OUTFLOW'
-                                ? 'text-rose-700'
-                                : 'text-emerald-700'
-                            }`}
+                  {filteredTransactions.map((transaction) => {
+                    const isEditing = activeEditingTransactionId === transaction.id
+
+                    return (
+                      <li
+                        key={transaction.id}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-3"
+                      >
+                        {isEditing ? (
+                          <form
+                            onSubmit={(event) => {
+                              void handleUpdateTransactionSubmit(event)
+                            }}
                           >
-                            {formatSignedAmount(transaction.amount, transaction.direction)}
-                          </p>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                              Редактировать транзакцию
+                            </p>
+
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              <label className="text-xs text-slate-600">
+                                Дата
+                                <input
+                                  type="date"
+                                  value={editingTransactionDate}
+                                  onChange={(event) => setEditingTransactionDate(event.target.value)}
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+
+                              <label className="text-xs text-slate-600">
+                                Направление
+                                <select
+                                  value={editingTransactionDirection}
+                                  onChange={(event) =>
+                                    setEditingTransactionDirection(
+                                      event.target.value as TransactionDirection,
+                                    )
+                                  }
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                >
+                                  <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
+                                  <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                                </select>
+                              </label>
+                            </div>
+
+                            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+                              <label className="text-xs text-slate-600">
+                                Сумма
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={editingTransactionAmount}
+                                  onChange={(event) => setEditingTransactionAmount(event.target.value)}
+                                  placeholder="0,00"
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+
+                              <label className="text-xs text-slate-600">
+                                Описание
+                                <input
+                                  type="text"
+                                  value={editingTransactionMemo}
+                                  onChange={(event) => setEditingTransactionMemo(event.target.value)}
+                                  placeholder="Без описания"
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+                            </div>
+
+                            {!isEditingTransactionAmountValid &&
+                            editingTransactionAmount.trim().length > 0 ? (
+                              <p className="mt-2 text-xs text-amber-700">
+                                Сумма должна быть положительной и содержать не более 2 знаков после
+                                запятой.
+                              </p>
+                            ) : null}
+
+                            {updateTransactionStatus === 'error' && updateTransactionErrorMessage ? (
+                              <p className="mt-2 text-xs text-amber-700">
+                                {updateTransactionErrorMessage}
+                              </p>
+                            ) : null}
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="submit"
+                                disabled={!canUpdateTransaction}
+                                className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {updateTransactionStatus === 'submitting'
+                                  ? 'Сохраняем...'
+                                  : 'Сохранить'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={resetEditingTransaction}
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {toTransactionMemoDisplay(transaction.memo)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatIsoDateRu(transaction.occurredOn)} ·{' '}
+                                {toDirectionLabel(transaction.direction)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs uppercase tracking-wide text-slate-500">
+                                {transaction.currency}
+                              </p>
+                              <p
+                                className={`mt-1 text-sm font-semibold ${
+                                  transaction.direction === 'OUTFLOW'
+                                    ? 'text-rose-700'
+                                    : 'text-emerald-700'
+                                }`}
+                              >
+                                {formatSignedAmount(transaction.amount, transaction.direction)}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditingTransaction(transaction)}
+                                className="mt-2 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600"
+                              >
+                                Редактировать
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               ) : null}
             </div>
@@ -1054,6 +1256,27 @@ function formatAmount(amount: string): string {
 function formatSignedAmount(amount: string, direction: 'INFLOW' | 'OUTFLOW'): string {
   const prefix = direction === 'OUTFLOW' ? '-' : '+'
   return `${prefix}${formatAmount(amount)}`
+}
+
+function normalizeAmountInput(value: string): string {
+  return value.trim().replace(',', '.')
+}
+
+function isValidIsoDateValue(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function isValidPositiveAmountValue(value: string): boolean {
+  return /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value) && Number(value) > 0
+}
+
+function normalizeTransactionMemo(memo: string | null): string {
+  return memo ?? ''
+}
+
+function toTransactionMemoDisplay(memo: string | null): string {
+  const normalizedMemo = normalizeTransactionMemo(memo)
+  return normalizedMemo.length > 0 ? normalizedMemo : 'Без описания'
 }
 
 function todayIsoDate(): string {

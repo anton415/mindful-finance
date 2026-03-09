@@ -31,6 +31,13 @@ export interface CreateTransactionRequest {
   memo: string
 }
 
+export interface UpdateTransactionRequest {
+  occurredOn: IsoDate
+  direction: TransactionDirection
+  amount: DecimalAmount
+  memo: string
+}
+
 export interface CreateTransactionResponse {
   transactionId: string
 }
@@ -47,7 +54,7 @@ export interface TransactionDto {
   direction: TransactionDirection
   amount: DecimalAmount
   currency: CurrencyCode
-  memo: string
+  memo: string | null
 }
 
 export interface MoneyDto {

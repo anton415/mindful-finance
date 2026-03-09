@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,6 +30,7 @@ import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
+import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
@@ -48,6 +50,7 @@ public class AccountsController {
     private final ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
+    private final UpdateTransaction updateTransaction;
 
     public AccountsController(
         AccountRepository accountRepository,
@@ -56,7 +59,8 @@ public class AccountsController {
         ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
         ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
-        ImportTransactions importTransactions
+        ImportTransactions importTransactions,
+        UpdateTransaction updateTransaction
     ) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
@@ -65,6 +69,7 @@ public class AccountsController {
         this.computeMonthlySavingsByCurrency = computeMonthlySavingsByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
+        this.updateTransaction = updateTransaction;
     }
 
     // Milestone 3: create account endpoint for the HTTP adapter v0.
@@ -128,6 +133,33 @@ public class AccountsController {
                 tx.memo()
             ))
             .toList();
+    }
+
+    @PutMapping("/accounts/{accountId}/transactions/{transactionId}")
+    public ResponseEntity<Void> updateTransaction(
+        @PathVariable("accountId") String accountId,
+        @PathVariable("transactionId") String transactionId,
+        @RequestBody UpdateTransactionRequest req
+    ) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        Account account = requireAccount(parsedAccountId);
+        TransactionId parsedTransactionId = parseTransactionId(transactionId);
+
+        boolean updated = updateTransaction.update(new UpdateTransaction.Command(
+            parsedAccountId,
+            parsedTransactionId,
+            account.currency(),
+            req.occurredOn(),
+            req.direction(),
+            req.amount(),
+            req.memo()
+        )).isPresent();
+
+        if (!updated) {
+            throw new TransactionNotFoundException("Transaction not found");
+        }
+
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping(value = "/imports/transactions/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -212,6 +244,10 @@ public class AccountsController {
         return new AccountId(UUID.fromString(accountId));
     }
 
+    private static TransactionId parseTransactionId(String transactionId) {
+        return new TransactionId(UUID.fromString(transactionId));
+    }
+
     private static LocalDate parseAsOfDate(String asOf) {
         if (asOf == null || asOf.isBlank()) return LocalDate.now();
         try {
@@ -240,6 +276,13 @@ public class AccountsController {
     ) {}
 
     public record CreateTransactionResponse(String transactionId) {}
+
+    public record UpdateTransactionRequest(
+        LocalDate occurredOn,
+        TransactionDirection direction,
+        BigDecimal amount,
+        String memo
+    ) {}
 
     public record TransactionDto(
         String id,

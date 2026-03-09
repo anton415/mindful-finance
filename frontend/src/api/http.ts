@@ -16,6 +16,7 @@ export interface RequestFormDataOptions {
 export interface HttpClient {
   getJson<T>(path: string, options?: RequestJsonOptions): Promise<T>
   postJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
+  putJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
   postFormData<TResponse>(
     path: string,
     formData: FormData,
@@ -79,6 +80,25 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
       return parseJsonResponse<TResponse>(response)
     },
 
+    async putJson<TResponse, TBody>(
+      path: string,
+      body: TBody,
+      options: RequestJsonOptions = {},
+    ): Promise<TResponse> {
+      const url = buildUrl(baseUrl, path, options.query)
+      const response = await fetchFn(url, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: options.signal,
+      })
+
+      return parseJsonResponse<TResponse>(response, { allowEmpty: true })
+    },
+
     async postFormData<TResponse>(
       path: string,
       formData: FormData,
@@ -115,7 +135,10 @@ function buildUrl(baseUrl: string, path: string, query?: QueryParams): string {
   return url.toString()
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T> {
+async function parseJsonResponse<T>(
+  response: Response,
+  options: { allowEmpty?: boolean } = {},
+): Promise<T> {
   const body = await readResponseBody(response)
 
   if (!response.ok) {
@@ -126,6 +149,9 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   }
 
   if (body === null) {
+    if (options.allowEmpty) {
+      return undefined as T
+    }
     throw new ApiClientError('Expected JSON response body but got empty response', response.status, null)
   }
 

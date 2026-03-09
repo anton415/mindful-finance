@@ -19,6 +19,7 @@ import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
+import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
 import com.mindfulfinance.postgres.PostgresTransactionRepository;
 
@@ -96,5 +97,10 @@ public class ApiWiringConfig {
     @Bean
     public ImportTransactions importTransactions(AccountRepository accountRepository, TransactionRepository transactionRepository) {
         return new ImportTransactions(accountRepository, transactionRepository);
+    }
+
+    @Bean
+    public UpdateTransaction updateTransaction(TransactionRepository transactionRepository) {
+        return new UpdateTransaction(transactionRepository);
     }
 }

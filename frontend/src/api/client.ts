@@ -10,6 +10,7 @@ import type {
   IsoDate,
   MoneyDto,
   TransactionDto,
+  UpdateTransactionRequest,
 } from './types'
 
 export interface ApiClient {
@@ -19,6 +20,12 @@ export interface ApiClient {
     request: CreateTransactionRequest,
     signal?: AbortSignal,
   ): Promise<CreateTransactionResponse>
+  updateTransaction(
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
   importTransactionsCsv(
     accountId: string,
     file: File,
@@ -47,6 +54,19 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
     ): Promise<CreateTransactionResponse> {
       return http.postJson<CreateTransactionResponse, CreateTransactionRequest>(
         `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+        request,
+        { signal },
+      )
+    },
+
+    updateTransaction(
+      accountId: string,
+      transactionId: string,
+      request: UpdateTransactionRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateTransactionRequest>(
+        `/accounts/${toEncodedAccountId(accountId)}/transactions/${toEncodedTransactionId(transactionId)}`,
         request,
         { signal },
       )
@@ -105,13 +125,21 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
 export const apiClient = createApiClient()
 
 function toEncodedAccountId(accountId: string): string {
-  return encodeURIComponent(toRequiredAccountId(accountId))
+  return encodeURIComponent(toRequiredIdentifier(accountId, 'accountId'))
+}
+
+function toEncodedTransactionId(transactionId: string): string {
+  return encodeURIComponent(toRequiredIdentifier(transactionId, 'transactionId'))
 }
 
 function toRequiredAccountId(accountId: string): string {
-  const trimmed = accountId.trim()
+  return toRequiredIdentifier(accountId, 'accountId')
+}
+
+function toRequiredIdentifier(value: string, fieldName: string): string {
+  const trimmed = value.trim()
   if (trimmed.length === 0) {
-    throw new Error('accountId must not be blank')
+    throw new Error(`${fieldName} must not be blank`)
   }
   return trimmed
 }
