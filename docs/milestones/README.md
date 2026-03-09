@@ -48,4 +48,4 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
 - **Milestone 13 — Engineering Automation & Bots (v1)**  
   Spec: `milestone-13-engineering-automation-and-bots.md` • Tracking: https://github.com/anton415/mindful-finance/issues/48
 - **Milestone 14 — Domain Model Alignment & Schema v1 (v1)**  
-  Spec: `milestone-14-domain-model-alignment-and-schema-v1.md`
+  Spec: `milestone-14-domain-model-alignment-and-schema-v1.md` • Tracking: https://github.com/anton415/mindful-finance/issues/67
