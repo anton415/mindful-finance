@@ -44,6 +44,13 @@ public class ApiExceptionHandlerTest {
     }
 
     @Test
+    public void personalFinanceCardNotFoundException_returns404NotFound() throws Exception {
+        mockMvc.perform(get("/throw/personal-finance-card-not-found"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
     public void illegalArgumentException_returns400BadRequest() throws Exception {
         mockMvc.perform(get("/throw/bad-request"))
             .andExpect(status().isBadRequest())
@@ -74,6 +81,11 @@ public class ApiExceptionHandlerTest {
         @GetMapping("/throw/transaction-not-found")
         public String transactionNotFound() {
             throw new TransactionNotFoundException("Transaction not found");
+        }
+
+        @GetMapping("/throw/personal-finance-card-not-found")
+        public String personalFinanceCardNotFound() {
+            throw new PersonalFinanceCardNotFoundException("Personal finance card not found");
         }
 
         // Milestone 3 requires 400 mapping for request and validation errors.

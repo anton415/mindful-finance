@@ -11,16 +11,38 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import com.mindfulfinance.api.InMemoryAccountRepository;
+import com.mindfulfinance.api.InMemoryIncomeForecastRepository;
+import com.mindfulfinance.api.InMemoryMonthlyExpenseActualRepository;
+import com.mindfulfinance.api.InMemoryMonthlyExpenseLimitRepository;
+import com.mindfulfinance.api.InMemoryMonthlyIncomeActualRepository;
+import com.mindfulfinance.api.InMemoryPersonalFinanceCardRepository;
 import com.mindfulfinance.api.InMemoryTransactionRepository;
 import com.mindfulfinance.application.ports.AccountRepository;
+import com.mindfulfinance.application.ports.IncomeForecastRepository;
+import com.mindfulfinance.application.ports.MonthlyExpenseActualRepository;
+import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
+import com.mindfulfinance.application.ports.MonthlyIncomeActualRepository;
+import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
+import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ImportTransactions;
+import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
+import com.mindfulfinance.application.usecases.SaveIncomeForecast;
+import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
+import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
+import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
+import com.mindfulfinance.postgres.PostgresIncomeForecastRepository;
+import com.mindfulfinance.postgres.PostgresMonthlyExpenseActualRepository;
+import com.mindfulfinance.postgres.PostgresMonthlyExpenseLimitRepository;
+import com.mindfulfinance.postgres.PostgresMonthlyIncomeActualRepository;
+import com.mindfulfinance.postgres.PostgresPersonalFinanceCardRepository;
 import com.mindfulfinance.postgres.PostgresTransactionRepository;
 
 @Configuration
@@ -35,6 +57,36 @@ public class ApiWiringConfig {
     @Profile("!postgres")
     public TransactionRepository transactionRepository() {
         return new InMemoryTransactionRepository();
+    }
+
+    @Bean
+    @Profile("!postgres")
+    public PersonalFinanceCardRepository personalFinanceCardRepository() {
+        return new InMemoryPersonalFinanceCardRepository();
+    }
+
+    @Bean
+    @Profile("!postgres")
+    public MonthlyExpenseActualRepository monthlyExpenseActualRepository() {
+        return new InMemoryMonthlyExpenseActualRepository();
+    }
+
+    @Bean
+    @Profile("!postgres")
+    public MonthlyExpenseLimitRepository monthlyExpenseLimitRepository() {
+        return new InMemoryMonthlyExpenseLimitRepository();
+    }
+
+    @Bean
+    @Profile("!postgres")
+    public MonthlyIncomeActualRepository monthlyIncomeActualRepository() {
+        return new InMemoryMonthlyIncomeActualRepository();
+    }
+
+    @Bean
+    @Profile("!postgres")
+    public IncomeForecastRepository incomeForecastRepository() {
+        return new InMemoryIncomeForecastRepository();
     }
 
     @Bean
@@ -75,6 +127,36 @@ public class ApiWiringConfig {
     }
 
     @Bean
+    @Profile("postgres")
+    public PersonalFinanceCardRepository postgresPersonalFinanceCardRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresPersonalFinanceCardRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @Profile("postgres")
+    public MonthlyExpenseActualRepository postgresMonthlyExpenseActualRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresMonthlyExpenseActualRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @Profile("postgres")
+    public MonthlyExpenseLimitRepository postgresMonthlyExpenseLimitRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresMonthlyExpenseLimitRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @Profile("postgres")
+    public MonthlyIncomeActualRepository postgresMonthlyIncomeActualRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresMonthlyIncomeActualRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @Profile("postgres")
+    public IncomeForecastRepository postgresIncomeForecastRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresIncomeForecastRepository(jdbcTemplate);
+    }
+
+    @Bean
     public ComputeAccountBalance computeAccountBalance(AccountRepository accountRepository, TransactionRepository transactionRepository) {
         return new ComputeAccountBalance(accountRepository, transactionRepository);
     }
@@ -102,5 +184,64 @@ public class ApiWiringConfig {
     @Bean
     public UpdateTransaction updateTransaction(TransactionRepository transactionRepository) {
         return new UpdateTransaction(transactionRepository);
+    }
+
+    @Bean
+    public CreatePersonalFinanceCard createPersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository
+    ) {
+        return new CreatePersonalFinanceCard(personalFinanceCardRepository);
+    }
+
+    @Bean
+    public ListPersonalFinanceCards listPersonalFinanceCards(
+        PersonalFinanceCardRepository personalFinanceCardRepository
+    ) {
+        return new ListPersonalFinanceCards(personalFinanceCardRepository);
+    }
+
+    @Bean
+    public SaveMonthlyExpenseActual saveMonthlyExpenseActual(
+        MonthlyExpenseActualRepository monthlyExpenseActualRepository
+    ) {
+        return new SaveMonthlyExpenseActual(monthlyExpenseActualRepository);
+    }
+
+    @Bean
+    public SaveMonthlyExpenseLimit saveMonthlyExpenseLimit(
+        MonthlyExpenseLimitRepository monthlyExpenseLimitRepository
+    ) {
+        return new SaveMonthlyExpenseLimit(monthlyExpenseLimitRepository);
+    }
+
+    @Bean
+    public SaveMonthlyIncomeActual saveMonthlyIncomeActual(
+        MonthlyIncomeActualRepository monthlyIncomeActualRepository
+    ) {
+        return new SaveMonthlyIncomeActual(monthlyIncomeActualRepository);
+    }
+
+    @Bean
+    public SaveIncomeForecast saveIncomeForecast(
+        IncomeForecastRepository incomeForecastRepository
+    ) {
+        return new SaveIncomeForecast(incomeForecastRepository);
+    }
+
+    @Bean
+    public GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        MonthlyExpenseActualRepository monthlyExpenseActualRepository,
+        MonthlyExpenseLimitRepository monthlyExpenseLimitRepository,
+        MonthlyIncomeActualRepository monthlyIncomeActualRepository,
+        IncomeForecastRepository incomeForecastRepository
+    ) {
+        return new GetCardPersonalFinanceSnapshot(
+            personalFinanceCardRepository,
+            monthlyExpenseActualRepository,
+            monthlyExpenseLimitRepository,
+            monthlyIncomeActualRepository,
+            incomeForecastRepository
+        );
     }
 }

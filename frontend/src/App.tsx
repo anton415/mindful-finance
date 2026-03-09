@@ -4,15 +4,22 @@ import {
   apiClient,
   type AccountDto,
   type AccountType,
+  type CreatePersonalFinanceCardRequest,
   type CreateAccountRequest,
   type CreateTransactionRequest,
   type CurrencyTotalsDto,
   type ImportTransactionsCsvResponse,
   type MoneyDto,
+  type PersonalFinanceCardDto,
+  type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
+  type UpdateIncomeForecastRequest,
+  type UpdateMonthlyExpenseRequest,
+  type UpdateMonthlyIncomeActualRequest,
   type UpdateTransactionRequest,
 } from './api'
+import { PersonalFinanceView, type PersonalFinanceTab } from './features/personal-finance/PersonalFinanceView'
 
 interface DashboardData {
   asOf: string
@@ -26,7 +33,7 @@ interface AccountWithBalance extends AccountDto {
 }
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-type ViewTab = 'dashboard' | 'accounts'
+type ViewTab = 'dashboard' | 'accounts' | 'personal-finance'
 type TransactionDirectionFilter = 'ALL' | 'INFLOW' | 'OUTFLOW'
 type CreateAccountStatus = 'idle' | 'submitting' | 'error'
 type CreateTransactionStatus = 'idle' | 'submitting' | 'error'
@@ -35,6 +42,9 @@ type AccountStatus = 'ACTIVE' | string
 interface NavigationState {
   tab: ViewTab
   accountId: string | null
+  financeTab: PersonalFinanceTab
+  financeYear: number
+  financeCardId: string | null
 }
 
 const ACCOUNT_TYPE_OPTIONS: AccountType[] = ['CASH', 'DEPOSIT', 'FUND', 'IIS', 'BROKERAGE']
@@ -43,10 +53,25 @@ const DEFAULT_ACCOUNT_CURRENCY =
   ACCOUNT_CURRENCY_OPTIONS.includes('USD') && ACCOUNT_CURRENCY_OPTIONS.length > 0
     ? 'USD'
     : (ACCOUNT_CURRENCY_OPTIONS[0] ?? 'USD')
-const DEFAULT_NAVIGATION_STATE: NavigationState = { tab: 'dashboard', accountId: null }
+const DEFAULT_NAVIGATION_STATE: NavigationState = {
+  tab: 'dashboard',
+  accountId: null,
+  financeTab: 'expenses',
+  financeYear: currentYear(),
+  financeCardId: null,
+}
 
 function App() {
   const [activeView, setActiveView] = useState<ViewTab>(() => readNavigationFromUrl().tab)
+  const [activePersonalFinanceTab, setActivePersonalFinanceTab] = useState<PersonalFinanceTab>(
+    () => readNavigationFromUrl().financeTab,
+  )
+  const [selectedPersonalFinanceYear, setSelectedPersonalFinanceYear] = useState<number>(
+    () => readNavigationFromUrl().financeYear,
+  )
+  const [selectedPersonalFinanceCardId, setSelectedPersonalFinanceCardId] = useState<string | null>(
+    () => readNavigationFromUrl().financeCardId,
+  )
 
   const [dashboardStatus, setDashboardStatus] = useState<LoadStatus>('idle')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
@@ -72,13 +97,30 @@ function App() {
   const [csvImportStatus, setCsvImportStatus] = useState<CsvImportStatus>('idle')
   const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<string | null>(null)
   const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
+  const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
+  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardDto[]>([])
+  const [personalFinanceSnapshot, setPersonalFinanceSnapshot] = useState<PersonalFinanceSnapshotDto | null>(null)
+  const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
+  const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
 
   const [directionFilter, setDirectionFilter] = useState<TransactionDirectionFilter>('ALL')
   const [memoFilter, setMemoFilter] = useState<string>('')
 
   useEffect(() => {
-    syncNavigationToUrl(activeView, selectedAccountId)
-  }, [activeView, selectedAccountId])
+    syncNavigationToUrl(
+      activeView,
+      selectedAccountId,
+      activePersonalFinanceTab,
+      selectedPersonalFinanceYear,
+      selectedPersonalFinanceCardId,
+    )
+  }, [
+    activeView,
+    selectedAccountId,
+    activePersonalFinanceTab,
+    selectedPersonalFinanceYear,
+    selectedPersonalFinanceCardId,
+  ])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -223,6 +265,72 @@ function App() {
     }
   }, [selectedAccountId, transactionsReloadTick])
 
+  useEffect(() => {
+    if (activeView !== 'personal-finance') {
+      return
+    }
+
+    const controller = new AbortController()
+
+    const loadPersonalFinance = async (): Promise<void> => {
+      setPersonalFinanceStatus('loading')
+      setPersonalFinanceErrorMessage(null)
+
+      try {
+        const cards = await apiClient.listPersonalFinanceCards(controller.signal)
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceCards(cards)
+
+        if (cards.length === 0) {
+          setSelectedPersonalFinanceCardId(null)
+          setPersonalFinanceSnapshot(null)
+          setPersonalFinanceStatus('ready')
+          return
+        }
+
+        const resolvedCardId =
+          selectedPersonalFinanceCardId && cards.some((card) => card.id === selectedPersonalFinanceCardId)
+            ? selectedPersonalFinanceCardId
+            : cards[0].id
+
+        if (resolvedCardId !== selectedPersonalFinanceCardId) {
+          setSelectedPersonalFinanceCardId(resolvedCardId)
+        }
+
+        const snapshot = await apiClient.getPersonalFinanceSnapshot(
+          resolvedCardId,
+          selectedPersonalFinanceYear,
+          controller.signal,
+        )
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceCards(snapshot.cards)
+        setPersonalFinanceSnapshot(snapshot)
+        setPersonalFinanceStatus('ready')
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceStatus('error')
+        setPersonalFinanceErrorMessage(toErrorMessage(error))
+      }
+    }
+
+    void loadPersonalFinance()
+
+    return () => {
+      controller.abort()
+    }
+  }, [activeView, selectedPersonalFinanceCardId, selectedPersonalFinanceYear, personalFinanceReloadTick])
+
   const selectedAccount = selectedAccountId
     ? accounts.find((account) => account.id === selectedAccountId) ?? null
     : null
@@ -243,11 +351,16 @@ function App() {
     })
   }, [transactions, directionFilter, memoFilter])
 
-  const localizedTitle = activeView === 'dashboard' ? 'Обзор' : 'Счета'
-  const localizedDescription =
-    activeView === 'dashboard'
-      ? 'Спокойный срез капитала и метрик финансового спокойствия.'
-      : 'Счета с балансами, деталями транзакций и простыми фильтрами.'
+  const localizedTitle = getViewTitle(activeView)
+  const localizedDescription = getViewDescription(activeView)
+  const headerContextLabel =
+    activeView === 'personal-finance'
+      ? personalFinanceSnapshot?.card
+        ? `${personalFinanceSnapshot.card.name} · ${selectedPersonalFinanceYear}`
+        : `Год ${selectedPersonalFinanceYear}`
+      : dashboard
+        ? `На дату ${formatIsoDateRu(dashboard.asOf)}`
+        : 'На сегодня'
 
   const handleAccountSelect = (accountId: string): void => {
     if (accountId === selectedAccountId) {
@@ -340,9 +453,106 @@ function App() {
     refreshTransactionDerivedViews()
   }
 
+  const handleCreatePersonalFinanceCard = async (
+    request: CreatePersonalFinanceCardRequest,
+  ): Promise<boolean> => {
+    try {
+      const created = await apiClient.createPersonalFinanceCard(request)
+      setSelectedPersonalFinanceCardId(created.cardId)
+      setPersonalFinanceReloadTick((tick) => tick + 1)
+      return true
+    } catch (error) {
+      setPersonalFinanceErrorMessage(toErrorMessage(error))
+      return false
+    }
+  }
+
+  const handleSaveExpenseActual = async (
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateMonthlyExpenseActual(selectedPersonalFinanceCardId, month, request)
+      setPersonalFinanceReloadTick((tick) => tick + 1)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSaveExpenseLimit = async (
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateMonthlyExpenseLimit(selectedPersonalFinanceCardId, month, request)
+      setPersonalFinanceReloadTick((tick) => tick + 1)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSaveIncomeActual = async (
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateMonthlyIncomeActual(
+        selectedPersonalFinanceCardId,
+        month,
+        request,
+      )
+      setPersonalFinanceReloadTick((tick) => tick + 1)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSaveIncomeForecast = async (request: UpdateIncomeForecastRequest): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateIncomeForecast(
+        selectedPersonalFinanceCardId,
+        selectedPersonalFinanceYear,
+        request,
+      )
+      setPersonalFinanceReloadTick((tick) => tick + 1)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const isPersonalFinanceView = activeView === 'personal-finance'
+
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:py-14">
-      <section className="rounded-2xl border border-slate-200 bg-white/85 p-8 shadow-sm backdrop-blur">
+    <main
+      className={`min-h-screen w-full px-4 py-8 sm:px-6 sm:py-10 ${
+        isPersonalFinanceView ? '' : 'mx-auto max-w-5xl sm:py-14'
+      }`}
+    >
+      <section
+        className={`rounded-2xl border border-slate-200 bg-white/85 shadow-sm backdrop-blur ${
+          isPersonalFinanceView ? 'w-full p-5 lg:p-8' : 'p-8'
+        }`}
+      >
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -353,9 +563,7 @@ function App() {
               {localizedDescription}
             </p>
           </div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            {dashboard ? `На дату ${formatIsoDateRu(dashboard.asOf)}` : 'На сегодня'}
-          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{headerContextLabel}</p>
         </header>
 
         <nav className="mt-8 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -365,9 +573,14 @@ function App() {
             onClick={() => setActiveView('dashboard')}
           />
           <TabButton
-            label="Счета"
+            label="Инвестиции"
             isActive={activeView === 'accounts'}
             onClick={() => setActiveView('accounts')}
+          />
+          <TabButton
+            label="Личные финансы"
+            isActive={activeView === 'personal-finance'}
+            onClick={() => setActiveView('personal-finance')}
           />
         </nav>
 
@@ -381,6 +594,28 @@ function App() {
                 setDashboardErrorMessage(null)
                 setDashboardReloadTick((tick) => tick + 1)
               }}
+            />
+          ) : activeView === 'personal-finance' ? (
+            <PersonalFinanceView
+              status={personalFinanceStatus}
+              cards={personalFinanceCards}
+              snapshot={personalFinanceSnapshot}
+              selectedCardId={selectedPersonalFinanceCardId}
+              activeTab={activePersonalFinanceTab}
+              year={selectedPersonalFinanceYear}
+              errorMessage={personalFinanceErrorMessage}
+              onSelectTab={setActivePersonalFinanceTab}
+              onSelectYear={setSelectedPersonalFinanceYear}
+              onSelectCard={setSelectedPersonalFinanceCardId}
+              onRetry={() => {
+                setPersonalFinanceErrorMessage(null)
+                setPersonalFinanceReloadTick((tick) => tick + 1)
+              }}
+              onCreateCard={handleCreatePersonalFinanceCard}
+              onSaveExpenseActual={handleSaveExpenseActual}
+              onSaveExpenseLimit={handleSaveExpenseLimit}
+              onSaveIncomeActual={handleSaveIncomeActual}
+              onSaveIncomeForecast={handleSaveIncomeForecast}
             />
           ) : (
             <AccountsView
@@ -562,14 +797,14 @@ function AccountsView({
   }
 
   if (status === 'loading' || status === 'idle') {
-    return <StatusCard tone="neutral" message="Загружаем счета и балансы..." />
+    return <StatusCard tone="neutral" message="Загружаем инвестиции и балансы..." />
   }
 
   if (status === 'error') {
     return (
       <StatusCard
         tone="warning"
-        message={errorMessage ?? 'Не удалось загрузить счета.'}
+        message={errorMessage ?? 'Не удалось загрузить инвестиции.'}
         actionLabel="Повторить"
         onAction={onRetryAccounts}
       />
@@ -713,8 +948,8 @@ function AccountsView({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Список счетов</h2>
-        <p className="mt-1 text-xs text-slate-500">Выберите счет, чтобы посмотреть транзакции.</p>
+        <h2 className="text-sm font-semibold text-slate-900">Список инвестиций</h2>
+        <p className="mt-1 text-xs text-slate-500">Выберите инструмент, чтобы посмотреть транзакции.</p>
 
         <form
           className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
@@ -722,14 +957,14 @@ function AccountsView({
             void handleCreateAccountSubmit(event)
           }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Создать счет</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Добавить инструмент</p>
 
           <div className="mt-3 space-y-2">
             <input
               type="text"
               value={newAccountName}
               onChange={(event) => setNewAccountName(event.target.value)}
-              placeholder="Название счета"
+              placeholder="Название инструмента"
               className="block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
             />
 
@@ -773,13 +1008,13 @@ function AccountsView({
             disabled={!canCreate}
             className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {createAccountStatus === 'submitting' ? 'Создаем...' : 'Создать счет'}
+            {createAccountStatus === 'submitting' ? 'Добавляем...' : 'Добавить'}
           </button>
         </form>
 
         {accounts.length === 0 ? (
           <div className="mt-4">
-            <StatusCard tone="neutral" message="Пока нет счетов. Создайте первый счет." />
+            <StatusCard tone="neutral" message="Пока нет инвестиций. Добавьте первый инструмент." />
           </div>
         ) : (
           <ul className="mt-4 space-y-2">
@@ -819,7 +1054,7 @@ function AccountsView({
 
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         {!selectedAccount ? (
-          <StatusCard tone="neutral" message="Выберите счет, чтобы посмотреть транзакции." />
+          <StatusCard tone="neutral" message="Выберите инструмент, чтобы посмотреть транзакции." />
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1003,7 +1238,7 @@ function AccountsView({
               ) : null}
 
               {transactionsStatus === 'ready' && totalTransactionsCount === 0 ? (
-                <StatusCard tone="neutral" message="Для этого счета пока нет транзакций." />
+                <StatusCard tone="neutral" message="Для этого инструмента пока нет транзакций." />
               ) : null}
 
               {transactionsStatus === 'ready' && totalTransactionsCount > 0 && filteredTransactions.length === 0 ? (
@@ -1337,6 +1572,26 @@ function getAccountCurrencyOptions(): string[] {
   )
 }
 
+function getViewTitle(view: ViewTab): string {
+  if (view === 'accounts') {
+    return 'Инвестиции'
+  }
+  if (view === 'personal-finance') {
+    return 'Личные финансы'
+  }
+  return 'Обзор'
+}
+
+function getViewDescription(view: ViewTab): string {
+  if (view === 'accounts') {
+    return 'Инвестиционные счета и активы с балансами, деталями транзакций и простыми фильтрами.'
+  }
+  if (view === 'personal-finance') {
+    return 'Ручной yearly review по картам: факт расходов, лимиты, фактический доход и прогноз.'
+  }
+  return 'Спокойный срез капитала и метрик финансового спокойствия.'
+}
+
 function readNavigationFromUrl(): NavigationState {
   if (typeof window === 'undefined') {
     return DEFAULT_NAVIGATION_STATE
@@ -1345,13 +1600,31 @@ function readNavigationFromUrl(): NavigationState {
   const params = new URLSearchParams(window.location.search)
   const tabParam = params.get('tab')
   const accountIdRaw = params.get('accountId')
+  const financeTabParam = params.get('financeTab')
+  const financeYearParam = params.get('financeYear')
+  const financeCardIdRaw = params.get('financeCardId')
   const accountId = accountIdRaw && accountIdRaw.trim().length > 0 ? accountIdRaw : null
-  const tab: ViewTab = tabParam === 'accounts' || accountId ? 'accounts' : 'dashboard'
+  const financeCardId = financeCardIdRaw && financeCardIdRaw.trim().length > 0 ? financeCardIdRaw : null
+  const financeTab: PersonalFinanceTab = financeTabParam === 'income' ? 'income' : 'expenses'
+  const financeYear = toNavigationYear(financeYearParam)
 
-  return { tab, accountId }
+  const tab: ViewTab =
+    tabParam === 'personal-finance'
+      ? 'personal-finance'
+      : tabParam === 'accounts' || accountId
+        ? 'accounts'
+        : 'dashboard'
+
+  return { tab, accountId, financeTab, financeYear, financeCardId }
 }
 
-function syncNavigationToUrl(activeView: ViewTab, selectedAccountId: string | null): void {
+function syncNavigationToUrl(
+  activeView: ViewTab,
+  selectedAccountId: string | null,
+  financeTab: PersonalFinanceTab,
+  financeYear: number,
+  financeCardId: string | null,
+): void {
   if (typeof window === 'undefined') {
     return
   }
@@ -1359,15 +1632,42 @@ function syncNavigationToUrl(activeView: ViewTab, selectedAccountId: string | nu
   const params = new URLSearchParams(window.location.search)
   params.delete('tab')
   params.delete('accountId')
+  params.delete('financeTab')
+  params.delete('financeYear')
+  params.delete('financeCardId')
 
   params.set('tab', activeView)
   if (activeView === 'accounts' && selectedAccountId) {
     params.set('accountId', selectedAccountId)
   }
+  if (activeView === 'personal-finance') {
+    params.set('financeTab', financeTab)
+    params.set('financeYear', String(financeYear))
+    if (financeCardId) {
+      params.set('financeCardId', financeCardId)
+    }
+  }
 
   const query = params.toString()
   const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`
   window.history.replaceState(null, '', nextUrl)
+}
+
+function toNavigationYear(value: string | null): number {
+  if (!value) {
+    return currentYear()
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 9999) {
+    return currentYear()
+  }
+
+  return parsed
+}
+
+function currentYear(): number {
+  return new Date().getFullYear()
 }
 
 function toErrorMessage(error: unknown): string {

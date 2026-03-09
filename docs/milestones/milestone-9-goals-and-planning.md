@@ -63,3 +63,4 @@
 ## Task notes
 - Reuse the existing `LifeGoal` domain foundation instead of inventing a parallel goal model.
 - Keep planning formulas explicit and explainable.
+- Annual `Personal Finance` manual review is a separate card-scoped persisted layer for monthly facts, category limits, actual income, and income forecast; it does not replace or mutate the transaction-based truth ledger or current Peace metrics.

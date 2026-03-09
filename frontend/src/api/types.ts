@@ -64,6 +64,101 @@ export interface MoneyDto {
 
 export type CurrencyTotalsDto = Record<CurrencyCode, DecimalAmount>
 
+export type PersonalExpenseCategoryCode =
+  | 'RESTAURANTS'
+  | 'GROCERIES'
+  | 'PERSONAL'
+  | 'UTILITIES'
+  | 'TRANSPORT'
+  | 'GIFTS'
+  | 'INVESTMENTS'
+  | 'ENTERTAINMENT'
+  | 'EDUCATION'
+
+export interface PersonalExpenseCategoryDto {
+  code: PersonalExpenseCategoryCode
+  label: string
+}
+
+export interface PersonalFinanceCardDto {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export interface CreatePersonalFinanceCardRequest {
+  name: string
+}
+
+export interface CreatePersonalFinanceCardResponse {
+  cardId: string
+}
+
+export interface PersonalFinanceExpenseMonthDto {
+  month: number
+  actualCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  actualTotal: DecimalAmount
+  limitTotal: DecimalAmount
+}
+
+export interface PersonalFinanceExpensesDto {
+  months: PersonalFinanceExpenseMonthDto[]
+  actualTotalsByCategory: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  limitTotalsByCategory: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  annualActualTotal: DecimalAmount
+  annualLimitTotal: DecimalAmount
+  averageMonthlyActualTotal: DecimalAmount
+}
+
+export type PersonalFinanceIncomeMonthStatus = 'ACTUAL' | 'FORECAST'
+
+export interface PersonalFinanceIncomeMonthDto {
+  month: number
+  totalAmount: DecimalAmount
+  status: PersonalFinanceIncomeMonthStatus | null
+}
+
+export interface PersonalFinanceIncomeForecastDto {
+  startMonth: number
+  salaryAmount: DecimalAmount
+  bonusAmount: DecimalAmount
+  totalAmount: DecimalAmount
+}
+
+export interface PersonalFinanceIncomeDto {
+  months: PersonalFinanceIncomeMonthDto[]
+  annualTotal: DecimalAmount
+  averageMonthlyTotal: DecimalAmount
+  forecast: PersonalFinanceIncomeForecastDto | null
+}
+
+export interface PersonalFinanceSnapshotDto {
+  cards: PersonalFinanceCardDto[]
+  card: PersonalFinanceCardDto
+  year: number
+  currency: CurrencyCode
+  categories: PersonalExpenseCategoryDto[]
+  expenses: PersonalFinanceExpensesDto
+  income: PersonalFinanceIncomeDto
+}
+
+export interface UpdateMonthlyExpenseRequest {
+  year: number
+  categoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+}
+
+export interface UpdateMonthlyIncomeActualRequest {
+  year: number
+  totalAmount: DecimalAmount
+}
+
+export interface UpdateIncomeForecastRequest {
+  startMonth: number
+  salaryAmount: DecimalAmount
+  bonusAmount: DecimalAmount
+}
+
 export interface ApiErrorDto {
   error: string
   message: string

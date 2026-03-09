@@ -25,33 +25,39 @@ class MigrationSmokeTest {
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Test
-    void migration_creates_accounts_and_transactions_tables() throws Exception {
-        // Run the module's Flyway migrations against a real PostgreSQL instance.
+    void migration_creates_expected_tables() throws Exception {
         var flyway = Flyway.configure()
             .dataSource(
                 postgres.getJdbcUrl(),
                 postgres.getUsername(),
                 postgres.getPassword()
             )
+            .cleanDisabled(false)
             .locations("classpath:db/migration")
             .load();
 
+        flyway.clean();
         var result = flyway.migrate();
 
-        assertEquals(2, result.migrationsExecuted);
+        assertEquals(4, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),
             postgres.getUsername(),
             postgres.getPassword())) {
-            // Smoke-test the schema by asking PostgreSQL which tables exist in public.
-            assertThat(loadTableNames(connection)).containsExactly("accounts", "transactions");
+            assertThat(loadTableNames(connection)).containsExactly(
+                "accounts",
+                "personal_finance_cards",
+                "personal_finance_income_forecasts",
+                "personal_finance_monthly_expense_actuals",
+                "personal_finance_monthly_expense_limits",
+                "personal_finance_monthly_income_actuals",
+                "transactions"
+            );
 
-            // Check the account table shape before moving on to repository tests.
             assertThat(loadColumnNames(connection, "accounts"))
                 .containsExactly("id", "name", "currency", "type", "status", "created_at");
 
-            // Check the transaction table shape for the first persistence slice.
             assertThat(loadColumnNames(connection, "transactions"))
                 .containsExactly(
                     "id",
@@ -64,12 +70,84 @@ class MigrationSmokeTest {
                     "created_at"
                 );
 
-            // Check a few key SQL types so the JDBC mapping shape stays aligned with the domain.
             assertThat(loadColumnTypes(connection, "transactions"))
                 .containsEntry("account_id", "uuid")
                 .containsEntry("occurred_on", "date")
                 .containsEntry("amount", "numeric")
                 .containsEntry("created_at", "timestamp with time zone");
+
+            assertThat(loadColumnTypes(connection, "personal_finance_cards"))
+                .containsEntry("id", "uuid")
+                .containsEntry("created_at", "timestamp with time zone");
+
+            assertThat(loadColumnTypes(connection, "personal_finance_monthly_income_actuals"))
+                .containsEntry("card_id", "uuid")
+                .containsEntry("total_amount", "numeric");
+        }
+    }
+
+    @Test
+    void migration_v4_moves_legacy_personal_finance_rows_to_default_card() throws Exception {
+        var baseFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .target("3")
+            .load();
+
+        baseFlyway.clean();
+        baseFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword())) {
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_monthly_expenses (
+                    year, month, restaurants, groceries, personal, utilities, transport,
+                    gifts, investments, entertainment, education
+                ) VALUES (
+                    2026, 2, 100.00, 200.00, 0, 0, 0, 0, 0, 0, 0
+                )
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_monthly_income (year, month, salary_amount, bonus_amount)
+                VALUES (2026, 3, 205000.00, 61500.00)
+                """);
+        }
+
+        var latestFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .load();
+        latestFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword())) {
+            assertThat(countRows(connection, "personal_finance_cards")).isEqualTo(1);
+            assertThat(countRows(connection, "personal_finance_monthly_expense_actuals")).isEqualTo(1);
+            assertThat(countRows(connection, "personal_finance_monthly_income_actuals")).isEqualTo(1);
+
+            try (var statement = connection.prepareStatement("""
+                SELECT name FROM personal_finance_cards
+                WHERE id = '6e710c4d-b306-4416-9313-f50ebad55261'::uuid
+                """);
+                 var rs = statement.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString("name")).isEqualTo("Основная карта");
+            }
+
+            try (var statement = connection.prepareStatement("""
+                SELECT total_amount FROM personal_finance_monthly_income_actuals
+                WHERE year = 2026 AND month = 3
+                """);
+                 var rs = statement.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getBigDecimal("total_amount")).isEqualByComparingTo("266500.00");
+            }
         }
     }
 
@@ -84,7 +162,15 @@ class MigrationSmokeTest {
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
-              AND table_name IN ('accounts', 'transactions')
+              AND table_name IN (
+                'accounts',
+                'transactions',
+                'personal_finance_cards',
+                'personal_finance_monthly_expense_actuals',
+                'personal_finance_monthly_expense_limits',
+                'personal_finance_monthly_income_actuals',
+                'personal_finance_income_forecasts'
+              )
             ORDER BY table_name
             """);
              var rs = statement.executeQuery()) {
@@ -147,6 +233,14 @@ class MigrationSmokeTest {
                 }
                 return columnTypes;
             }
+        }
+    }
+
+    private static int countRows(Connection connection, String tableName) throws SQLException {
+        try (var statement = connection.prepareStatement("SELECT COUNT(*) AS row_count FROM " + tableName);
+             var rs = statement.executeQuery()) {
+            rs.next();
+            return rs.getInt("row_count");
         }
     }
 }

@@ -12,7 +12,7 @@ import com.mindfulfinance.domain.shared.DomainException;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
-    @ExceptionHandler({AccountNotFoundException.class, TransactionNotFoundException.class})
+    @ExceptionHandler({AccountNotFoundException.class, TransactionNotFoundException.class, PersonalFinanceCardNotFoundException.class})
     public ResponseEntity<ApiError> handleNotFound(RuntimeException ex) {
         return ResponseEntity
             .status(HttpStatus.NOT_FOUND)
