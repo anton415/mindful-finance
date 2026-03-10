@@ -10,7 +10,6 @@ import {
   type CurrencyTotalsDto,
   type ImportTransactionsCsvResponse,
   type MoneyDto,
-  type PersonalFinanceCardDto,
   type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
@@ -19,7 +18,11 @@ import {
   type UpdatePersonalFinanceSettingsRequest,
   type UpdateTransactionRequest,
 } from './api'
-import { PersonalFinanceView, type PersonalFinanceTab } from './features/personal-finance/PersonalFinanceView'
+import {
+  PersonalFinanceView,
+  type PersonalFinanceCardListItem,
+  type PersonalFinanceTab,
+} from './features/personal-finance/PersonalFinanceView'
 
 interface DashboardData {
   asOf: string
@@ -98,7 +101,7 @@ function App() {
   const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<string | null>(null)
   const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
   const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
-  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardDto[]>([])
+  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardListItem[]>([])
   const [personalFinanceSnapshot, setPersonalFinanceSnapshot] = useState<PersonalFinanceSnapshotDto | null>(null)
   const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
   const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
@@ -283,9 +286,9 @@ function App() {
           return
         }
 
-        setPersonalFinanceCards(cards)
-
         if (cards.length === 0) {
+          setPersonalFinanceCards([])
+          setActivePersonalFinanceTab('settings')
           setSelectedPersonalFinanceCardId(null)
           setPersonalFinanceSnapshot(null)
           setPersonalFinanceStatus('ready')
@@ -301,7 +304,7 @@ function App() {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
-        const snapshot = await apiClient.getPersonalFinanceSnapshot(
+        const selectedSnapshot = await apiClient.getPersonalFinanceSnapshot(
           resolvedCardId,
           selectedPersonalFinanceYear,
           controller.signal,
@@ -311,9 +314,66 @@ function App() {
           return
         }
 
-        setPersonalFinanceCards(snapshot.cards)
-        setPersonalFinanceSnapshot(snapshot)
+        setPersonalFinanceCards(
+          cards.map((card) => ({
+            ...card,
+            currentBalance:
+              card.id === selectedSnapshot.card.id ? selectedSnapshot.settings.currentBalance : null,
+            currency: card.id === selectedSnapshot.card.id ? selectedSnapshot.currency : null,
+          })),
+        )
+        setPersonalFinanceSnapshot(selectedSnapshot)
         setPersonalFinanceStatus('ready')
+
+        const otherCards = cards.filter((card) => card.id !== resolvedCardId)
+        const otherSnapshotResults = await Promise.allSettled(
+          otherCards.map((card) =>
+            apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
+          ),
+        )
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        const summaryByCardId = new Map<
+          string,
+          {
+            currentBalance: string | null
+            currency: string | null
+          }
+        >([
+          [
+            selectedSnapshot.card.id,
+            {
+              currentBalance: selectedSnapshot.settings.currentBalance,
+              currency: selectedSnapshot.currency,
+            },
+          ],
+        ])
+
+        otherSnapshotResults.forEach((result, index) => {
+          if (result.status !== 'fulfilled') {
+            return
+          }
+
+          summaryByCardId.set(otherCards[index].id, {
+            currentBalance: result.value.settings.currentBalance,
+            currency: result.value.currency,
+          })
+        })
+
+        setPersonalFinanceCards(
+          cards.map((card): PersonalFinanceCardListItem => {
+            const summary = summaryByCardId.get(card.id)
+
+            return {
+              ...card,
+              currentBalance: summary?.currentBalance ?? null,
+              currency: summary?.currency ?? null,
+            }
+          }),
+        )
       } catch (error) {
         if (controller.signal.aborted) {
           return
@@ -463,13 +523,15 @@ function App() {
   const handleCreatePersonalFinanceCard = async (
     request: CreatePersonalFinanceCardRequest,
   ): Promise<boolean> => {
+    setActivePersonalFinanceTab('settings')
+    setPersonalFinanceErrorMessage(null)
+
     try {
       const created = await apiClient.createPersonalFinanceCard(request)
       setSelectedPersonalFinanceCardId(created.cardId)
       refreshPersonalFinanceDerivedViews()
       return true
-    } catch (error) {
-      setPersonalFinanceErrorMessage(toErrorMessage(error))
+    } catch {
       return false
     }
   }
@@ -529,7 +591,11 @@ function App() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
+    <main
+      className={`mx-auto min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14 ${
+        activeView === 'personal-finance' ? 'max-w-screen-2xl' : 'max-w-5xl'
+      }`}
+    >
       <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
