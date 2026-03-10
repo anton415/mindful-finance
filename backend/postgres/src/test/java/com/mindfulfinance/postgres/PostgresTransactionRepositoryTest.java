@@ -147,6 +147,57 @@ public class PostgresTransactionRepositoryTest {
             .containsExactly(firstAccountTransaction);
     }
 
+    @Test
+    public void update_then_find_by_account_id_returns_updated_transaction_in_new_order() {
+        var account = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        accountRepository.save(account);
+
+        var first = transaction(
+            "33333333-3333-3333-3333-333333333333",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:00:00Z"
+        );
+        var second = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-03",
+            OUTFLOW,
+            "15.00",
+            "USD",
+            "Coffee",
+            "2026-03-03T10:00:00Z"
+        );
+
+        transactionRepository.save(first);
+        transactionRepository.save(second);
+
+        var updatedSecond = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-01",
+            OUTFLOW,
+            "25.00",
+            "USD",
+            null,
+            "2026-03-03T10:00:00Z"
+        );
+
+        transactionRepository.update(updatedSecond);
+
+        assertThat(transactionRepository.findByAccountId(account.id()))
+            .containsExactly(updatedSecond, first);
+    }
+
     private static Account account(
         String id,
         String name,
@@ -262,5 +313,57 @@ public class PostgresTransactionRepositoryTest {
 
         assertThat(transactionRepository.findByAccountId(account.id()))
             .containsExactly(first);
+    }
+
+    @Test
+    public void update_duplicate_logical_transaction_throws_duplicate_key() {
+        var account = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        accountRepository.save(account);
+
+        var first = transaction(
+            "33333333-3333-3333-3333-333333333333",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:00:00Z"
+        );
+        var second = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-03",
+            OUTFLOW,
+            "20.00",
+            "USD",
+            "Taxi",
+            "2026-03-03T10:00:00Z"
+        );
+
+        transactionRepository.save(first);
+        transactionRepository.save(second);
+
+        var duplicateUpdate = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            account.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "salary",
+            "2026-03-03T10:00:00Z"
+        );
+
+        assertThatThrownBy(() -> transactionRepository.update(duplicateUpdate))
+            .isInstanceOf(DuplicateKeyException.class);
+
+        assertThat(transactionRepository.findByAccountId(account.id()))
+            .containsExactly(first, second);
     }
 }

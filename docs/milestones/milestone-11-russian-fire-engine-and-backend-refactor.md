@@ -16,6 +16,7 @@
 - The current backend already exposes basic Peace metrics such as monthly burn and monthly savings.
 - JUnit 5 is already used in the repository, so this milestone extends coverage rather than introducing a new test stack.
 - The current product roadmap does not yet contain a dedicated backend milestone for FIRE-specific modeling beyond the first Peace metrics.
+- `docs/domain/ТЗ-05...09` now define a richer financial model than the current backend shape, so deep FIRE work should build on the aligned schema/domain outputs from Milestone 14 rather than extending legacy `direction + amount` assumptions.
 
 ## Assumptions / defaults (explicit)
 - v1 models IIS type A and type B as explicit calculation modes with documented assumptions.
@@ -76,3 +77,4 @@
 - Prefer explicit formulas and documented assumptions over “smart” hidden heuristics.
 - Treat Russian tax/investment logic as scenario modeling, not legal advice.
 - Keep domain/application calculation logic isolated from Spring-specific concerns.
+- Pull the Milestone 14 alignment tasks forward before adding Russian-specific rules if the backend still cannot represent the documented v1 financial model explicitly.

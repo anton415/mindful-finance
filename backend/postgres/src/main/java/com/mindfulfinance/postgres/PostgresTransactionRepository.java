@@ -75,4 +75,37 @@ public final class PostgresTransactionRepository implements TransactionRepositor
             Timestamp.from(transaction.createdAt())
         );
     }
+
+    @Override
+    public void update(Transaction transaction) {
+        int updatedRows = jdbcTemplate.update(
+            """
+                UPDATE transactions
+                SET occurred_on = ?, direction = ?, amount = ?, memo = ?
+                WHERE id = ? AND account_id = ?
+                """,
+            Date.valueOf(transaction.occurredOn()),
+            transaction.direction().name(),
+            transaction.amount().amount(),
+            transaction.memo(),
+            transaction.id().value(),
+            transaction.accountId().value()
+        );
+
+        if (updatedRows != 1) {
+            throw new IllegalStateException("Transaction not found");
+        }
+    }
+
+    @Override
+    public void delete(AccountId accountId, TransactionId transactionId) {
+        jdbcTemplate.update(
+            """
+                DELETE FROM transactions
+                WHERE id = ? AND account_id = ?
+                """,
+            transactionId.value(),
+            accountId.value()
+        );
+    }
 }

@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.transaction.Transaction;
+import com.mindfulfinance.domain.transaction.TransactionId;
 
 /**
  * Repository interface for managing Transaction entities.
@@ -18,4 +19,14 @@ public interface TransactionRepository {
      * Saves a transaction to the repository.
      */
     void save(Transaction transaction);
+
+    /**
+     * Updates an existing transaction in the repository.
+     */
+    void update(Transaction transaction);
+
+    /**
+     * Deletes an existing transaction from the repository.
+     */
+    void delete(AccountId accountId, TransactionId transactionId);
 }

@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,12 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.mindfulfinance.application.ports.AccountRepository;
+import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.ImportTransactions;
+import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
@@ -42,29 +45,35 @@ import com.mindfulfinance.domain.transaction.TransactionId;
 @RestController
 public class AccountsController {
     private final AccountRepository accountRepository;
+    private final PersonalFinanceCardRepository personalFinanceCardRepository;
     private final TransactionRepository transactionRepository;
     private final ComputeAccountBalance computeAccountBalance;
     private final ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency;
     private final ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
+    private final UpdateTransaction updateTransaction;
 
     public AccountsController(
         AccountRepository accountRepository,
+        PersonalFinanceCardRepository personalFinanceCardRepository,
         TransactionRepository transactionRepository,
         ComputeAccountBalance computeAccountBalance,
         ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
         ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
-        ImportTransactions importTransactions
+        ImportTransactions importTransactions,
+        UpdateTransaction updateTransaction
     ) {
         this.accountRepository = accountRepository;
+        this.personalFinanceCardRepository = personalFinanceCardRepository;
         this.transactionRepository = transactionRepository;
         this.computeAccountBalance = computeAccountBalance;
         this.computeMonthlyBurnByCurrency = computeMonthlyBurnByCurrency;
         this.computeMonthlySavingsByCurrency = computeMonthlySavingsByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
+        this.updateTransaction = updateTransaction;
     }
 
     // Milestone 3: create account endpoint for the HTTP adapter v0.
@@ -84,7 +93,10 @@ public class AccountsController {
                 account.name(),
                 account.currency().getCurrencyCode(),
                 account.type().name(),
-                account.status().name()
+                account.status().name(),
+                personalFinanceCardRepository.findByLinkedAccountId(account.id())
+                    .map(card -> card.id().value().toString())
+                    .orElse(null)
             ))
             .toList();
     }
@@ -96,6 +108,7 @@ public class AccountsController {
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
         Account account = requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
 
         Transaction tx = new Transaction(
             TransactionId.random(),
@@ -130,6 +143,34 @@ public class AccountsController {
             .toList();
     }
 
+    @PutMapping("/accounts/{accountId}/transactions/{transactionId}")
+    public ResponseEntity<Void> updateTransaction(
+        @PathVariable("accountId") String accountId,
+        @PathVariable("transactionId") String transactionId,
+        @RequestBody UpdateTransactionRequest req
+    ) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        Account account = requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
+        TransactionId parsedTransactionId = parseTransactionId(transactionId);
+
+        boolean updated = updateTransaction.update(new UpdateTransaction.Command(
+            parsedAccountId,
+            parsedTransactionId,
+            account.currency(),
+            req.occurredOn(),
+            req.direction(),
+            req.amount(),
+            req.memo()
+        )).isPresent();
+
+        if (!updated) {
+            throw new TransactionNotFoundException("Transaction not found");
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping(value = "/imports/transactions/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ImportTransactionsCsvResponse importTransactionsCsv(
         @RequestParam("accountId") String accountId,
@@ -137,6 +178,7 @@ public class AccountsController {
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
         requireAccount(parsedAccountId);
+        rejectLinkedPersonalFinanceAccount(parsedAccountId);
 
         List<ImportTransactions.Row> rows = TransactionsCsvParser.parse(file);
         ImportTransactions.Result result = importTransactions.importRows(parsedAccountId, rows);
@@ -208,8 +250,18 @@ public class AccountsController {
             .orElseThrow(() -> new AccountNotFoundException("Account not found"));
     }
 
+    private void rejectLinkedPersonalFinanceAccount(AccountId accountId) {
+        if (personalFinanceCardRepository.findByLinkedAccountId(accountId).isPresent()) {
+            throw new IllegalStateException("Linked personal finance accounts are read-only in Investments");
+        }
+    }
+
     private static AccountId parseAccountId(String accountId) {
         return new AccountId(UUID.fromString(accountId));
+    }
+
+    private static TransactionId parseTransactionId(String transactionId) {
+        return new TransactionId(UUID.fromString(transactionId));
     }
 
     private static LocalDate parseAsOfDate(String asOf) {
@@ -230,7 +282,14 @@ public class AccountsController {
 
     public record CreateAccountResponse(String accountId) {}
 
-    public record AccountDto(String id, String name, String currency, String type, String status) {}
+    public record AccountDto(
+        String id,
+        String name,
+        String currency,
+        String type,
+        String status,
+        String linkedPersonalFinanceCardId
+    ) {}
 
     public record CreateTransactionRequest(
         LocalDate occurredOn,
@@ -240,6 +299,13 @@ public class AccountsController {
     ) {}
 
     public record CreateTransactionResponse(String transactionId) {}
+
+    public record UpdateTransactionRequest(
+        LocalDate occurredOn,
+        TransactionDirection direction,
+        BigDecimal amount,
+        String memo
+    ) {}
 
     public record TransactionDto(
         String id,
