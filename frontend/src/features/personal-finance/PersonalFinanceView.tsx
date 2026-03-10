@@ -85,7 +85,7 @@ export function PersonalFinanceView({
 
   const hasCards = cards.length > 0
   const selectedCard = snapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
-  const yearOptions = selectableYearOptions()
+  const yearOptions = selectableYearOptions(year)
 
   return (
     <div className="space-y-6">
@@ -1437,9 +1437,8 @@ function currentMonthNumber(): number {
   return new Date().getMonth() + 1
 }
 
-function selectableYearOptions(): number[] {
-  const current = currentYear()
-  return Array.from({ length: 7 }, (_, index) => current - 3 + index)
+function selectableYearOptions(selectedYear: number): number[] {
+  return Array.from({ length: 7 }, (_, index) => selectedYear - 3 + index)
 }
 
 function serializeExpenseMonth(

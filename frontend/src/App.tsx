@@ -304,8 +304,30 @@ function App() {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
-        const snapshots = await Promise.all(
-          cards.map((card) =>
+        const selectedSnapshot = await apiClient.getPersonalFinanceSnapshot(
+          resolvedCardId,
+          selectedPersonalFinanceYear,
+          controller.signal,
+        )
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceCards(
+          cards.map((card) => ({
+            ...card,
+            currentBalance:
+              card.id === selectedSnapshot.card.id ? selectedSnapshot.settings.currentBalance : null,
+            currency: card.id === selectedSnapshot.card.id ? selectedSnapshot.currency : null,
+          })),
+        )
+        setPersonalFinanceSnapshot(selectedSnapshot)
+        setPersonalFinanceStatus('ready')
+
+        const otherCards = cards.filter((card) => card.id !== resolvedCardId)
+        const otherSnapshotResults = await Promise.allSettled(
+          otherCards.map((card) =>
             apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
           ),
         )
@@ -314,21 +336,44 @@ function App() {
           return
         }
 
-        const cardsWithSummaries: PersonalFinanceCardListItem[] = cards.map((card) => {
-          const cardSnapshot = snapshots.find((snapshot) => snapshot.card.id === card.id)
-
-          return {
-            ...card,
-            currentBalance: cardSnapshot?.settings.currentBalance ?? null,
-            currency: cardSnapshot?.currency ?? null,
+        const summaryByCardId = new Map<
+          string,
+          {
+            currentBalance: string | null
+            currency: string | null
           }
-        })
-        const selectedSnapshot =
-          snapshots.find((snapshot) => snapshot.card.id === resolvedCardId) ?? snapshots[0] ?? null
+        >([
+          [
+            selectedSnapshot.card.id,
+            {
+              currentBalance: selectedSnapshot.settings.currentBalance,
+              currency: selectedSnapshot.currency,
+            },
+          ],
+        ])
 
-        setPersonalFinanceCards(cardsWithSummaries)
-        setPersonalFinanceSnapshot(selectedSnapshot)
-        setPersonalFinanceStatus('ready')
+        otherSnapshotResults.forEach((result, index) => {
+          if (result.status !== 'fulfilled') {
+            return
+          }
+
+          summaryByCardId.set(otherCards[index].id, {
+            currentBalance: result.value.settings.currentBalance,
+            currency: result.value.currency,
+          })
+        })
+
+        setPersonalFinanceCards(
+          cards.map((card): PersonalFinanceCardListItem => {
+            const summary = summaryByCardId.get(card.id)
+
+            return {
+              ...card,
+              currentBalance: summary?.currentBalance ?? null,
+              currency: summary?.currency ?? null,
+            }
+          }),
+        )
       } catch (error) {
         if (controller.signal.aborted) {
           return
