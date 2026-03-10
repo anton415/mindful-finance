@@ -1,0 +1,141 @@
+name: Codex Auto Approve
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Architecture Guard
+      - CodeQL
+    types:
+      - completed
+  pull_request_target:
+    types:
+      - ready_for_review
+      - reopened
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: write
+
+jobs:
+  approve:
+    name: Approve PR after required checks
+    if: |
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Approve pull request when all required checks pass
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const requiredChecks = [
+              "Backend tests",
+              "Frontend lint and build",
+              "Framework boundary",
+              "Analyze (java-kotlin)",
+              "Analyze (javascript-typescript)",
+            ];
+
+            const pullRequest =
+              context.eventName === "workflow_run"
+                ? context.payload.workflow_run.pull_requests[0]
+                : context.payload.pull_request;
+
+            if (!pullRequest) {
+              core.info("Approval event is not attached to a pull request.");
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const pull_number = pullRequest.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number,
+            });
+
+            if (pr.state !== "open") {
+              core.info(`Pull request #${pull_number} is already ${pr.state}.`);
+              return;
+            }
+
+            if (pr.draft) {
+              core.info(`Pull request #${pull_number} is still a draft.`);
+              return;
+            }
+
+            const headSha = pr.head.sha;
+            const { data: checksResponse } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: headSha,
+              filter: "latest",
+              per_page: 100,
+            });
+
+            const checksByName = new Map(
+              checksResponse.check_runs.map((checkRun) => [checkRun.name, checkRun]),
+            );
+
+            const pendingOrFailingChecks = requiredChecks.filter((checkName) => {
+              const checkRun = checksByName.get(checkName);
+
+              return (
+                !checkRun ||
+                checkRun.status !== "completed" ||
+                checkRun.conclusion !== "success"
+              );
+            });
+
+            if (pendingOrFailingChecks.length > 0) {
+              core.info(
+                `Approval skipped until all required checks succeed. Pending/failing: ${pendingOrFailingChecks.join(", ")}`,
+              );
+              return;
+            }
+
+            const approverLogin = "github-actions[bot]";
+
+            if (pr.user.login === approverLogin) {
+              core.info(
+                `Pull request author matches approver ${approverLogin}; skipping self-approval.`,
+              );
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const alreadyApproved = reviews.some(
+              (review) =>
+                review.user?.login === approverLogin &&
+                review.state === "APPROVED" &&
+                review.commit_id === headSha,
+            );
+
+            if (alreadyApproved) {
+              core.info(
+                `Pull request #${pull_number} is already approved by ${approverLogin} for ${headSha}.`,
+              );
+              return;
+            }
+
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              commit_id: headSha,
+              event: "APPROVE",
+              body: "Automatically approved after all required CI checks succeeded.",
+            });
+
+            core.info(`Approved pull request #${pull_number} for commit ${headSha}.`);

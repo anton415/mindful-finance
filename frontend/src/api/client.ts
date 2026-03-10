@@ -3,13 +3,21 @@ import type {
   AccountDto,
   CreateAccountRequest,
   CreateAccountResponse,
+  CreatePersonalFinanceCardRequest,
+  CreatePersonalFinanceCardResponse,
   CreateTransactionRequest,
   CreateTransactionResponse,
   CurrencyTotalsDto,
   ImportTransactionsCsvResponse,
   IsoDate,
   MoneyDto,
+  PersonalFinanceCardDto,
+  PersonalFinanceSnapshotDto,
   TransactionDto,
+  UpdateMonthlyExpenseRequest,
+  UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceSettingsRequest,
+  UpdateTransactionRequest,
 } from './types'
 
 export interface ApiClient {
@@ -19,6 +27,12 @@ export interface ApiClient {
     request: CreateTransactionRequest,
     signal?: AbortSignal,
   ): Promise<CreateTransactionResponse>
+  updateTransaction(
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
   importTransactionsCsv(
     accountId: string,
     file: File,
@@ -30,6 +44,33 @@ export interface ApiClient {
   getNetWorth(signal?: AbortSignal): Promise<CurrencyTotalsDto>
   getMonthlyBurn(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto>
   getMonthlySavings(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto>
+  listPersonalFinanceCards(signal?: AbortSignal): Promise<PersonalFinanceCardDto[]>
+  createPersonalFinanceCard(
+    request: CreatePersonalFinanceCardRequest,
+    signal?: AbortSignal,
+  ): Promise<CreatePersonalFinanceCardResponse>
+  getPersonalFinanceSnapshot(
+    cardId: string,
+    year: number,
+    signal?: AbortSignal,
+  ): Promise<PersonalFinanceSnapshotDto>
+  updateMonthlyExpenseActual(
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
+  updateMonthlyIncomeActual(
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
+  updatePersonalFinanceSettings(
+    cardId: string,
+    request: UpdatePersonalFinanceSettingsRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
 }
 
 export function createApiClient(config: HttpClientConfig = {}): ApiClient {
@@ -47,6 +88,19 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
     ): Promise<CreateTransactionResponse> {
       return http.postJson<CreateTransactionResponse, CreateTransactionRequest>(
         `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+        request,
+        { signal },
+      )
+    },
+
+    updateTransaction(
+      accountId: string,
+      transactionId: string,
+      request: UpdateTransactionRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateTransactionRequest>(
+        `/accounts/${toEncodedAccountId(accountId)}/transactions/${toEncodedTransactionId(transactionId)}`,
         request,
         { signal },
       )
@@ -99,19 +153,110 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
         signal: options?.signal,
       })
     },
+
+    listPersonalFinanceCards(signal?: AbortSignal): Promise<PersonalFinanceCardDto[]> {
+      return http.getJson<PersonalFinanceCardDto[]>('/personal-finance/cards', { signal })
+    },
+
+    createPersonalFinanceCard(
+      request: CreatePersonalFinanceCardRequest,
+      signal?: AbortSignal,
+    ): Promise<CreatePersonalFinanceCardResponse> {
+      return http.postJson<CreatePersonalFinanceCardResponse, CreatePersonalFinanceCardRequest>(
+        '/personal-finance/cards',
+        request,
+        { signal },
+      )
+    },
+
+    getPersonalFinanceSnapshot(
+      cardId: string,
+      year: number,
+      signal?: AbortSignal,
+    ): Promise<PersonalFinanceSnapshotDto> {
+      return http.getJson<PersonalFinanceSnapshotDto>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/years/${toRequiredYear(year)}`,
+        { signal },
+      )
+    },
+
+    updateMonthlyExpenseActual(
+      cardId: string,
+      month: number,
+      request: UpdateMonthlyExpenseRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateMonthlyExpenseRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/expenses/actual/${toRequiredMonth(month)}`,
+        request,
+        { signal },
+      )
+    },
+
+    updateMonthlyIncomeActual(
+      cardId: string,
+      month: number,
+      request: UpdateMonthlyIncomeActualRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateMonthlyIncomeActualRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/income/actual/${toRequiredMonth(month)}`,
+        request,
+        { signal },
+      )
+    },
+
+    updatePersonalFinanceSettings(
+      cardId: string,
+      request: UpdatePersonalFinanceSettingsRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdatePersonalFinanceSettingsRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/settings`,
+        request,
+        { signal },
+      )
+    },
   }
 }
 
 export const apiClient = createApiClient()
 
 function toEncodedAccountId(accountId: string): string {
-  return encodeURIComponent(toRequiredAccountId(accountId))
+  return encodeURIComponent(toRequiredIdentifier(accountId, 'accountId'))
+}
+
+function toEncodedTransactionId(transactionId: string): string {
+  return encodeURIComponent(toRequiredIdentifier(transactionId, 'transactionId'))
+}
+
+function toEncodedPersonalFinanceCardId(cardId: string): string {
+  return encodeURIComponent(toRequiredIdentifier(cardId, 'cardId'))
 }
 
 function toRequiredAccountId(accountId: string): string {
-  const trimmed = accountId.trim()
+  return toRequiredIdentifier(accountId, 'accountId')
+}
+
+function toRequiredIdentifier(value: string, fieldName: string): string {
+  const trimmed = value.trim()
   if (trimmed.length === 0) {
-    throw new Error('accountId must not be blank')
+    throw new Error(`${fieldName} must not be blank`)
   }
+
   return trimmed
+}
+
+function toRequiredMonth(month: number): string {
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error('month must be between 1 and 12')
+  }
+  return String(month)
+}
+
+function toRequiredYear(year: number): string {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) {
+    throw new Error('year must be between 1 and 9999')
+  }
+  return String(year)
 }

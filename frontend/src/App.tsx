@@ -4,14 +4,22 @@ import {
   apiClient,
   type AccountDto,
   type AccountType,
+  type CreatePersonalFinanceCardRequest,
   type CreateAccountRequest,
   type CreateTransactionRequest,
   type CurrencyTotalsDto,
   type ImportTransactionsCsvResponse,
   type MoneyDto,
+  type PersonalFinanceCardDto,
+  type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
+  type UpdateMonthlyExpenseRequest,
+  type UpdateMonthlyIncomeActualRequest,
+  type UpdatePersonalFinanceSettingsRequest,
+  type UpdateTransactionRequest,
 } from './api'
+import { PersonalFinanceView, type PersonalFinanceTab } from './features/personal-finance/PersonalFinanceView'
 
 interface DashboardData {
   asOf: string
@@ -25,7 +33,7 @@ interface AccountWithBalance extends AccountDto {
 }
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-type ViewTab = 'dashboard' | 'accounts'
+type ViewTab = 'dashboard' | 'accounts' | 'personal-finance'
 type TransactionDirectionFilter = 'ALL' | 'INFLOW' | 'OUTFLOW'
 type CreateAccountStatus = 'idle' | 'submitting' | 'error'
 type CreateTransactionStatus = 'idle' | 'submitting' | 'error'
@@ -34,6 +42,9 @@ type AccountStatus = 'ACTIVE' | string
 interface NavigationState {
   tab: ViewTab
   accountId: string | null
+  financeTab: PersonalFinanceTab
+  financeYear: number
+  financeCardId: string | null
 }
 
 const ACCOUNT_TYPE_OPTIONS: AccountType[] = ['CASH', 'DEPOSIT', 'FUND', 'IIS', 'BROKERAGE']
@@ -42,14 +53,30 @@ const DEFAULT_ACCOUNT_CURRENCY =
   ACCOUNT_CURRENCY_OPTIONS.includes('USD') && ACCOUNT_CURRENCY_OPTIONS.length > 0
     ? 'USD'
     : (ACCOUNT_CURRENCY_OPTIONS[0] ?? 'USD')
-const DEFAULT_NAVIGATION_STATE: NavigationState = { tab: 'dashboard', accountId: null }
+const DEFAULT_NAVIGATION_STATE: NavigationState = {
+  tab: 'dashboard',
+  accountId: null,
+  financeTab: 'expenses',
+  financeYear: currentYear(),
+  financeCardId: null,
+}
 
 function App() {
   const [activeView, setActiveView] = useState<ViewTab>(() => readNavigationFromUrl().tab)
+  const [activePersonalFinanceTab, setActivePersonalFinanceTab] = useState<PersonalFinanceTab>(
+    () => readNavigationFromUrl().financeTab,
+  )
+  const [selectedPersonalFinanceYear, setSelectedPersonalFinanceYear] = useState<number>(
+    () => readNavigationFromUrl().financeYear,
+  )
+  const [selectedPersonalFinanceCardId, setSelectedPersonalFinanceCardId] = useState<string | null>(
+    () => readNavigationFromUrl().financeCardId,
+  )
 
   const [dashboardStatus, setDashboardStatus] = useState<LoadStatus>('idle')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null)
+  const [dashboardReloadTick, setDashboardReloadTick] = useState<number>(0)
 
   const [accountsStatus, setAccountsStatus] = useState<LoadStatus>('idle')
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([])
@@ -70,13 +97,30 @@ function App() {
   const [csvImportStatus, setCsvImportStatus] = useState<CsvImportStatus>('idle')
   const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<string | null>(null)
   const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
+  const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
+  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardDto[]>([])
+  const [personalFinanceSnapshot, setPersonalFinanceSnapshot] = useState<PersonalFinanceSnapshotDto | null>(null)
+  const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
+  const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
 
   const [directionFilter, setDirectionFilter] = useState<TransactionDirectionFilter>('ALL')
   const [memoFilter, setMemoFilter] = useState<string>('')
 
   useEffect(() => {
-    syncNavigationToUrl(activeView, selectedAccountId)
-  }, [activeView, selectedAccountId])
+    syncNavigationToUrl(
+      activeView,
+      selectedAccountId,
+      activePersonalFinanceTab,
+      selectedPersonalFinanceYear,
+      selectedPersonalFinanceCardId,
+    )
+  }, [
+    activeView,
+    selectedAccountId,
+    activePersonalFinanceTab,
+    selectedPersonalFinanceYear,
+    selectedPersonalFinanceCardId,
+  ])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -119,7 +163,7 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [])
+  }, [dashboardReloadTick])
 
   useEffect(() => {
     if (activeView !== 'accounts') {
@@ -221,6 +265,72 @@ function App() {
     }
   }, [selectedAccountId, transactionsReloadTick])
 
+  useEffect(() => {
+    if (activeView !== 'personal-finance') {
+      return
+    }
+
+    const controller = new AbortController()
+
+    const loadPersonalFinance = async (): Promise<void> => {
+      setPersonalFinanceStatus('loading')
+      setPersonalFinanceErrorMessage(null)
+
+      try {
+        const cards = await apiClient.listPersonalFinanceCards(controller.signal)
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceCards(cards)
+
+        if (cards.length === 0) {
+          setSelectedPersonalFinanceCardId(null)
+          setPersonalFinanceSnapshot(null)
+          setPersonalFinanceStatus('ready')
+          return
+        }
+
+        const resolvedCardId =
+          selectedPersonalFinanceCardId && cards.some((card) => card.id === selectedPersonalFinanceCardId)
+            ? selectedPersonalFinanceCardId
+            : cards[0].id
+
+        if (resolvedCardId !== selectedPersonalFinanceCardId) {
+          setSelectedPersonalFinanceCardId(resolvedCardId)
+        }
+
+        const snapshot = await apiClient.getPersonalFinanceSnapshot(
+          resolvedCardId,
+          selectedPersonalFinanceYear,
+          controller.signal,
+        )
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceCards(snapshot.cards)
+        setPersonalFinanceSnapshot(snapshot)
+        setPersonalFinanceStatus('ready')
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setPersonalFinanceStatus('error')
+        setPersonalFinanceErrorMessage(toErrorMessage(error))
+      }
+    }
+
+    void loadPersonalFinance()
+
+    return () => {
+      controller.abort()
+    }
+  }, [activeView, selectedPersonalFinanceCardId, selectedPersonalFinanceYear, personalFinanceReloadTick])
+
   const selectedAccount = selectedAccountId
     ? accounts.find((account) => account.id === selectedAccountId) ?? null
     : null
@@ -234,18 +344,23 @@ function App() {
       }
 
       if (normalizedMemoFilter.length > 0) {
-        return transaction.memo.toLowerCase().includes(normalizedMemoFilter)
+        return normalizeTransactionMemo(transaction.memo).toLowerCase().includes(normalizedMemoFilter)
       }
 
       return true
     })
   }, [transactions, directionFilter, memoFilter])
 
-  const localizedTitle = activeView === 'dashboard' ? 'Обзор' : 'Счета'
-  const localizedDescription =
-    activeView === 'dashboard'
-      ? 'Спокойный срез капитала и метрик финансового спокойствия.'
-      : 'Счета с балансами, деталями транзакций и простыми фильтрами.'
+  const localizedTitle = getViewTitle(activeView)
+  const localizedDescription = getViewDescription(activeView)
+  const headerContextLabel =
+    activeView === 'personal-finance'
+      ? personalFinanceSnapshot?.card
+        ? `${personalFinanceSnapshot.card.name} · ${selectedPersonalFinanceYear}`
+        : `Год ${selectedPersonalFinanceYear}`
+      : dashboard
+        ? `На дату ${formatIsoDateRu(dashboard.asOf)}`
+        : 'На сегодня'
 
   const handleAccountSelect = (accountId: string): void => {
     if (accountId === selectedAccountId) {
@@ -283,6 +398,19 @@ function App() {
     }
   }
 
+  const refreshTransactionDerivedViews = (): void => {
+    setTransactionsReloadTick((tick) => tick + 1)
+    setAccountsReloadTick((tick) => tick + 1)
+    setDashboardReloadTick((tick) => tick + 1)
+  }
+
+  const refreshPersonalFinanceDerivedViews = (): void => {
+    setPersonalFinanceReloadTick((tick) => tick + 1)
+    setAccountsReloadTick((tick) => tick + 1)
+    setTransactionsReloadTick((tick) => tick + 1)
+    setDashboardReloadTick((tick) => tick + 1)
+  }
+
   const handleCreateTransaction = async (
     accountId: string,
     request: CreateTransactionRequest,
@@ -294,8 +422,7 @@ function App() {
       await apiClient.createTransaction(accountId, request)
       setCreateTransactionStatus('idle')
       setCreateTransactionErrorMessage(null)
-      setTransactionsReloadTick((tick) => tick + 1)
-      setAccountsReloadTick((tick) => tick + 1)
+      refreshTransactionDerivedViews()
       return true
     } catch (error) {
       setCreateTransactionStatus('error')
@@ -314,8 +441,7 @@ function App() {
       setCsvImportStatus('success')
       setCsvImportErrorMessage(null)
       setCsvImportResult(response)
-      setTransactionsReloadTick((tick) => tick + 1)
-      setAccountsReloadTick((tick) => tick + 1)
+      refreshTransactionDerivedViews()
       return true
     } catch (error) {
       setCsvImportStatus('error')
@@ -325,9 +451,86 @@ function App() {
     }
   }
 
+  const handleUpdateTransaction = async (
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+  ): Promise<void> => {
+    await apiClient.updateTransaction(accountId, transactionId, request)
+    refreshTransactionDerivedViews()
+  }
+
+  const handleCreatePersonalFinanceCard = async (
+    request: CreatePersonalFinanceCardRequest,
+  ): Promise<boolean> => {
+    try {
+      const created = await apiClient.createPersonalFinanceCard(request)
+      setSelectedPersonalFinanceCardId(created.cardId)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch (error) {
+      setPersonalFinanceErrorMessage(toErrorMessage(error))
+      return false
+    }
+  }
+
+  const handleSaveExpenseActual = async (
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateMonthlyExpenseActual(selectedPersonalFinanceCardId, month, request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSaveIncomeActual = async (
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updateMonthlyIncomeActual(
+        selectedPersonalFinanceCardId,
+        month,
+        request,
+      )
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSavePersonalFinanceSettings = async (
+    request: UpdatePersonalFinanceSettingsRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updatePersonalFinanceSettings(selectedPersonalFinanceCardId, request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:py-14">
-      <section className="rounded-2xl border border-slate-200 bg-white/85 p-8 shadow-sm backdrop-blur">
+    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
+      <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -338,9 +541,7 @@ function App() {
               {localizedDescription}
             </p>
           </div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            {dashboard ? `На дату ${formatIsoDateRu(dashboard.asOf)}` : 'На сегодня'}
-          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{headerContextLabel}</p>
         </header>
 
         <nav className="mt-8 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -350,9 +551,14 @@ function App() {
             onClick={() => setActiveView('dashboard')}
           />
           <TabButton
-            label="Счета"
+            label="Инвестиции"
             isActive={activeView === 'accounts'}
             onClick={() => setActiveView('accounts')}
+          />
+          <TabButton
+            label="Личные финансы"
+            isActive={activeView === 'personal-finance'}
+            onClick={() => setActiveView('personal-finance')}
           />
         </nav>
 
@@ -362,7 +568,31 @@ function App() {
               status={dashboardStatus}
               dashboard={dashboard}
               errorMessage={dashboardErrorMessage}
-              onRetry={() => window.location.reload()}
+              onRetry={() => {
+                setDashboardErrorMessage(null)
+                setDashboardReloadTick((tick) => tick + 1)
+              }}
+            />
+          ) : activeView === 'personal-finance' ? (
+            <PersonalFinanceView
+              status={personalFinanceStatus}
+              cards={personalFinanceCards}
+              snapshot={personalFinanceSnapshot}
+              selectedCardId={selectedPersonalFinanceCardId}
+              activeTab={activePersonalFinanceTab}
+              year={selectedPersonalFinanceYear}
+              errorMessage={personalFinanceErrorMessage}
+              onSelectTab={setActivePersonalFinanceTab}
+              onSelectYear={setSelectedPersonalFinanceYear}
+              onSelectCard={setSelectedPersonalFinanceCardId}
+              onRetry={() => {
+                setPersonalFinanceErrorMessage(null)
+                setPersonalFinanceReloadTick((tick) => tick + 1)
+              }}
+              onCreateCard={handleCreatePersonalFinanceCard}
+              onSaveExpenseActual={handleSaveExpenseActual}
+              onSaveIncomeActual={handleSaveIncomeActual}
+              onSaveSettings={handleSavePersonalFinanceSettings}
             />
           ) : (
             <AccountsView
@@ -385,6 +615,7 @@ function App() {
               createTransactionStatus={createTransactionStatus}
               createTransactionErrorMessage={createTransactionErrorMessage}
               onCreateTransaction={handleCreateTransaction}
+              onUpdateTransaction={handleUpdateTransaction}
               csvImportStatus={csvImportStatus}
               csvImportErrorMessage={csvImportErrorMessage}
               csvImportResult={csvImportResult}
@@ -469,6 +700,11 @@ interface AccountsViewProps {
   createTransactionStatus: CreateTransactionStatus
   createTransactionErrorMessage: string | null
   onCreateTransaction: (accountId: string, request: CreateTransactionRequest) => Promise<boolean>
+  onUpdateTransaction: (
+    accountId: string,
+    transactionId: string,
+    request: UpdateTransactionRequest,
+  ) => Promise<void>
   csvImportStatus: CsvImportStatus
   csvImportErrorMessage: string | null
   csvImportResult: ImportTransactionsCsvResponse | null
@@ -498,6 +734,7 @@ function AccountsView({
   createTransactionStatus,
   createTransactionErrorMessage,
   onCreateTransaction,
+  onUpdateTransaction,
   csvImportStatus,
   csvImportErrorMessage,
   csvImportResult,
@@ -513,18 +750,38 @@ function AccountsView({
   const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
   const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
   const [newTransactionMemo, setNewTransactionMemo] = useState<string>('')
+  const [editingTransactionAccountId, setEditingTransactionAccountId] = useState<string | null>(null)
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
+  const [editingTransactionDate, setEditingTransactionDate] = useState<string>(todayIsoDate())
+  const [editingTransactionDirection, setEditingTransactionDirection] =
+    useState<TransactionDirection>('OUTFLOW')
+  const [editingTransactionAmount, setEditingTransactionAmount] = useState<string>('')
+  const [editingTransactionMemo, setEditingTransactionMemo] = useState<string>('')
+  const [updateTransactionStatus, setUpdateTransactionStatus] = useState<CreateTransactionStatus>('idle')
+  const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] = useState<string | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const csvFileInputRef = useRef<HTMLInputElement | null>(null)
 
+  const resetEditingTransaction = (): void => {
+    setEditingTransactionAccountId(null)
+    setEditingTransactionId(null)
+    setEditingTransactionDate(todayIsoDate())
+    setEditingTransactionDirection('OUTFLOW')
+    setEditingTransactionAmount('')
+    setEditingTransactionMemo('')
+    setUpdateTransactionStatus('idle')
+    setUpdateTransactionErrorMessage(null)
+  }
+
   if (status === 'loading' || status === 'idle') {
-    return <StatusCard tone="neutral" message="Загружаем счета и балансы..." />
+    return <StatusCard tone="neutral" message="Загружаем инвестиции и балансы..." />
   }
 
   if (status === 'error') {
     return (
       <StatusCard
         tone="warning"
-        message={errorMessage ?? 'Не удалось загрузить счета.'}
+        message={errorMessage ?? 'Не удалось загрузить инвестиции.'}
         actionLabel="Повторить"
         onAction={onRetryAccounts}
       />
@@ -536,21 +793,36 @@ function AccountsView({
     newAccountName.trim().length > 0 && isCurrencyValid && createAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
-  const transactionAmountCandidateRaw = newTransactionAmount.trim()
-  const transactionAmountCandidate = transactionAmountCandidateRaw.replace(',', '.')
+  const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
   const transactionMemoCandidate = newTransactionMemo.trim()
-  const isTransactionDateValid = /^\d{4}-\d{2}-\d{2}$/.test(transactionDateCandidate)
-  const isTransactionAmountValid =
-    /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(transactionAmountCandidate) &&
-    Number(transactionAmountCandidate) > 0
+  const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
+  const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
+  const isLinkedPersonalFinanceAccount = selectedAccount?.linkedPersonalFinanceCardId !== null
   const canCreateTransaction =
     selectedAccount !== null &&
+    !isLinkedPersonalFinanceAccount &&
     isTransactionDateValid &&
     isTransactionAmountValid &&
-    transactionMemoCandidate.length > 0 &&
     createTransactionStatus !== 'submitting'
+  const editingTransactionDateCandidate = editingTransactionDate.trim()
+  const editingTransactionAmountCandidate = normalizeAmountInput(editingTransactionAmount)
+  const editingTransactionMemoCandidate = editingTransactionMemo.trim()
+  const isEditingTransactionDateValid = isValidIsoDateValue(editingTransactionDateCandidate)
+  const isEditingTransactionAmountValid = isValidPositiveAmountValue(editingTransactionAmountCandidate)
+  const activeEditingTransactionId =
+    editingTransactionAccountId === selectedAccountId ? editingTransactionId : null
+  const canUpdateTransaction =
+    selectedAccount !== null &&
+    activeEditingTransactionId !== null &&
+    !isLinkedPersonalFinanceAccount &&
+    isEditingTransactionDateValid &&
+    isEditingTransactionAmountValid &&
+    updateTransactionStatus !== 'submitting'
   const canImportCsv =
-    selectedAccount !== null && csvFile !== null && csvImportStatus !== 'submitting'
+    selectedAccount !== null &&
+    !isLinkedPersonalFinanceAccount &&
+    csvFile !== null &&
+    csvImportStatus !== 'submitting'
 
   const handleCreateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -608,8 +880,48 @@ function AccountsView({
     }
   }
 
+  const handleStartEditingTransaction = (transaction: TransactionDto): void => {
+    if (isLinkedPersonalFinanceAccount) {
+      return
+    }
+
+    setEditingTransactionAccountId(selectedAccountId)
+    setEditingTransactionId(transaction.id)
+    setEditingTransactionDate(transaction.occurredOn)
+    setEditingTransactionDirection(transaction.direction)
+    setEditingTransactionAmount(transaction.amount)
+    setEditingTransactionMemo(normalizeTransactionMemo(transaction.memo))
+    setUpdateTransactionStatus('idle')
+    setUpdateTransactionErrorMessage(null)
+  }
+
+  const handleUpdateTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!selectedAccount || !activeEditingTransactionId || !canUpdateTransaction) {
+      return
+    }
+
+    setUpdateTransactionStatus('submitting')
+    setUpdateTransactionErrorMessage(null)
+
+    try {
+      await onUpdateTransaction(selectedAccount.id, activeEditingTransactionId, {
+        occurredOn: editingTransactionDateCandidate,
+        direction: editingTransactionDirection,
+        amount: editingTransactionAmountCandidate,
+        memo: editingTransactionMemoCandidate,
+      })
+      resetEditingTransaction()
+    } catch (error) {
+      setUpdateTransactionStatus('error')
+      setUpdateTransactionErrorMessage(toErrorMessage(error))
+    }
+  }
+
   const handleSelectAccountClick = (accountId: string): void => {
     onSelectAccount(accountId)
+    resetEditingTransaction()
     setNewTransactionDate(todayIsoDate())
     setNewTransactionDirection('OUTFLOW')
     setNewTransactionAmount('')
@@ -623,8 +935,8 @@ function AccountsView({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Список счетов</h2>
-        <p className="mt-1 text-xs text-slate-500">Выберите счет, чтобы посмотреть транзакции.</p>
+        <h2 className="text-sm font-semibold text-slate-900">Список инвестиций</h2>
+        <p className="mt-1 text-xs text-slate-500">Выберите инструмент, чтобы посмотреть транзакции.</p>
 
         <form
           className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
@@ -632,14 +944,14 @@ function AccountsView({
             void handleCreateAccountSubmit(event)
           }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Создать счет</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Добавить инструмент</p>
 
           <div className="mt-3 space-y-2">
             <input
               type="text"
               value={newAccountName}
               onChange={(event) => setNewAccountName(event.target.value)}
-              placeholder="Название счета"
+              placeholder="Название инструмента"
               className="block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
             />
 
@@ -683,13 +995,13 @@ function AccountsView({
             disabled={!canCreate}
             className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {createAccountStatus === 'submitting' ? 'Создаем...' : 'Создать счет'}
+            {createAccountStatus === 'submitting' ? 'Добавляем...' : 'Добавить'}
           </button>
         </form>
 
         {accounts.length === 0 ? (
           <div className="mt-4">
-            <StatusCard tone="neutral" message="Пока нет счетов. Создайте первый счет." />
+            <StatusCard tone="neutral" message="Пока нет инвестиций. Добавьте первый инструмент." />
           </div>
         ) : (
           <ul className="mt-4 space-y-2">
@@ -708,7 +1020,8 @@ function AccountsView({
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{account.name}</p>
                       <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                        {toAccountTypeLabel(account.type)} · {toAccountStatusLabel(account.status)}
+                        {toAccountTypeLabel(account.type)} ·{' '}
+                        {account.linkedPersonalFinanceCardId ? 'Личные финансы' : toAccountStatusLabel(account.status)}
                       </p>
                     </div>
                     <div className="text-right">
@@ -729,7 +1042,7 @@ function AccountsView({
 
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         {!selectedAccount ? (
-          <StatusCard tone="neutral" message="Выберите счет, чтобы посмотреть транзакции." />
+          <StatusCard tone="neutral" message="Выберите инструмент, чтобы посмотреть транзакции." />
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -741,134 +1054,146 @@ function AccountsView({
               </div>
             </div>
 
-            <form
-              className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
-              onSubmit={(event) => {
-                void handleCreateTransactionSubmit(event)
-              }}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Добавить транзакцию
-              </p>
+            {isLinkedPersonalFinanceAccount ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Режим просмотра</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Этот счёт привязан к карте из раздела личных финансов. Баланс и транзакции
+                  обновляются из monthly income, monthly expense и baseline в настройках карты.
+                </p>
+              </div>
+            ) : (
+              <>
+                <form
+                  className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
+                  onSubmit={(event) => {
+                    void handleCreateTransactionSubmit(event)
+                  }}
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Добавить транзакцию
+                  </p>
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <label className="text-xs text-slate-600">
-                  Дата
-                  <input
-                    type="date"
-                    value={newTransactionDate}
-                    onChange={(event) => setNewTransactionDate(event.target.value)}
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs text-slate-600">
+                      Дата
+                      <input
+                        type="date"
+                        value={newTransactionDate}
+                        onChange={(event) => setNewTransactionDate(event.target.value)}
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
 
-                <label className="text-xs text-slate-600">
-                  Направление
-                  <select
-                    value={newTransactionDirection}
-                    onChange={(event) =>
-                      setNewTransactionDirection(event.target.value as TransactionDirection)
-                    }
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                    <label className="text-xs text-slate-600">
+                      Направление
+                      <select
+                        value={newTransactionDirection}
+                        onChange={(event) =>
+                          setNewTransactionDirection(event.target.value as TransactionDirection)
+                        }
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      >
+                        <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
+                        <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+                    <label className="text-xs text-slate-600">
+                      Сумма
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={newTransactionAmount}
+                        onChange={(event) => setNewTransactionAmount(event.target.value)}
+                        placeholder="0,00"
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
+
+                    <label className="text-xs text-slate-600">
+                      Описание
+                      <input
+                        type="text"
+                        value={newTransactionMemo}
+                        onChange={(event) => setNewTransactionMemo(event.target.value)}
+                        placeholder="Продукты"
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      />
+                    </label>
+                  </div>
+
+                  {!isTransactionAmountValid && newTransactionAmount.trim().length > 0 ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Сумма должна быть положительной и содержать не более 2 знаков после запятой.
+                    </p>
+                  ) : null}
+
+                  {createTransactionStatus === 'error' && createTransactionErrorMessage ? (
+                    <p className="mt-2 text-xs text-amber-700">{createTransactionErrorMessage}</p>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    disabled={!canCreateTransaction}
+                    className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
-                    <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
-                  </select>
-                </label>
-              </div>
+                    {createTransactionStatus === 'submitting' ? 'Добавляем...' : 'Добавить транзакцию'}
+                  </button>
+                </form>
 
-              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
-                <label className="text-xs text-slate-600">
-                  Сумма
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={newTransactionAmount}
-                    onChange={(event) => setNewTransactionAmount(event.target.value)}
-                    placeholder="0,00"
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
+                <form
+                  className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
+                  onSubmit={(event) => {
+                    void handleImportCsvSubmit(event)
+                  }}
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Импорт из CSV</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Формат заголовка: <code>occurred_on,direction,amount,currency,memo</code>
+                  </p>
 
-                <label className="text-xs text-slate-600">
-                  Описание
-                  <input
-                    type="text"
-                    value={newTransactionMemo}
-                    onChange={(event) => setNewTransactionMemo(event.target.value)}
-                    placeholder="Продукты"
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  />
-                </label>
-              </div>
+                  <label className="mt-3 block text-xs text-slate-600">
+                    Файл
+                    <input
+                      ref={csvFileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700"
+                    />
+                  </label>
 
-              {!isTransactionAmountValid && newTransactionAmount.trim().length > 0 ? (
-                <p className="mt-2 text-xs text-amber-700">
-                  Сумма должна быть положительной и содержать не более 2 знаков после запятой.
-                </p>
-              ) : null}
+                  {csvFile ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Выбран файл: <span className="font-medium text-slate-700">{csvFile.name}</span>
+                    </p>
+                  ) : null}
 
-              {createTransactionStatus === 'error' && createTransactionErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{createTransactionErrorMessage}</p>
-              ) : null}
+                  {csvImportStatus === 'error' && csvImportErrorMessage ? (
+                    <p className="mt-2 text-xs text-amber-700">{csvImportErrorMessage}</p>
+                  ) : null}
 
-              <button
-                type="submit"
-                disabled={!canCreateTransaction}
-                className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {createTransactionStatus === 'submitting' ? 'Добавляем...' : 'Добавить транзакцию'}
-              </button>
-            </form>
+                  {csvImportStatus === 'success' && csvImportResult ? (
+                    <p className="mt-2 text-xs text-emerald-700">
+                      Импорт завершен: получено {csvImportResult.receivedRows}, добавлено{' '}
+                      {csvImportResult.importedCount}, пропущено дубликатов{' '}
+                      {csvImportResult.skippedDuplicates}.
+                    </p>
+                  ) : null}
 
-            <form
-              className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
-              onSubmit={(event) => {
-                void handleImportCsvSubmit(event)
-              }}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Импорт из CSV</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Формат заголовка: <code>occurred_on,direction,amount,currency,memo</code>
-              </p>
-
-              <label className="mt-3 block text-xs text-slate-600">
-                Файл
-                <input
-                  ref={csvFileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700"
-                />
-              </label>
-
-              {csvFile ? (
-                <p className="mt-2 text-xs text-slate-500">
-                  Выбран файл: <span className="font-medium text-slate-700">{csvFile.name}</span>
-                </p>
-              ) : null}
-
-              {csvImportStatus === 'error' && csvImportErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{csvImportErrorMessage}</p>
-              ) : null}
-
-              {csvImportStatus === 'success' && csvImportResult ? (
-                <p className="mt-2 text-xs text-emerald-700">
-                  Импорт завершен: получено {csvImportResult.receivedRows}, добавлено{' '}
-                  {csvImportResult.importedCount}, пропущено дубликатов{' '}
-                  {csvImportResult.skippedDuplicates}.
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={!canImportCsv}
-                className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {csvImportStatus === 'submitting' ? 'Импортируем...' : 'Импортировать CSV'}
-              </button>
-            </form>
+                  <button
+                    type="submit"
+                    disabled={!canImportCsv}
+                    className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {csvImportStatus === 'submitting' ? 'Импортируем...' : 'Импортировать CSV'}
+                  </button>
+                </form>
+              </>
+            )}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-600">
@@ -913,7 +1238,7 @@ function AccountsView({
               ) : null}
 
               {transactionsStatus === 'ready' && totalTransactionsCount === 0 ? (
-                <StatusCard tone="neutral" message="Для этого счета пока нет транзакций." />
+                <StatusCard tone="neutral" message="Для этого инструмента пока нет транзакций." />
               ) : null}
 
               {transactionsStatus === 'ready' && totalTransactionsCount > 0 && filteredTransactions.length === 0 ? (
@@ -922,35 +1247,149 @@ function AccountsView({
 
               {transactionsStatus === 'ready' && filteredTransactions.length > 0 ? (
                 <ul className="space-y-2">
-                  {filteredTransactions.map((transaction) => (
-                    <li
-                      key={transaction.id}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">{transaction.memo}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {formatIsoDateRu(transaction.occurredOn)} · {toDirectionLabel(transaction.direction)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">
-                            {transaction.currency}
-                          </p>
-                          <p
-                            className={`mt-1 text-sm font-semibold ${
-                              transaction.direction === 'OUTFLOW'
-                                ? 'text-rose-700'
-                                : 'text-emerald-700'
-                            }`}
+                  {filteredTransactions.map((transaction) => {
+                    const isEditing = activeEditingTransactionId === transaction.id
+
+                    return (
+                      <li
+                        key={transaction.id}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-3"
+                      >
+                        {isEditing ? (
+                          <form
+                            onSubmit={(event) => {
+                              void handleUpdateTransactionSubmit(event)
+                            }}
                           >
-                            {formatSignedAmount(transaction.amount, transaction.direction)}
-                          </p>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                              Редактировать транзакцию
+                            </p>
+
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              <label className="text-xs text-slate-600">
+                                Дата
+                                <input
+                                  type="date"
+                                  value={editingTransactionDate}
+                                  onChange={(event) => setEditingTransactionDate(event.target.value)}
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+
+                              <label className="text-xs text-slate-600">
+                                Направление
+                                <select
+                                  value={editingTransactionDirection}
+                                  onChange={(event) =>
+                                    setEditingTransactionDirection(
+                                      event.target.value as TransactionDirection,
+                                    )
+                                  }
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                >
+                                  <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
+                                  <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                                </select>
+                              </label>
+                            </div>
+
+                            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+                              <label className="text-xs text-slate-600">
+                                Сумма
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={editingTransactionAmount}
+                                  onChange={(event) => setEditingTransactionAmount(event.target.value)}
+                                  placeholder="0,00"
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+
+                              <label className="text-xs text-slate-600">
+                                Описание
+                                <input
+                                  type="text"
+                                  value={editingTransactionMemo}
+                                  onChange={(event) => setEditingTransactionMemo(event.target.value)}
+                                  placeholder="Без описания"
+                                  className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                                />
+                              </label>
+                            </div>
+
+                            {!isEditingTransactionAmountValid &&
+                            editingTransactionAmount.trim().length > 0 ? (
+                              <p className="mt-2 text-xs text-amber-700">
+                                Сумма должна быть положительной и содержать не более 2 знаков после
+                                запятой.
+                              </p>
+                            ) : null}
+
+                            {updateTransactionStatus === 'error' && updateTransactionErrorMessage ? (
+                              <p className="mt-2 text-xs text-amber-700">
+                                {updateTransactionErrorMessage}
+                              </p>
+                            ) : null}
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="submit"
+                                disabled={!canUpdateTransaction}
+                                className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {updateTransactionStatus === 'submitting'
+                                  ? 'Сохраняем...'
+                                  : 'Сохранить'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={resetEditingTransaction}
+                                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {toTransactionMemoDisplay(transaction.memo)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatIsoDateRu(transaction.occurredOn)} ·{' '}
+                                {toDirectionLabel(transaction.direction)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs uppercase tracking-wide text-slate-500">
+                                {transaction.currency}
+                              </p>
+                              <p
+                                className={`mt-1 text-sm font-semibold ${
+                                  transaction.direction === 'OUTFLOW'
+                                    ? 'text-rose-700'
+                                    : 'text-emerald-700'
+                                }`}
+                              >
+                                {formatSignedAmount(transaction.amount, transaction.direction)}
+                              </p>
+                              {!isLinkedPersonalFinanceAccount ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditingTransaction(transaction)}
+                                  className="mt-2 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                >
+                                  Редактировать
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               ) : null}
             </div>
@@ -1056,6 +1495,27 @@ function formatSignedAmount(amount: string, direction: 'INFLOW' | 'OUTFLOW'): st
   return `${prefix}${formatAmount(amount)}`
 }
 
+function normalizeAmountInput(value: string): string {
+  return value.trim().replace(',', '.')
+}
+
+function isValidIsoDateValue(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function isValidPositiveAmountValue(value: string): boolean {
+  return /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value) && Number(value) > 0
+}
+
+function normalizeTransactionMemo(memo: string | null): string {
+  return memo ?? ''
+}
+
+function toTransactionMemoDisplay(memo: string | null): string {
+  const normalizedMemo = normalizeTransactionMemo(memo)
+  return normalizedMemo.length > 0 ? normalizedMemo : 'Без описания'
+}
+
 function todayIsoDate(): string {
   const now = new Date()
   const year = String(now.getFullYear())
@@ -1114,6 +1574,26 @@ function getAccountCurrencyOptions(): string[] {
   )
 }
 
+function getViewTitle(view: ViewTab): string {
+  if (view === 'accounts') {
+    return 'Инвестиции'
+  }
+  if (view === 'personal-finance') {
+    return 'Личные финансы'
+  }
+  return 'Обзор'
+}
+
+function getViewDescription(view: ViewTab): string {
+  if (view === 'accounts') {
+    return 'Инвестиционные счета и активы с балансами, деталями транзакций и простыми фильтрами.'
+  }
+  if (view === 'personal-finance') {
+    return 'Ручной yearly review по картам: факт расходов, лимиты, фактический доход и прогноз.'
+  }
+  return 'Спокойный срез капитала и метрик финансового спокойствия.'
+}
+
 function readNavigationFromUrl(): NavigationState {
   if (typeof window === 'undefined') {
     return DEFAULT_NAVIGATION_STATE
@@ -1122,13 +1602,36 @@ function readNavigationFromUrl(): NavigationState {
   const params = new URLSearchParams(window.location.search)
   const tabParam = params.get('tab')
   const accountIdRaw = params.get('accountId')
+  const financeTabParam = params.get('financeTab')
+  const financeYearParam = params.get('financeYear')
+  const financeCardIdRaw = params.get('financeCardId')
   const accountId = accountIdRaw && accountIdRaw.trim().length > 0 ? accountIdRaw : null
-  const tab: ViewTab = tabParam === 'accounts' || accountId ? 'accounts' : 'dashboard'
+  const financeCardId = financeCardIdRaw && financeCardIdRaw.trim().length > 0 ? financeCardIdRaw : null
+  const financeTab: PersonalFinanceTab =
+    financeTabParam === 'settings'
+      ? 'settings'
+      : financeTabParam === 'income'
+        ? 'income'
+        : 'expenses'
+  const financeYear = toNavigationYear(financeYearParam)
 
-  return { tab, accountId }
+  const tab: ViewTab =
+    tabParam === 'personal-finance'
+      ? 'personal-finance'
+      : tabParam === 'accounts' || accountId
+        ? 'accounts'
+        : 'dashboard'
+
+  return { tab, accountId, financeTab, financeYear, financeCardId }
 }
 
-function syncNavigationToUrl(activeView: ViewTab, selectedAccountId: string | null): void {
+function syncNavigationToUrl(
+  activeView: ViewTab,
+  selectedAccountId: string | null,
+  financeTab: PersonalFinanceTab,
+  financeYear: number,
+  financeCardId: string | null,
+): void {
   if (typeof window === 'undefined') {
     return
   }
@@ -1136,15 +1639,42 @@ function syncNavigationToUrl(activeView: ViewTab, selectedAccountId: string | nu
   const params = new URLSearchParams(window.location.search)
   params.delete('tab')
   params.delete('accountId')
+  params.delete('financeTab')
+  params.delete('financeYear')
+  params.delete('financeCardId')
 
   params.set('tab', activeView)
   if (activeView === 'accounts' && selectedAccountId) {
     params.set('accountId', selectedAccountId)
   }
+  if (activeView === 'personal-finance') {
+    params.set('financeTab', financeTab)
+    params.set('financeYear', String(financeYear))
+    if (financeCardId) {
+      params.set('financeCardId', financeCardId)
+    }
+  }
 
   const query = params.toString()
   const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`
   window.history.replaceState(null, '', nextUrl)
+}
+
+function toNavigationYear(value: string | null): number {
+  if (!value) {
+    return currentYear()
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 9999) {
+    return currentYear()
+  }
+
+  return parsed
+}
+
+function currentYear(): number {
+  return new Date().getFullYear()
 }
 
 function toErrorMessage(error: unknown): string {
