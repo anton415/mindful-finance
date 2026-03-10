@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type {
   CreatePersonalFinanceCardRequest,
   PersonalExpenseCategoryCode,
@@ -13,10 +13,14 @@ import type {
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type PersonalFinanceTab = 'expenses' | 'income' | 'settings'
+export interface PersonalFinanceCardListItem extends PersonalFinanceCardDto {
+  currentBalance: string | null
+  currency: string | null
+}
 
 interface PersonalFinanceViewProps {
   status: LoadStatus
-  cards: PersonalFinanceCardDto[]
+  cards: PersonalFinanceCardListItem[]
   snapshot: PersonalFinanceSnapshotDto | null
   selectedCardId: string | null
   activeTab: PersonalFinanceTab
@@ -64,31 +68,6 @@ export function PersonalFinanceView({
   onSaveIncomeActual,
   onSaveSettings,
 }: PersonalFinanceViewProps) {
-  const [newCardName, setNewCardName] = useState<string>('')
-  const [createCardStatus, setCreateCardStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [createCardErrorMessage, setCreateCardErrorMessage] = useState<string | null>(null)
-
-  const handleCreateCardSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-
-    if (newCardName.trim().length === 0 || createCardStatus === 'submitting') {
-      return
-    }
-
-    setCreateCardStatus('submitting')
-    setCreateCardErrorMessage(null)
-
-    const created = await onCreateCard({ name: newCardName.trim() })
-    if (created) {
-      setNewCardName('')
-      setCreateCardStatus('idle')
-      return
-    }
-
-    setCreateCardStatus('error')
-    setCreateCardErrorMessage('Не удалось добавить карту.')
-  }
-
   if (status === 'loading' || status === 'idle') {
     return <InlineStatus tone="neutral" message="Загружаем личные финансы..." />
   }
@@ -106,103 +85,56 @@ export function PersonalFinanceView({
 
   const hasCards = cards.length > 0
   const selectedCard = snapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
+  const yearOptions = selectableYearOptions()
 
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 lg:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
-              <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
-                лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="min-w-64 text-sm text-slate-600">
-                Карта
-                <select
-                  value={selectedCard?.id ?? ''}
-                  onChange={(event) => onSelectCard(event.target.value)}
-                  disabled={!hasCards}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"
-                >
-                  {hasCards ? (
-                    cards.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">Сначала добавьте карту</option>
-                  )}
-                </select>
-              </label>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onSelectYear(year - 1)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                >
-                  Назад
-                </button>
-                <div className="min-w-24 rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-900">
-                  {year}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onSelectYear(year + 1)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                >
-                  Вперёд
-                </button>
-              </div>
-            </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
+              лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
+            </p>
           </div>
 
-          <form
-            className="rounded-2xl border border-slate-200 bg-white p-3 sm:min-w-80"
-            onSubmit={(event) => {
-              void handleCreateCardSubmit(event)
-            }}
-          >
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Добавить карту
-            </p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                value={newCardName}
-                onChange={(event) => setNewCardName(event.target.value)}
-                placeholder="Например, T-Банк Black"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none"
-              />
-              <button
-                type="submit"
-                disabled={newCardName.trim().length === 0 || createCardStatus === 'submitting'}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {createCardStatus === 'submitting' ? 'Добавляем...' : 'Добавить'}
-              </button>
-            </div>
-            {createCardErrorMessage ? (
-              <p className="mt-2 text-xs text-rose-600">{createCardErrorMessage}</p>
-            ) : null}
-          </form>
+          <label className="w-full text-sm text-slate-600 sm:max-w-52">
+            Год
+            <select
+              value={year}
+              onChange={(event) => onSelectYear(Number(event.target.value))}
+              disabled={!hasCards}
+              className={selectClassName()}
+            >
+              {yearOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        <nav className="mt-4 inline-flex rounded-2xl border border-slate-200 bg-white p-1">
+        <PersonalFinanceCardSelector
+          cards={cards}
+          selectedCardId={selectedCard?.id ?? null}
+          onSelectCard={onSelectCard}
+        />
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+        <nav className="inline-flex rounded-2xl border border-slate-200 bg-white p-1">
           <NestedTabButton
             label="Расходы"
             isActive={activeTab === 'expenses'}
+            disabled={!hasCards}
             onClick={() => onSelectTab('expenses')}
           />
           <NestedTabButton
             label="Доходы"
             isActive={activeTab === 'income'}
+            disabled={!hasCards}
             onClick={() => onSelectTab('income')}
           />
           <NestedTabButton
@@ -214,7 +146,7 @@ export function PersonalFinanceView({
       </section>
 
       {!hasCards ? (
-        <InlineStatus tone="neutral" message="Добавьте первую карту, чтобы начать review по месяцам." />
+        <PersonalFinanceSettingsEmptyState onCreateCard={onCreateCard} />
       ) : !snapshot ? (
         <InlineStatus tone="neutral" message="Выберите карту, чтобы загрузить данные." />
       ) : activeTab === 'expenses' ? (
@@ -233,6 +165,7 @@ export function PersonalFinanceView({
         <SettingsTab
           key={`settings-${snapshot.card.id}-${snapshot.year}-${snapshot.settings.currentBalance}`}
           snapshot={snapshot}
+          onCreateCard={onCreateCard}
           onSaveSettings={onSaveSettings}
         />
       )}
@@ -247,32 +180,52 @@ interface ExpensesTabProps {
 
 function ExpensesTab({ snapshot, onSaveExpenseActual }: ExpensesTabProps) {
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
+  const [isExpenseDrawerOpen, setIsExpenseDrawerOpen] = useState<boolean>(false)
   const selectedMonthData =
     snapshot.expenses.months.find((month) => month.month === selectedMonth) ?? snapshot.expenses.months[0]
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-        <MonthSelectorCard
-          title="Месяц для ввода"
-          description="Выберите месяц, для которого сохраняется фактический расход."
-          selectedMonth={selectedMonth}
-          onSelectMonth={setSelectedMonth}
-        />
+      <section className="rounded-3xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Фактические расходы</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Добавляйте расходы через панель справа, не теряя из виду годовую таблицу.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsExpenseDrawerOpen(true)}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            + Добавить расходы
+          </button>
+        </div>
+      </section>
 
-        <ExpenseEntryFormCard
-          key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
+      {isExpenseDrawerOpen ? (
+        <DrawerShell
           title="Фактические расходы"
-          description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
-          submitLabel="Сохранить факт"
-          month={selectedMonth}
-          year={snapshot.year}
-          currency={snapshot.currency}
-          categories={snapshot.categories}
-          initialValues={selectedMonthData.actualCategoryAmounts}
-          onSave={onSaveExpenseActual}
-        />
-      </div>
+          description="Выберите месяц и сохраните факт по категориям. Лимиты остаются в заголовках годовой таблицы и в настройках."
+          onClose={() => setIsExpenseDrawerOpen(false)}
+        >
+          <ExpenseEntryFormCard
+            key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
+            title="Расходы по категориям"
+            description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
+            submitLabel="Сохранить факт"
+            selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+            year={snapshot.year}
+            currency={snapshot.currency}
+            categories={snapshot.categories}
+            initialValues={selectedMonthData.actualCategoryAmounts}
+            onSave={onSaveExpenseActual}
+            onSaved={() => setIsExpenseDrawerOpen(false)}
+          />
+        </DrawerShell>
+      ) : null}
 
       <ExpenseReviewTable snapshot={snapshot} />
     </div>
@@ -313,10 +266,26 @@ function IncomeTab({ snapshot, onSaveIncomeActual }: IncomeTabProps) {
 
 interface SettingsTabProps {
   snapshot: PersonalFinanceSnapshotDto
+  onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
 }
 
-function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
+function SettingsTab({ snapshot, onCreateCard, onSaveSettings }: SettingsTabProps) {
+  return (
+    <div className="space-y-4">
+      <CreateCardSection onCreateCard={onCreateCard} hasExistingCards />
+      <SettingsDetails snapshot={snapshot} onSaveSettings={onSaveSettings} />
+    </div>
+  )
+}
+
+function SettingsDetails({
+  snapshot,
+  onSaveSettings,
+}: {
+  snapshot: PersonalFinanceSnapshotDto
+  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+}) {
   const [baselineAmount, setBaselineAmount] = useState<string>(
     toDraftAmount(snapshot.settings.baselineAmount),
   )
@@ -378,7 +347,7 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <>
       <section className="grid gap-4 lg:grid-cols-3">
         <MetricTile
           label="Текущий баланс карты"
@@ -551,7 +520,108 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
           <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
         ) : null}
       </form>
+    </>
+  )
+}
+
+function PersonalFinanceSettingsEmptyState({
+  onCreateCard,
+}: {
+  onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
+}) {
+  return (
+    <div className="space-y-4">
+      <CreateCardSection onCreateCard={onCreateCard} hasExistingCards={false} />
+      <InlineStatus
+        tone="neutral"
+        message="Создайте первую карту в настройках, чтобы затем вести расходы, доходы и годовой обзор."
+      />
     </div>
+  )
+}
+
+function CreateCardSection({
+  onCreateCard,
+  hasExistingCards,
+}: {
+  onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
+  hasExistingCards: boolean
+}) {
+  const [newCardName, setNewCardName] = useState<string>('')
+  const [createCardStatus, setCreateCardStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [createCardErrorMessage, setCreateCardErrorMessage] = useState<string | null>(null)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (newCardName.trim().length === 0 || createCardStatus === 'submitting') {
+      return
+    }
+
+    setCreateCardStatus('submitting')
+    setCreateCardErrorMessage(null)
+
+    const created = await onCreateCard({ name: newCardName.trim() })
+    if (created) {
+      setNewCardName('')
+      setCreateCardStatus('idle')
+      return
+    }
+
+    setCreateCardStatus('error')
+    setCreateCardErrorMessage('Не удалось добавить карту.')
+  }
+
+  return (
+    <section
+      className={`rounded-3xl border p-4 ${
+        hasExistingCards ? 'border-slate-200 bg-slate-50/70' : 'border-slate-200 bg-white'
+      }`}
+    >
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">
+            {hasExistingCards ? 'Добавить ещё одну карту' : 'Добавить первую карту'}
+          </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            {hasExistingCards
+              ? 'Создание карты спрятано в настройки, потому что это редкое действие.'
+              : 'Сначала создайте карту, а затем настройте баланс, лимиты и прогноз доходов.'}
+          </p>
+        </div>
+      </div>
+
+      <form
+        className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start"
+        onSubmit={(event) => {
+          void handleSubmit(event)
+        }}
+      >
+        <label className="w-full text-sm text-slate-600">
+          Название карты
+          <input
+            type="text"
+            value={newCardName}
+            onChange={(event) => setNewCardName(event.target.value)}
+            placeholder="Например, T-Банк Black"
+            className={inputClassName(true)}
+          />
+        </label>
+        <div className="flex sm:pt-6">
+          <button
+            type="submit"
+            disabled={newCardName.trim().length === 0 || createCardStatus === 'submitting'}
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+          >
+            {createCardStatus === 'submitting' ? 'Добавляем...' : 'Добавить'}
+          </button>
+        </div>
+      </form>
+
+      {createCardErrorMessage ? (
+        <p className="mt-3 text-xs text-rose-600">{createCardErrorMessage}</p>
+      ) : null}
+    </section>
   )
 }
 
@@ -590,6 +660,68 @@ function RecurringIncomeSummaryCard({
   )
 }
 
+function PersonalFinanceCardSelector({
+  cards,
+  selectedCardId,
+  onSelectCard,
+}: {
+  cards: PersonalFinanceCardListItem[]
+  selectedCardId: string | null
+  onSelectCard: (cardId: string) => void
+}) {
+  return (
+    <article className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Карты личных финансов</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Выберите карту, чтобы открыть расходы, доходы и настройки.
+          </p>
+        </div>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+          Пока нет карт. Создание доступно на вкладке настроек.
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {cards.map((card) => (
+            <li key={card.id}>
+              <button
+                type="button"
+                onClick={() => onSelectCard(card.id)}
+                className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                  selectedCardId === card.id
+                    ? 'border-slate-300 bg-slate-50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{card.name}</p>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                      Наличные · Личные финансы
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      {card.currency ?? 'RUB'}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {card.currentBalance ? formatAmount(card.currentBalance) : '...'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  )
+}
+
 function MetricTile({
   label,
   value,
@@ -608,59 +740,32 @@ function MetricTile({
   )
 }
 
-interface MonthSelectorCardProps {
-  title: string
-  description: string
-  selectedMonth: number
-  onSelectMonth: (month: number) => void
-}
-
-function MonthSelectorCard({ title, description, selectedMonth, onSelectMonth }: MonthSelectorCardProps) {
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
-
-      <label className="mt-4 block text-sm text-slate-600">
-        Месяц
-        <select
-          value={selectedMonth}
-          onChange={(event) => onSelectMonth(Number(event.target.value))}
-          className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
-        >
-          {MONTH_LABELS.map((label, index) => (
-            <option key={label} value={index + 1}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </section>
-  )
-}
-
 interface ExpenseEntryFormCardProps {
   title: string
   description: string
   submitLabel: string
-  month: number
+  selectedMonth: number
+  onSelectMonth: (month: number) => void
   year: number
   currency: string
   categories: PersonalExpenseCategoryDto[]
   initialValues: Record<PersonalExpenseCategoryCode, string>
   onSave: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
+  onSaved?: () => void
 }
 
 function ExpenseEntryFormCard({
   title,
   description,
   submitLabel,
-  month,
+  selectedMonth,
+  onSelectMonth,
   year,
   currency,
   categories,
   initialValues,
   onSave,
+  onSaved,
 }: ExpenseEntryFormCardProps) {
   const [draftValues, setDraftValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
     toExpenseDraftValues(initialValues, categories),
@@ -684,7 +789,7 @@ function ExpenseEntryFormCard({
     setStatus('submitting')
     setErrorMessage(null)
 
-    const saved = await onSave(month, {
+    const saved = await onSave(selectedMonth, {
       year,
       categoryAmounts: categories.reduce(
         (result, category) => ({
@@ -697,6 +802,7 @@ function ExpenseEntryFormCard({
 
     if (saved) {
       setStatus('idle')
+      onSaved?.()
       return
     }
 
@@ -706,15 +812,25 @@ function ExpenseEntryFormCard({
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h3 className="text-base font-semibold text-slate-900">{title}</h3>
           <p className="mt-1 text-sm text-slate-600">{description}</p>
         </div>
-        <div className="rounded-xl bg-slate-100 px-3 py-2 text-right">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месяц</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{toMonthLabel(month)}</p>
-        </div>
+        <label className="w-full text-sm text-slate-600 sm:max-w-64">
+          Месяц
+          <select
+            value={selectedMonth}
+            onChange={(event) => onSelectMonth(Number(event.target.value))}
+            className={selectClassName()}
+          >
+            {MONTH_LABELS.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <form
@@ -769,6 +885,69 @@ function ExpenseEntryFormCard({
   )
 }
 
+function DrawerShell({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string
+  description: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 sm:items-stretch sm:justify-end">
+      <button
+        type="button"
+        aria-label="Закрыть панель"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:h-full sm:max-h-none sm:max-w-2xl sm:rounded-none sm:rounded-l-3xl"
+      >
+        <div className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+              <p className="mt-1 text-sm text-slate-600">{description}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      </aside>
+    </div>
+  )
+}
+
 function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
@@ -779,25 +958,108 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
         </p>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] table-fixed border-collapse text-[12px] leading-4">
+      <div className="lg:hidden">
+        <div className="space-y-3 p-4">
+          {snapshot.expenses.months.map((month) => (
+            <article key={month.month} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">{toMonthLabel(month.month)}</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Факт {formatAmount(month.actualTotal)} · Лимит {formatAmount(month.limitTotal)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {snapshot.categories.map((category) => {
+                  const actual = month.actualCategoryAmounts[category.code]
+                  const limit = month.limitCategoryAmounts[category.code]
+                  const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+
+                  return (
+                    <div
+                      key={category.code}
+                      className={`rounded-2xl border px-3 py-2 ${
+                        isOverLimit
+                          ? 'border-rose-200 bg-rose-50'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-900">{category.label}</p>
+                        <p className={`text-sm font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
+                          {formatAmountOrDash(actual)}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Лимит {formatAmountOrDash(limit)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <MetricTile label="Факт за месяц" value={formatAmount(month.actualTotal)} />
+                <MetricTile label="Лимит за месяц" value={formatAmount(month.limitTotal)} />
+              </div>
+            </article>
+          ))}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+            <h4 className="text-sm font-semibold text-slate-900">Итоги года</h4>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {snapshot.categories.map((category) => (
+                <div key={category.code} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-medium text-slate-900">{category.label}</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Факт {formatAmount(snapshot.expenses.actualTotalsByCategory[category.code])}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Лимит {formatAmount(snapshot.expenses.limitTotalsByCategory[category.code])}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <MetricTile
+                label="Годовой факт"
+                value={formatAmountWithCurrency(snapshot.expenses.annualActualTotal, snapshot.currency)}
+              />
+              <MetricTile
+                label="Годовой лимит"
+                value={formatAmountWithCurrency(snapshot.expenses.annualLimitTotal, snapshot.currency)}
+              />
+              <MetricTile
+                label="Средний факт"
+                value={formatAmountWithCurrency(snapshot.expenses.averageMonthlyActualTotal, snapshot.currency)}
+              />
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div className="hidden lg:block">
+        <table className="w-full border-collapse text-[11px] leading-4 xl:text-[12px]">
           <thead className="bg-slate-50">
             <tr>
-              <th className="w-28 border-b border-r border-slate-200 px-3 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24 xl:px-3">
                 Месяц
               </th>
               {snapshot.categories.map((category) => (
                 <th
                   key={category.code}
-                  className="border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900"
+                  className="border-b border-r border-slate-200 px-3 py-3 text-left text-slate-900"
                 >
-                  {category.label}
+                  <span className="block whitespace-nowrap font-semibold">{category.label}</span>
+                  <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
+                    Лимит {formatAmountOrDash(snapshot.settings.recurringLimitCategoryAmounts[category.code])}
+                  </span>
                 </th>
               ))}
-              <th className="w-28 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24">
                 Факт
               </th>
-              <th className="w-28 border-b border-slate-200 px-2 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24">
                 Лимит
               </th>
             </tr>
@@ -805,7 +1067,7 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
           <tbody>
             {snapshot.expenses.months.map((month) => (
               <tr key={month.month} className="align-top">
-                <td className="border-b border-r border-slate-200 px-3 py-3 font-semibold text-slate-900">
+                <td className="border-b border-r border-slate-200 px-2 py-3 font-semibold text-slate-900 xl:px-3">
                   {toMonthLabel(month.month)}
                 </td>
                 {snapshot.categories.map((category) => {
@@ -822,9 +1084,6 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
                     >
                       <p className={`font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
                         {formatAmountOrDash(actual)}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Лимит {formatAmountOrDash(limit)}
                       </p>
                     </td>
                   )
@@ -954,7 +1213,7 @@ function IncomeActualFormCard({
           <select
             value={selectedMonth}
             onChange={(event) => onSelectMonth(Number(event.target.value))}
-            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
+            className={selectClassName()}
           >
             {MONTH_LABELS.map((label, index) => (
               <option key={label} value={index + 1}>
@@ -1087,18 +1346,25 @@ function StatusBadge({ status }: { status: 'ACTUAL' | 'FORECAST' }) {
 function NestedTabButton({
   label,
   isActive,
+  disabled = false,
   onClick,
 }: {
   label: string
   isActive: boolean
+  disabled?: boolean
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-        isActive ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+        isActive
+          ? 'bg-slate-900 text-white shadow-sm'
+          : disabled
+            ? 'cursor-not-allowed text-slate-300'
+            : 'text-slate-600 hover:text-slate-900'
       }`}
     >
       {label}
@@ -1141,8 +1407,16 @@ function InlineStatus({
   )
 }
 
+function selectClassName(): string {
+  return controlClassName(true)
+}
+
 function inputClassName(isValid: boolean): string {
-  return `mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
+  return controlClassName(isValid)
+}
+
+function controlClassName(isValid: boolean): string {
+  return `mt-1 block h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100 ${
     isValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
   }`
 }
@@ -1161,6 +1435,11 @@ function currentYear(): number {
 
 function currentMonthNumber(): number {
   return new Date().getMonth() + 1
+}
+
+function selectableYearOptions(): number[] {
+  const current = currentYear()
+  return Array.from({ length: 7 }, (_, index) => current - 3 + index)
 }
 
 function serializeExpenseMonth(
@@ -1250,6 +1529,7 @@ function formatAmountWithCurrency(value: string, currency: string): string {
 function formatAmountOrDash(value: string): string {
   return isPositiveAmount(value) ? formatAmount(value) : '-'
 }
+
 
 function isPositiveAmount(value: string): boolean {
   return compareDecimalStrings(value, '0.00') > 0
