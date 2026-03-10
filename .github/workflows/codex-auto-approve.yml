@@ -30,7 +30,6 @@ jobs:
               "Backend tests",
               "Frontend lint and build",
               "Framework boundary",
-              "dependency-review",
               "Analyze (java-kotlin)",
               "Analyze (javascript-typescript)",
             ];

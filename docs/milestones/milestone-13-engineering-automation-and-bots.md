@@ -72,5 +72,6 @@
 - Treat this as an engineering enablement milestone, not as a reason to bypass product-roadmap checkpoints.
 - Keep domain truth explicit: automation should reinforce the architecture, not hide violations.
 - Prefer low-maintenance GitHub-native automation before introducing extra bot platforms.
-- Decision (2026-03-10): `main` governance now targets one required approval plus required checks `Backend tests`, `Frontend lint and build`, `Framework boundary`, `dependency-review`, `Analyze (java-kotlin)`, and `Analyze (javascript-typescript)`.
+- Decision (2026-03-10): `main` governance now targets one required approval plus required checks `Backend tests`, `Frontend lint and build`, `Framework boundary`, `Analyze (java-kotlin)`, and `Analyze (javascript-typescript)`.
 - Decision (2026-03-10): PR review comments may come from Codex, but automatic merge approval is issued by GitHub Actions after all required checks pass because that path is GitHub-native and does not require storing a personal PAT in the repository.
+- Decision (2026-03-10): `dependency-review` stays non-required until repository security settings support it reliably; otherwise branch protection would deadlock normal PR merges.
