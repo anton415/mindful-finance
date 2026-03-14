@@ -77,6 +77,9 @@ export interface ApiClient {
     request: UpdatePersonalFinanceSettingsRequest,
     signal?: AbortSignal,
   ): Promise<void>
+  archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
+  restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
+  deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
 }
 
 export function createApiClient(config: HttpClientConfig = {}): ApiClient {
@@ -234,6 +237,18 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
         request,
         { signal },
       )
+    },
+
+    archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/archive`, { signal })
+    },
+
+    restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/restore`, { signal })
+    },
+
+    deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.deleteVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`, { signal })
     },
   }
 }

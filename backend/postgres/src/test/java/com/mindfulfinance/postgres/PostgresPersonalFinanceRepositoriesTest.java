@@ -26,6 +26,7 @@ import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
+import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
 
 @Testcontainers
 public class PostgresPersonalFinanceRepositoriesTest {
@@ -92,13 +93,15 @@ public class PostgresPersonalFinanceRepositoriesTest {
             firstCardId,
             "Основная карта",
             firstLinkedAccountId,
-            Instant.parse("2026-01-01T00:00:00Z")
+            Instant.parse("2026-01-01T00:00:00Z"),
+            PersonalFinanceCardStatus.ACTIVE
         ));
         cardRepository.save(new PersonalFinanceCard(
             secondCardId,
             "Резерв",
             secondLinkedAccountId,
-            Instant.parse("2026-01-02T00:00:00Z")
+            Instant.parse("2026-01-02T00:00:00Z"),
+            PersonalFinanceCardStatus.ARCHIVED
         ));
 
         expenseActualRepository.upsert(new MonthlyExpenseActual(
@@ -143,6 +146,8 @@ public class PostgresPersonalFinanceRepositoriesTest {
         ));
 
         assertThat(cardRepository.findAll()).hasSize(2);
+        assertThat(cardRepository.find(secondCardId)).get().extracting(PersonalFinanceCard::status)
+            .isEqualTo(PersonalFinanceCardStatus.ARCHIVED);
         assertThat(cardRepository.findByLinkedAccountId(firstLinkedAccountId)).isPresent();
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(2);
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026).get(0).month()).isEqualTo(1);
@@ -164,5 +169,8 @@ public class PostgresPersonalFinanceRepositoriesTest {
         assertThat(expenseLimitRepository.findByCardId(firstCardId)).isEmpty();
         assertThat(incomeActualRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
         assertThat(incomeForecastRepository.findByCardId(firstCardId)).isEmpty();
+
+        cardRepository.delete(secondCardId);
+        assertThat(cardRepository.find(secondCardId)).isEmpty();
     }
 }

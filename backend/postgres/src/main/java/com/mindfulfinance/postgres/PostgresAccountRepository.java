@@ -69,4 +69,9 @@ public final class PostgresAccountRepository implements AccountRepository {
             ACCOUNT_ROW_MAPPER
         );
     }
+
+    @Override
+    public void delete(AccountId id) {
+        jdbcTemplate.update("DELETE FROM accounts WHERE id = ?", id.value());
+    }
 }

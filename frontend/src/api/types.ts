@@ -76,6 +76,8 @@ export type PersonalExpenseCategoryCode =
   | 'ENTERTAINMENT'
   | 'EDUCATION'
 
+export type PersonalFinanceCardStatus = 'ACTIVE' | 'ARCHIVED'
+
 export interface PersonalExpenseCategoryDto {
   code: PersonalExpenseCategoryCode
   label: string
@@ -86,6 +88,7 @@ export interface PersonalFinanceCardDto {
   name: string
   linkedAccountId: string
   createdAt: string
+  status: PersonalFinanceCardStatus
 }
 
 export interface CreatePersonalFinanceCardRequest {

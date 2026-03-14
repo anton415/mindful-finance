@@ -8,11 +8,11 @@ import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 
-public final class RenamePersonalFinanceCard {
+public final class ArchivePersonalFinanceCard {
     private final PersonalFinanceCardRepository cardRepository;
     private final AccountRepository accountRepository;
 
-    public RenamePersonalFinanceCard(
+    public ArchivePersonalFinanceCard(
         PersonalFinanceCardRepository cardRepository,
         AccountRepository accountRepository
     ) {
@@ -20,33 +20,21 @@ public final class RenamePersonalFinanceCard {
         this.accountRepository = accountRepository;
     }
 
-    public PersonalFinanceCard rename(Command command) {
+    public PersonalFinanceCard archive(Command command) {
         Objects.requireNonNull(command, "command");
 
-        PersonalFinanceCard existingCard = PersonalFinanceCardStateGuard.requireMutableCard(cardRepository, command.cardId());
+        PersonalFinanceCard existingCard = cardRepository.find(command.cardId())
+            .orElseThrow(() -> new IllegalArgumentException("Personal finance card not found"));
         Account linkedAccount = accountRepository.find(existingCard.linkedAccountId())
             .orElseThrow(() -> new IllegalStateException("Linked account not found for personal finance card"));
 
-        PersonalFinanceCard renamedCard = new PersonalFinanceCard(
-            existingCard.id(),
-            command.name(),
-            existingCard.linkedAccountId(),
-            existingCard.createdAt(),
-            existingCard.status()
-        );
-        Account renamedAccount = new Account(
-            linkedAccount.id(),
-            command.name(),
-            linkedAccount.currency(),
-            linkedAccount.type(),
-            linkedAccount.status(),
-            linkedAccount.createdAt()
-        );
+        PersonalFinanceCard archivedCard = existingCard.archive();
+        Account archivedAccount = linkedAccount.archive();
 
-        accountRepository.save(renamedAccount);
-        cardRepository.save(renamedCard);
-        return renamedCard;
+        accountRepository.save(archivedAccount);
+        cardRepository.save(archivedCard);
+        return archivedCard;
     }
 
-    public record Command(PersonalFinanceCardId cardId, String name) {}
+    public record Command(PersonalFinanceCardId cardId) {}
 }

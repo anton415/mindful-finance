@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,10 +18,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
+import com.mindfulfinance.application.usecases.ArchivePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.DeletePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
 import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.RestorePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
@@ -36,6 +40,9 @@ public class PersonalFinanceController {
     private final ListPersonalFinanceCards listPersonalFinanceCards;
     private final CreatePersonalFinanceCard createPersonalFinanceCard;
     private final RenamePersonalFinanceCard renamePersonalFinanceCard;
+    private final ArchivePersonalFinanceCard archivePersonalFinanceCard;
+    private final RestorePersonalFinanceCard restorePersonalFinanceCard;
+    private final DeletePersonalFinanceCard deletePersonalFinanceCard;
     private final GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot;
     private final SaveMonthlyExpenseActual saveMonthlyExpenseActual;
     private final SaveMonthlyIncomeActual saveMonthlyIncomeActual;
@@ -46,6 +53,9 @@ public class PersonalFinanceController {
         ListPersonalFinanceCards listPersonalFinanceCards,
         CreatePersonalFinanceCard createPersonalFinanceCard,
         RenamePersonalFinanceCard renamePersonalFinanceCard,
+        ArchivePersonalFinanceCard archivePersonalFinanceCard,
+        RestorePersonalFinanceCard restorePersonalFinanceCard,
+        DeletePersonalFinanceCard deletePersonalFinanceCard,
         GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot,
         SaveMonthlyExpenseActual saveMonthlyExpenseActual,
         SaveMonthlyIncomeActual saveMonthlyIncomeActual,
@@ -55,6 +65,9 @@ public class PersonalFinanceController {
         this.listPersonalFinanceCards = listPersonalFinanceCards;
         this.createPersonalFinanceCard = createPersonalFinanceCard;
         this.renamePersonalFinanceCard = renamePersonalFinanceCard;
+        this.archivePersonalFinanceCard = archivePersonalFinanceCard;
+        this.restorePersonalFinanceCard = restorePersonalFinanceCard;
+        this.deletePersonalFinanceCard = deletePersonalFinanceCard;
         this.getCardPersonalFinanceSnapshot = getCardPersonalFinanceSnapshot;
         this.saveMonthlyExpenseActual = saveMonthlyExpenseActual;
         this.saveMonthlyIncomeActual = saveMonthlyIncomeActual;
@@ -90,6 +103,30 @@ public class PersonalFinanceController {
         }
 
         renamePersonalFinanceCard.rename(new RenamePersonalFinanceCard.Command(cardId, request.name()));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/personal-finance/cards/{cardId}/archive")
+    @Transactional
+    public ResponseEntity<Void> archiveCard(@PathVariable("cardId") String rawCardId) {
+        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
+        archivePersonalFinanceCard.archive(new ArchivePersonalFinanceCard.Command(cardId));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/personal-finance/cards/{cardId}/restore")
+    @Transactional
+    public ResponseEntity<Void> restoreCard(@PathVariable("cardId") String rawCardId) {
+        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
+        restorePersonalFinanceCard.restore(new RestorePersonalFinanceCard.Command(cardId));
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/personal-finance/cards/{cardId}")
+    @Transactional
+    public ResponseEntity<Void> deleteCard(@PathVariable("cardId") String rawCardId) {
+        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
+        deletePersonalFinanceCard.delete(new DeletePersonalFinanceCard.Command(cardId));
         return ResponseEntity.noContent().build();
     }
 
@@ -276,7 +313,8 @@ public class PersonalFinanceController {
             card.id().value().toString(),
             card.name(),
             card.linkedAccountId().value().toString(),
-            card.createdAt().toString()
+            card.createdAt().toString(),
+            card.status().name()
         );
     }
 
@@ -345,7 +383,7 @@ public class PersonalFinanceController {
         SettingsSectionDto settings
     ) {}
 
-    public record PersonalFinanceCardDto(String id, String name, String linkedAccountId, String createdAt) {}
+    public record PersonalFinanceCardDto(String id, String name, String linkedAccountId, String createdAt, String status) {}
 
     public record ExpenseCategoryDto(String code, String label) {}
 
