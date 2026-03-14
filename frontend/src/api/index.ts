@@ -27,6 +27,7 @@ export type {
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
+  PersonalFinanceCardStatus,
   PersonalFinanceExpenseMonthDto,
   PersonalFinanceExpensesDto,
   PersonalFinanceIncomeForecastDto,

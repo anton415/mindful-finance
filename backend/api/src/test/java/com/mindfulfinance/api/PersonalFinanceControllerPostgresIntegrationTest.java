@@ -2,6 +2,7 @@ package com.mindfulfinance.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -65,6 +66,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
         mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.card.id").value(cardId))
+            .andExpect(jsonPath("$.card.status").value("ACTIVE"))
             .andExpect(jsonPath("$.year").value(2026))
             .andExpect(jsonPath("$.currency").value("RUB"))
             .andExpect(jsonPath("$.cards", hasSize(1)))
@@ -208,7 +210,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
         mockMvc.perform(get("/personal-finance/cards"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].id").value(cardId))
-            .andExpect(jsonPath("$[0].name").value("Семейный кэш"));
+            .andExpect(jsonPath("$[0].name").value("Семейный кэш"))
+            .andExpect(jsonPath("$[0].status").value("ACTIVE"));
 
         mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
             .andExpect(status().isOk())
@@ -224,6 +227,129 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].name").value("Семейный кэш"))
             .andExpect(jsonPath("$[0].linkedPersonalFinanceCardId").value(cardId));
+    }
+
+    @Test
+    void archive_restore_and_delete_card_update_visibility_and_metrics() throws Exception {
+        String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "1000.00",
+                  "limitCategoryAmounts": {},
+                  "salaryAmount": "0.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").value("1000.00"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/archive", cardId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].status").value("ARCHIVED"));
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.card.status").value("ARCHIVED"))
+            .andExpect(jsonPath("$.cards", hasSize(0)));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(0)));
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").doesNotExist());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/restore", cardId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].status").value("ACTIVE"));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].linkedPersonalFinanceCardId").value(cardId));
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").value("1000.00"));
+
+        mockMvc.perform(delete("/personal-finance/cards/{cardId}", cardId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(0)));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(0)));
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void archived_card_mutations_return_conflict() throws Exception {
+        String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/archive", cardId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "name": "Архив"
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "100.00",
+                  "limitCategoryAmounts": {},
+                  "salaryAmount": "0.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/expenses/actual/2", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "year": 2026,
+                  "categoryAmounts": {}
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/actual/2", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "year": 2026,
+                  "totalAmount": "0.00"
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
     }
 
     @Test

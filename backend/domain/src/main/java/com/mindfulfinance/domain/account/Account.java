@@ -71,4 +71,8 @@ public record Account(
     public Account archive() {
         return new Account(id, name, currency, type, AccountStatus.ARCHIVED, createdAt);
     }
+
+    public Account activate() {
+        return new Account(id, name, currency, type, AccountStatus.ACTIVE, createdAt);
+    }
 }

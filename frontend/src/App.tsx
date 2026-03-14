@@ -10,6 +10,7 @@ import {
   type CurrencyTotalsDto,
   type ImportTransactionsCsvResponse,
   type MoneyDto,
+  type PersonalFinanceCardDto,
   type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
@@ -282,6 +283,7 @@ function App() {
 
       try {
         const cards = await apiClient.listPersonalFinanceCards(controller.signal)
+        const activeCards = cards.filter((card) => card.status === 'ACTIVE')
 
         if (controller.signal.aborted) {
           return
@@ -299,10 +301,17 @@ function App() {
         const resolvedCardId =
           selectedPersonalFinanceCardId && cards.some((card) => card.id === selectedPersonalFinanceCardId)
             ? selectedPersonalFinanceCardId
-            : cards[0].id
+            : (activeCards[0]?.id ?? null)
 
         if (resolvedCardId !== selectedPersonalFinanceCardId) {
           setSelectedPersonalFinanceCardId(resolvedCardId)
+        }
+
+        if (!resolvedCardId) {
+          setPersonalFinanceCards(enrichPersonalFinanceCards(cards))
+          setPersonalFinanceSnapshot(null)
+          setPersonalFinanceStatus('ready')
+          return
         }
 
         const selectedSnapshot = await apiClient.getPersonalFinanceSnapshot(
@@ -316,12 +325,15 @@ function App() {
         }
 
         setPersonalFinanceCards(
-          cards.map((card) => ({
-            ...card,
-            currentBalance:
-              card.id === selectedSnapshot.card.id ? selectedSnapshot.settings.currentBalance : null,
-            currency: card.id === selectedSnapshot.card.id ? selectedSnapshot.currency : null,
-          })),
+          enrichPersonalFinanceCards(cards, new Map([
+            [
+              selectedSnapshot.card.id,
+              {
+                currentBalance: selectedSnapshot.settings.currentBalance,
+                currency: selectedSnapshot.currency,
+              },
+            ],
+          ])),
         )
         setPersonalFinanceSnapshot(selectedSnapshot)
         setPersonalFinanceStatus('ready')
@@ -365,15 +377,7 @@ function App() {
         })
 
         setPersonalFinanceCards(
-          cards.map((card): PersonalFinanceCardListItem => {
-            const summary = summaryByCardId.get(card.id)
-
-            return {
-              ...card,
-              currentBalance: summary?.currentBalance ?? null,
-              currency: summary?.currency ?? null,
-            }
-          }),
+          enrichPersonalFinanceCards(cards, summaryByCardId),
         )
       } catch (error) {
         if (controller.signal.aborted) {
@@ -607,6 +611,42 @@ function App() {
     }
   }
 
+  const handleArchivePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.archivePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId(null)
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleRestorePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.restorePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId(cardId)
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleDeletePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.deletePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId((current) => (current === cardId ? null : current))
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   return (
     <main
       className={`mx-auto min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14 ${
@@ -677,6 +717,9 @@ function App() {
               onSaveIncomeActual={handleSaveIncomeActual}
               onRenameCard={handleRenamePersonalFinanceCard}
               onSaveSettings={handleSavePersonalFinanceSettings}
+              onArchiveCard={handleArchivePersonalFinanceCard}
+              onRestoreCard={handleRestorePersonalFinanceCard}
+              onDeleteCard={handleDeletePersonalFinanceCard}
             />
           ) : (
             <AccountsView
@@ -1640,7 +1683,31 @@ function toAccountStatusLabel(status: AccountStatus): string {
   if (status === 'ACTIVE') {
     return 'Активный'
   }
+  if (status === 'ARCHIVED') {
+    return 'Архивный'
+  }
   return status
+}
+
+function enrichPersonalFinanceCards(
+  cards: PersonalFinanceCardDto[],
+  summaryByCardId: Map<
+    string,
+    {
+      currentBalance: string | null
+      currency: string | null
+    }
+  > = new Map(),
+): PersonalFinanceCardListItem[] {
+  return cards.map((card) => {
+    const summary = summaryByCardId.get(card.id)
+
+    return {
+      ...card,
+      currentBalance: summary?.currentBalance ?? null,
+      currency: summary?.currency ?? null,
+    }
+  })
 }
 
 function getAccountCurrencyOptions(): string[] {

@@ -88,6 +88,9 @@ public class AccountsController {
     @GetMapping("/accounts")
     public List<AccountDto> getAccounts() {
         return accountRepository.findAll().stream()
+            .filter(account -> personalFinanceCardRepository.findByLinkedAccountId(account.id())
+                .map(card -> card.isActive())
+                .orElse(true))
             .map(account -> new AccountDto(
                 account.id().value().toString(),
                 account.name(),

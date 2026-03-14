@@ -36,6 +36,9 @@ interface PersonalFinanceViewProps {
   onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
 }
 
 const MONTH_LABELS = [
@@ -102,6 +105,9 @@ export function PersonalFinanceView({
   onSaveIncomeActual,
   onRenameCard,
   onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
 }: PersonalFinanceViewProps) {
   const [isActionPanelOpen, setIsActionPanelOpen] = useState<boolean>(false)
 
@@ -120,11 +126,14 @@ export function PersonalFinanceView({
     )
   }
 
-  const hasCards = cards.length > 0
+  const activeCards = cards.filter((card) => card.status === 'ACTIVE')
+  const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
+  const hasAnyCards = cards.length > 0
+  const hasActiveCards = activeCards.length > 0
   const selectedCard = snapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
   const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
   const yearOptions = selectableYearOptions(year)
-  const canOpenActionPanel = activeTab === 'settings' || Boolean(snapshot)
+  const canOpenActionPanel = activeTab === 'settings' || Boolean(snapshot && snapshot.card.status === 'ACTIVE')
 
   const handleTabSelect = (tab: PersonalFinanceTab): void => {
     setIsActionPanelOpen(false)
@@ -158,7 +167,7 @@ export function PersonalFinanceView({
             <select
               value={year}
               onChange={(event) => handleYearSelect(Number(event.target.value))}
-              disabled={!hasCards}
+              disabled={!hasAnyCards}
               className={selectClassName()}
             >
               {yearOptions.map((option) => (
@@ -183,13 +192,13 @@ export function PersonalFinanceView({
             <NestedTabButton
               label="Расходы"
               isActive={activeTab === 'expenses'}
-              disabled={!hasCards}
+              disabled={!snapshot}
               onClick={() => handleTabSelect('expenses')}
             />
             <NestedTabButton
               label="Доходы"
               isActive={activeTab === 'income'}
-              disabled={!hasCards}
+              disabled={!snapshot}
               onClick={() => handleTabSelect('income')}
             />
             <NestedTabButton
@@ -215,8 +224,12 @@ export function PersonalFinanceView({
         </div>
       </section>
 
-      {!hasCards ? (
-        <PersonalFinanceSettingsEmptyState />
+      {snapshot?.card.status === 'ARCHIVED' ? (
+        <ArchivedCardBanner cardName={snapshot.card.name} />
+      ) : null}
+
+      {!hasActiveCards && !snapshot ? (
+        <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
       ) : !snapshot ? (
         <InlineStatus tone="neutral" message="Выберите карту, чтобы загрузить данные." />
       ) : activeTab === 'expenses' ? (
@@ -229,6 +242,9 @@ export function PersonalFinanceView({
           snapshot={snapshot}
           onRenameCard={onRenameCard}
           onSaveSettings={onSaveSettings}
+          onArchiveCard={onArchiveCard}
+          onRestoreCard={onRestoreCard}
+          onDeleteCard={onDeleteCard}
         />
       )}
 
@@ -238,14 +254,14 @@ export function PersonalFinanceView({
           description={activeTabCopy.panelDescription}
           onClose={() => setIsActionPanelOpen(false)}
         >
-          {activeTab === 'expenses' && snapshot ? (
+          {activeTab === 'expenses' && snapshot && snapshot.card.status === 'ACTIVE' ? (
             <ExpenseEntryDrawerPanel
               snapshot={snapshot}
               onSaveExpenseActual={onSaveExpenseActual}
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
-          {activeTab === 'income' && snapshot ? (
+          {activeTab === 'income' && snapshot && snapshot.card.status === 'ACTIVE' ? (
             <IncomeEntryDrawerPanel
               snapshot={snapshot}
               onSaveIncomeActual={onSaveIncomeActual}
@@ -355,21 +371,47 @@ interface SettingsTabProps {
   snapshot: PersonalFinanceSnapshotDto
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
 }
 
-function SettingsTab({ snapshot, onRenameCard, onSaveSettings }: SettingsTabProps) {
-  return <SettingsDetails snapshot={snapshot} onRenameCard={onRenameCard} onSaveSettings={onSaveSettings} />
+function SettingsTab({
+  snapshot,
+  onRenameCard,
+  onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
+}: SettingsTabProps) {
+  return (
+    <SettingsDetails
+      snapshot={snapshot}
+      onRenameCard={onRenameCard}
+      onSaveSettings={onSaveSettings}
+      onArchiveCard={onArchiveCard}
+      onRestoreCard={onRestoreCard}
+      onDeleteCard={onDeleteCard}
+    />
+  )
 }
 
 function SettingsDetails({
   snapshot,
   onRenameCard,
   onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
 }: {
   snapshot: PersonalFinanceSnapshotDto
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
 }) {
+  const isArchived = snapshot.card.status === 'ARCHIVED'
   const [cardName, setCardName] = useState<string>(snapshot.card.name)
   const [baselineAmount, setBaselineAmount] = useState<string>(
     toDraftAmount(snapshot.settings.baselineAmount),
@@ -387,6 +429,8 @@ function SettingsDetails({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [renameStatus, setRenameStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null)
+  const [cardActionStatus, setCardActionStatus] = useState<'idle' | 'archiving' | 'restoring' | 'deleting' | 'error'>('idle')
+  const [cardActionErrorMessage, setCardActionErrorMessage] = useState<string | null>(null)
 
   const areBaseValuesValid =
     isValidNonNegativeAmountValue(baselineAmount) &&
@@ -395,14 +439,15 @@ function SettingsDetails({
   const areLimitsValid = snapshot.categories.every((category) =>
     isValidNonNegativeAmountValue(limitValues[category.code]),
   )
-  const canSave = areBaseValuesValid && areLimitsValid && status !== 'submitting'
+  const canSave = !isArchived && areBaseValuesValid && areLimitsValid && status !== 'submitting'
   const recurringLimitTotal = sumDecimalAmountStrings(
     snapshot.categories.map((category) => toDecimalAmountString(limitValues[category.code])),
   )
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
   const isCardNameValid = cardName.trim().length > 0
   const canSaveCardName =
-    isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
+    !isArchived && isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
+  const isCardActionBusy = cardActionStatus !== 'idle' && cardActionStatus !== 'error'
 
   const handleRenameSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -456,6 +501,64 @@ function SettingsDetails({
     setErrorMessage('Не удалось сохранить настройки.')
   }
 
+  const handleArchiveClick = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        `Архивировать карту «${snapshot.card.name}»? Она исчезнет из активного контура, а linked account перестанет влиять на текущие метрики.`,
+      )
+    ) {
+      return
+    }
+
+    setCardActionStatus('archiving')
+    setCardActionErrorMessage(null)
+
+    const archived = await onArchiveCard(snapshot.card.id)
+    if (!archived) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось архивировать карту.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
+  const handleRestoreClick = async (): Promise<void> => {
+    setCardActionStatus('restoring')
+    setCardActionErrorMessage(null)
+
+    const restored = await onRestoreCard(snapshot.card.id)
+    if (!restored) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось вернуть карту из архива.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
+  const handleDeleteClick = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        `Удалить карту «${snapshot.card.name}» навсегда? Это удалит связанные доходы, расходы, настройки и linked cash account без возможности восстановления.`,
+      )
+    ) {
+      return
+    }
+
+    setCardActionStatus('deleting')
+    setCardActionErrorMessage(null)
+
+    const deleted = await onDeleteCard(snapshot.card.id)
+    if (!deleted) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось удалить карту.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
   return (
     <div className="space-y-4">
       <form
@@ -475,6 +578,7 @@ function SettingsDetails({
               <input
                 type="text"
                 value={cardName}
+                disabled={isArchived}
                 onChange={(event) => {
                   setCardName(event.target.value)
                   setRenameStatus('idle')
@@ -496,6 +600,9 @@ function SettingsDetails({
         </div>
 
         {renameErrorMessage ? <p className="mt-3 text-xs text-rose-600">{renameErrorMessage}</p> : null}
+        {isArchived ? (
+          <p className="mt-3 text-xs text-slate-500">Архивная карта доступна только для просмотра.</p>
+        ) : null}
         {!isCardNameValid ? (
           <p className="mt-3 text-xs text-rose-600">Название карты не может быть пустым.</p>
         ) : null}
@@ -510,7 +617,11 @@ function SettingsDetails({
         <MetricTile
           label="Связанный счёт"
           value={snapshot.settings.linkedAccountId}
-          hint="Этот cash account виден в Инвестициях, но редактируется только отсюда."
+          hint={
+            isArchived
+              ? 'Этот linked cash account архивирован и скрыт из активного списка Инвестиций.'
+              : 'Этот cash account виден в Инвестициях, но редактируется только отсюда.'
+          }
         />
         <MetricTile
           label="Повторяющийся лимит"
@@ -540,6 +651,7 @@ function SettingsDetails({
                 type="text"
                 inputMode="decimal"
                 value={baselineAmount}
+                disabled={isArchived}
                 onChange={(event) => setBaselineAmount(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(baselineAmount))}
@@ -582,6 +694,7 @@ function SettingsDetails({
                   type="text"
                   inputMode="decimal"
                   value={limitValues[category.code]}
+                  disabled={isArchived}
                   onChange={(event) =>
                     setLimitValues((current) => ({
                       ...current,
@@ -620,6 +733,7 @@ function SettingsDetails({
                 type="text"
                 inputMode="decimal"
                 value={salaryAmount}
+                disabled={isArchived}
                 onChange={(event) => setSalaryAmount(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(salaryAmount))}
@@ -632,6 +746,7 @@ function SettingsDetails({
                 type="text"
                 inputMode="decimal"
                 value={bonusPercent}
+                disabled={isArchived}
                 onChange={(event) => setBonusPercent(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(bonusPercent))}
@@ -657,15 +772,19 @@ function SettingsDetails({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
           <div className="text-sm text-slate-600">
-            Только фактические доходы и расходы двигают баланс linked account.
+            {isArchived
+              ? 'Архивная карта зафиксирована: сначала верните её в активные, если нужно снова редактировать данные.'
+              : 'Только фактические доходы и расходы двигают баланс linked account.'}
           </div>
-          <button
-            type="submit"
-            disabled={!canSave}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {status === 'submitting' ? 'Сохраняем...' : 'Сохранить настройки'}
-          </button>
+          {!isArchived ? (
+            <button
+              type="submit"
+              disabled={!canSave}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {status === 'submitting' ? 'Сохраняем...' : 'Сохранить настройки'}
+            </button>
+          ) : null}
         </div>
 
         {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
@@ -673,11 +792,76 @@ function SettingsDetails({
           <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
         ) : null}
       </form>
+
+      {isArchived ? (
+        <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-base font-semibold text-slate-900">Карта в архиве</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Данные сохранены, но карта и linked account исключены из активного личного контура и текущих метрик.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleRestoreClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {cardActionStatus === 'restoring' ? 'Возвращаем...' : 'Вернуть из архива'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleDeleteClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+            </button>
+          </div>
+          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+        </section>
+      ) : (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 p-4">
+          <h3 className="text-base font-semibold text-rose-700">Управление картой</h3>
+          <p className="mt-1 text-sm text-rose-700/80">
+            Архивируйте карту, если хотите убрать её из активного контура без потери истории. Удаление навсегда
+            вычищает все связанные данные.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleArchiveClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'archiving' ? 'Архивируем...' : 'Архивировать'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleDeleteClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-rose-200 bg-rose-100 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+            </button>
+          </div>
+          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+        </section>
+      )}
     </div>
   )
 }
 
-function PersonalFinanceSettingsEmptyState() {
+function PersonalFinanceSettingsEmptyState({ hasArchivedCards }: { hasArchivedCards: boolean }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5">
       <h3 className="text-base font-semibold text-slate-900">Добавьте первую карту</h3>
@@ -685,6 +869,11 @@ function PersonalFinanceSettingsEmptyState() {
         Используйте кнопку + Добавить карту вверху справа на вкладке настроек, чтобы создать
         personal finance card. После этого появятся расходы, доходы и годовой обзор.
       </p>
+      {hasArchivedCards ? (
+        <p className="mt-3 text-sm text-slate-500">
+          Ниже в секции архива можно открыть старую карту, вернуть её в активные или удалить навсегда.
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -809,6 +998,9 @@ function PersonalFinanceCardSelector({
   selectedCardId: string | null
   onSelectCard: (cardId: string) => void
 }) {
+  const activeCards = cards.filter((card) => card.status === 'ACTIVE')
+  const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
+
   return (
     <article className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -825,7 +1017,57 @@ function PersonalFinanceCardSelector({
           Пока нет карт. Создание доступно через кнопку на вкладке настроек.
         </div>
       ) : (
-        <ul className="mt-4 space-y-2">
+        <div className="mt-4 space-y-4">
+          <CardListSection
+            title="Активные карты"
+            emptyMessage="Активных карт сейчас нет."
+            cards={activeCards}
+            selectedCardId={selectedCardId}
+            onSelectCard={onSelectCard}
+          />
+          {archivedCards.length > 0 ? (
+            <CardListSection
+              title="Архив"
+              cards={archivedCards}
+              selectedCardId={selectedCardId}
+              onSelectCard={onSelectCard}
+              tone="archived"
+            />
+          ) : null}
+        </div>
+      )}
+    </article>
+  )
+}
+
+function CardListSection({
+  title,
+  cards,
+  selectedCardId,
+  onSelectCard,
+  emptyMessage,
+  tone = 'active',
+}: {
+  title: string
+  cards: PersonalFinanceCardListItem[]
+  selectedCardId: string | null
+  onSelectCard: (cardId: string) => void
+  emptyMessage?: string
+  tone?: 'active' | 'archived'
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</h4>
+        <span className="text-xs text-slate-400">{cards.length}</span>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+          {emptyMessage ?? 'Нет карточек в этом разделе.'}
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
           {cards.map((card) => (
             <li key={card.id}>
               <button
@@ -833,13 +1075,24 @@ function PersonalFinanceCardSelector({
                 onClick={() => onSelectCard(card.id)}
                 className={`w-full rounded-lg border px-3 py-3 text-left transition ${
                   selectedCardId === card.id
-                    ? 'border-slate-300 bg-slate-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                    ? tone === 'archived'
+                      ? 'border-slate-300 bg-slate-100 shadow-sm'
+                      : 'border-slate-300 bg-slate-50 shadow-sm'
+                    : tone === 'archived'
+                      ? 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{card.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{card.name}</p>
+                      {tone === 'archived' ? (
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                          Архив
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
                       Наличные · Личные финансы
                     </p>
@@ -858,7 +1111,19 @@ function PersonalFinanceCardSelector({
           ))}
         </ul>
       )}
-    </article>
+    </section>
+  )
+}
+
+function ArchivedCardBanner({ cardName }: { cardName: string }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-slate-100 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Архив</p>
+      <h3 className="mt-2 text-base font-semibold text-slate-900">{cardName}</h3>
+      <p className="mt-1 text-sm text-slate-600">
+        Карта открыта в режиме просмотра. Доходы, расходы и настройки заморожены, пока вы не вернёте её в активные.
+      </p>
+    </section>
   )
 }
 

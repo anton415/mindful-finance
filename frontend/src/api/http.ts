@@ -17,6 +17,9 @@ export interface HttpClient {
   getJson<T>(path: string, options?: RequestJsonOptions): Promise<T>
   postJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
   putJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
+  putVoid(path: string, options?: RequestJsonOptions): Promise<void>
+  deleteJson<T>(path: string, options?: RequestJsonOptions): Promise<T>
+  deleteVoid(path: string, options?: RequestJsonOptions): Promise<void>
   postFormData<TResponse>(
     path: string,
     formData: FormData,
@@ -97,6 +100,45 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
       })
 
       return parseJsonResponse<TResponse>(response, { allowEmpty: true })
+    },
+
+    async putVoid(path: string, options: RequestJsonOptions = {}): Promise<void> {
+      const url = buildUrl(baseUrl, path, options.query)
+      const response = await fetchFn(url, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+        },
+        signal: options.signal,
+      })
+
+      return parseJsonResponse<void>(response, { allowEmpty: true })
+    },
+
+    async deleteJson<T>(path: string, options: RequestJsonOptions = {}): Promise<T> {
+      const url = buildUrl(baseUrl, path, options.query)
+      const response = await fetchFn(url, {
+        method: 'DELETE',
+        headers: {
+          Accept: 'application/json',
+        },
+        signal: options.signal,
+      })
+
+      return parseJsonResponse<T>(response, { allowEmpty: true })
+    },
+
+    async deleteVoid(path: string, options: RequestJsonOptions = {}): Promise<void> {
+      const url = buildUrl(baseUrl, path, options.query)
+      const response = await fetchFn(url, {
+        method: 'DELETE',
+        headers: {
+          Accept: 'application/json',
+        },
+        signal: options.signal,
+      })
+
+      return parseJsonResponse<void>(response, { allowEmpty: true })
     },
 
     async postFormData<TResponse>(

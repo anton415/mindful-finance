@@ -58,7 +58,9 @@ public final class GetCardPersonalFinanceSnapshot {
         PersonalFinanceCard selectedCard = cardRepository.find(cardId)
             .orElseThrow(() -> new IllegalArgumentException("Personal finance card not found"));
 
-        List<PersonalFinanceCard> cards = cardRepository.findAll();
+        List<PersonalFinanceCard> cards = cardRepository.findAll().stream()
+            .filter(PersonalFinanceCard::isActive)
+            .toList();
         Map<Integer, MonthlyExpenseActual> expenseActualsByMonth = toExpenseActualMap(
             expenseActualRepository.findByCardAndYear(cardId, year)
         );
