@@ -225,7 +225,7 @@ export function PersonalFinanceView({
         <IncomeTab key={`income-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
       ) : (
         <SettingsTab
-          key={`settings-${snapshot.card.id}-${snapshot.year}-${snapshot.settings.currentBalance}`}
+          key={`settings-${snapshot.card.id}-${snapshot.card.name}-${snapshot.year}-${snapshot.settings.currentBalance}`}
           snapshot={snapshot}
           onRenameCard={onRenameCard}
           onSaveSettings={onSaveSettings}
@@ -387,12 +387,6 @@ function SettingsDetails({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [renameStatus, setRenameStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    setCardName(snapshot.card.name)
-    setRenameStatus('idle')
-    setRenameErrorMessage(null)
-  }, [snapshot.card.id, snapshot.card.name])
 
   const areBaseValuesValid =
     isValidNonNegativeAmountValue(baselineAmount) &&

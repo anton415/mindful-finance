@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,6 +79,7 @@ public class PersonalFinanceController {
     }
 
     @PutMapping("/personal-finance/cards/{cardId}")
+    @Transactional
     public ResponseEntity<Void> renameCard(
         @PathVariable("cardId") String rawCardId,
         @RequestBody UpdatePersonalFinanceCardRequest request
