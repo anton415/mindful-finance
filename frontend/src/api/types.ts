@@ -96,6 +96,10 @@ export interface CreatePersonalFinanceCardResponse {
   cardId: string
 }
 
+export interface UpdatePersonalFinanceCardRequest {
+  name: string
+}
+
 export interface PersonalFinanceExpenseMonthDto {
   month: number
   actualCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>

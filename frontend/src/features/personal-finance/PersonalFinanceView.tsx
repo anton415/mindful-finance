@@ -8,6 +8,7 @@ import type {
   PersonalFinanceSnapshotDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
 } from '../../api'
 
@@ -33,6 +34,7 @@ interface PersonalFinanceViewProps {
   onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
   onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
 }
 
@@ -98,6 +100,7 @@ export function PersonalFinanceView({
   onCreateCard,
   onSaveExpenseActual,
   onSaveIncomeActual,
+  onRenameCard,
   onSaveSettings,
 }: PersonalFinanceViewProps) {
   const [isActionPanelOpen, setIsActionPanelOpen] = useState<boolean>(false)
@@ -222,8 +225,9 @@ export function PersonalFinanceView({
         <IncomeTab key={`income-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
       ) : (
         <SettingsTab
-          key={`settings-${snapshot.card.id}-${snapshot.year}-${snapshot.settings.currentBalance}`}
+          key={`settings-${snapshot.card.id}-${snapshot.card.name}-${snapshot.year}-${snapshot.settings.currentBalance}`}
           snapshot={snapshot}
+          onRenameCard={onRenameCard}
           onSaveSettings={onSaveSettings}
         />
       )}
@@ -349,20 +353,24 @@ function IncomeEntryDrawerPanel({
 
 interface SettingsTabProps {
   snapshot: PersonalFinanceSnapshotDto
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
 }
 
-function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
-  return <SettingsDetails snapshot={snapshot} onSaveSettings={onSaveSettings} />
+function SettingsTab({ snapshot, onRenameCard, onSaveSettings }: SettingsTabProps) {
+  return <SettingsDetails snapshot={snapshot} onRenameCard={onRenameCard} onSaveSettings={onSaveSettings} />
 }
 
 function SettingsDetails({
   snapshot,
+  onRenameCard,
   onSaveSettings,
 }: {
   snapshot: PersonalFinanceSnapshotDto
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
 }) {
+  const [cardName, setCardName] = useState<string>(snapshot.card.name)
   const [baselineAmount, setBaselineAmount] = useState<string>(
     toDraftAmount(snapshot.settings.baselineAmount),
   )
@@ -377,6 +385,8 @@ function SettingsDetails({
   )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [renameStatus, setRenameStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null)
 
   const areBaseValuesValid =
     isValidNonNegativeAmountValue(baselineAmount) &&
@@ -390,6 +400,29 @@ function SettingsDetails({
     snapshot.categories.map((category) => toDecimalAmountString(limitValues[category.code])),
   )
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
+  const isCardNameValid = cardName.trim().length > 0
+  const canSaveCardName =
+    isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
+
+  const handleRenameSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!canSaveCardName) {
+      return
+    }
+
+    setRenameStatus('submitting')
+    setRenameErrorMessage(null)
+
+    const renamed = await onRenameCard({ name: cardName.trim() })
+    if (renamed) {
+      setRenameStatus('idle')
+      return
+    }
+
+    setRenameStatus('error')
+    setRenameErrorMessage('Не удалось сохранить название карты.')
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -424,7 +457,50 @@ function SettingsDetails({
   }
 
   return (
-    <>
+    <div className="space-y-4">
+      <form
+        className="rounded-3xl border border-slate-200 bg-white p-4"
+        onSubmit={(event) => {
+          void handleRenameSubmit(event)
+        }}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-slate-900">Название карты</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Это же имя будет у связанного cash account в Инвестициях.
+            </p>
+            <label className="mt-4 block text-sm text-slate-600">
+              Как карта называется в обзоре
+              <input
+                type="text"
+                value={cardName}
+                onChange={(event) => {
+                  setCardName(event.target.value)
+                  setRenameStatus('idle')
+                  setRenameErrorMessage(null)
+                }}
+                placeholder="Например, T-Банк Black"
+                className={inputClassName(isCardNameValid)}
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSaveCardName}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {renameStatus === 'submitting' ? 'Сохраняем...' : 'Сохранить название'}
+          </button>
+        </div>
+
+        {renameErrorMessage ? <p className="mt-3 text-xs text-rose-600">{renameErrorMessage}</p> : null}
+        {!isCardNameValid ? (
+          <p className="mt-3 text-xs text-rose-600">Название карты не может быть пустым.</p>
+        ) : null}
+      </form>
+
       <section className="grid gap-4 lg:grid-cols-3">
         <MetricTile
           label="Текущий баланс карты"
@@ -597,7 +673,7 @@ function SettingsDetails({
           <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
         ) : null}
       </form>
-    </>
+    </div>
   )
 }
 

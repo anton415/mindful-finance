@@ -16,6 +16,7 @@ import type {
   TransactionDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'
@@ -49,6 +50,11 @@ export interface ApiClient {
     request: CreatePersonalFinanceCardRequest,
     signal?: AbortSignal,
   ): Promise<CreatePersonalFinanceCardResponse>
+  updatePersonalFinanceCard(
+    cardId: string,
+    request: UpdatePersonalFinanceCardRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
   getPersonalFinanceSnapshot(
     cardId: string,
     year: number,
@@ -164,6 +170,18 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
     ): Promise<CreatePersonalFinanceCardResponse> {
       return http.postJson<CreatePersonalFinanceCardResponse, CreatePersonalFinanceCardRequest>(
         '/personal-finance/cards',
+        request,
+        { signal },
+      )
+    },
+
+    updatePersonalFinanceCard(
+      cardId: string,
+      request: UpdatePersonalFinanceCardRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdatePersonalFinanceCardRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`,
         request,
         { signal },
       )

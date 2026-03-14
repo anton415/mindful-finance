@@ -15,6 +15,7 @@ import {
   type TransactionDto,
   type UpdateMonthlyExpenseRequest,
   type UpdateMonthlyIncomeActualRequest,
+  type UpdatePersonalFinanceCardRequest,
   type UpdatePersonalFinanceSettingsRequest,
   type UpdateTransactionRequest,
 } from './api'
@@ -590,6 +591,22 @@ function App() {
     }
   }
 
+  const handleRenamePersonalFinanceCard = async (
+    request: UpdatePersonalFinanceCardRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updatePersonalFinanceCard(selectedPersonalFinanceCardId, request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   return (
     <main
       className={`mx-auto min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14 ${
@@ -658,6 +675,7 @@ function App() {
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
               onSaveIncomeActual={handleSaveIncomeActual}
+              onRenameCard={handleRenamePersonalFinanceCard}
               onSaveSettings={handleSavePersonalFinanceSettings}
             />
           ) : (
