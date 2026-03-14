@@ -179,6 +179,54 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
     }
 
     @Test
+    void rename_card_updates_list_snapshot_and_linked_account_name_without_touching_settings() throws Exception {
+        String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "1000.00",
+                  "limitCategoryAmounts": {
+                    "RESTAURANTS": "150.00"
+                  },
+                  "salaryAmount": "200.00",
+                  "bonusPercent": "25.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "name": "  Семейный кэш  "
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(cardId))
+            .andExpect(jsonPath("$[0].name").value("Семейный кэш"));
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.card.id").value(cardId))
+            .andExpect(jsonPath("$.card.name").value("Семейный кэш"))
+            .andExpect(jsonPath("$.cards[0].name").value("Семейный кэш"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("1000.00"))
+            .andExpect(jsonPath("$.settings.baselineAmount").value("1000.00"))
+            .andExpect(jsonPath("$.settings.recurringLimitTotal").value("150.00"))
+            .andExpect(jsonPath("$.settings.incomeForecast.totalAmount").value("250.00"));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].name").value("Семейный кэш"))
+            .andExpect(jsonPath("$[0].linkedPersonalFinanceCardId").value(cardId));
+    }
+
+    @Test
     void invalid_inputs_and_missing_card_return_errors() throws Exception {
         String cardId = createCard("Основная карта");
 
@@ -221,6 +269,16 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Income forecast bonus percent must be non-negative with up to 2 decimals"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "name": "   "
+                }
+                """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("name must not be null or blank"));
     }
 
     private String createCard(String name) throws Exception {

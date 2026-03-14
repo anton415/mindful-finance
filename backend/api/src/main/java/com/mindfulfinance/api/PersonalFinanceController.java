@@ -19,6 +19,7 @@ import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
+import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
@@ -33,6 +34,7 @@ public class PersonalFinanceController {
     private final PersonalFinanceCardRepository cardRepository;
     private final ListPersonalFinanceCards listPersonalFinanceCards;
     private final CreatePersonalFinanceCard createPersonalFinanceCard;
+    private final RenamePersonalFinanceCard renamePersonalFinanceCard;
     private final GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot;
     private final SaveMonthlyExpenseActual saveMonthlyExpenseActual;
     private final SaveMonthlyIncomeActual saveMonthlyIncomeActual;
@@ -42,6 +44,7 @@ public class PersonalFinanceController {
         PersonalFinanceCardRepository cardRepository,
         ListPersonalFinanceCards listPersonalFinanceCards,
         CreatePersonalFinanceCard createPersonalFinanceCard,
+        RenamePersonalFinanceCard renamePersonalFinanceCard,
         GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot,
         SaveMonthlyExpenseActual saveMonthlyExpenseActual,
         SaveMonthlyIncomeActual saveMonthlyIncomeActual,
@@ -50,6 +53,7 @@ public class PersonalFinanceController {
         this.cardRepository = cardRepository;
         this.listPersonalFinanceCards = listPersonalFinanceCards;
         this.createPersonalFinanceCard = createPersonalFinanceCard;
+        this.renamePersonalFinanceCard = renamePersonalFinanceCard;
         this.getCardPersonalFinanceSnapshot = getCardPersonalFinanceSnapshot;
         this.saveMonthlyExpenseActual = saveMonthlyExpenseActual;
         this.saveMonthlyIncomeActual = saveMonthlyIncomeActual;
@@ -71,6 +75,20 @@ public class PersonalFinanceController {
 
         PersonalFinanceCard card = createPersonalFinanceCard.create(new CreatePersonalFinanceCard.Command(request.name()));
         return new CreatePersonalFinanceCardResponse(card.id().value().toString());
+    }
+
+    @PutMapping("/personal-finance/cards/{cardId}")
+    public ResponseEntity<Void> renameCard(
+        @PathVariable("cardId") String rawCardId,
+        @RequestBody UpdatePersonalFinanceCardRequest request
+    ) {
+        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body must not be null");
+        }
+
+        renamePersonalFinanceCard.rename(new RenamePersonalFinanceCard.Command(cardId, request.name()));
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/personal-finance/cards/{cardId}/years/{year}")
@@ -300,6 +318,8 @@ public class PersonalFinanceController {
     public record CreatePersonalFinanceCardRequest(String name) {}
 
     public record CreatePersonalFinanceCardResponse(String cardId) {}
+
+    public record UpdatePersonalFinanceCardRequest(String name) {}
 
     public record UpdateMonthlyExpenseRequest(int year, Map<String, BigDecimal> categoryAmounts) {}
 

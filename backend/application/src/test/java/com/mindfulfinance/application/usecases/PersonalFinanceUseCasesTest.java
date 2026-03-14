@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
@@ -216,6 +217,51 @@ public class PersonalFinanceUseCasesTest {
         assertEquals(CASH, linkedAccount.type());
         assertEquals(ACTIVE, linkedAccount.status());
         assertEquals("RUB", linkedAccount.currency().getCurrencyCode());
+    }
+
+    @Test
+    void rename_personal_finance_card_updates_card_and_linked_account_name() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(card("Основная карта"));
+        accounts.save(new Account(
+            LINKED_ACCOUNT_ID,
+            "Основная карта",
+            java.util.Currency.getInstance("RUB"),
+            CASH,
+            ACTIVE,
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+
+        PersonalFinanceCard renamed = new RenamePersonalFinanceCard(cards, accounts).rename(
+            new RenamePersonalFinanceCard.Command(CARD_ID, "  Семейный кэш  ")
+        );
+
+        assertEquals(CARD_ID, renamed.id());
+        assertEquals("Семейный кэш", renamed.name());
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z"), renamed.createdAt());
+
+        Account linkedAccount = accounts.find(LINKED_ACCOUNT_ID).orElseThrow();
+        assertEquals("Семейный кэш", linkedAccount.name());
+        assertEquals(CASH, linkedAccount.type());
+        assertEquals(ACTIVE, linkedAccount.status());
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z"), linkedAccount.createdAt());
+    }
+
+    @Test
+    void rename_personal_finance_card_requires_existing_linked_account() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(card("Основная карта"));
+
+        IllegalStateException error = assertThrows(
+            IllegalStateException.class,
+            () -> new RenamePersonalFinanceCard(cards, accounts).rename(
+                new RenamePersonalFinanceCard.Command(CARD_ID, "Новое имя")
+            )
+        );
+
+        assertEquals("Linked account not found for personal finance card", error.getMessage());
     }
 
     private static PersonalFinanceCard card(String name) {

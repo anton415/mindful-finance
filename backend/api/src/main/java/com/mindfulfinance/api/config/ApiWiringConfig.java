@@ -32,6 +32,7 @@ import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
+import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.SaveIncomeForecast;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
@@ -193,6 +194,14 @@ public class ApiWiringConfig {
         AccountRepository accountRepository
     ) {
         return new CreatePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
+    }
+
+    @Bean
+    public RenamePersonalFinanceCard renamePersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository
+    ) {
+        return new RenamePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
     }
 
     @Bean

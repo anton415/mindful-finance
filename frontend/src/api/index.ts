@@ -39,6 +39,7 @@ export type {
   TransactionDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'
