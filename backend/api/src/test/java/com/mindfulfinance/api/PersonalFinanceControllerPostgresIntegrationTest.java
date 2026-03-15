@@ -80,6 +80,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.income.annualTotal").value("0.00"))
             .andExpect(jsonPath("$.settings.currentBalance").value("0.00"))
             .andExpect(jsonPath("$.settings.baselineAmount").value("0.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.RESTAURANTS").value("0.00"))
             .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("0.00"))
             .andExpect(jsonPath("$.settings.annualLimitTotal").value("0.00"));
     }
@@ -93,12 +94,12 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "1000.00",
-                  "limitCategoryAmounts": {
-                    "RESTAURANTS": "180.00",
-                    "GROCERIES": "210.00",
-                    "ENTERTAINMENT": "1200.00"
+                  "limitCategoryPercents": {
+                    "RESTAURANTS": "18.00",
+                    "GROCERIES": "21.00",
+                    "ENTERTAINMENT": "10.00"
                   },
-                  "salaryAmount": "0.00",
+                  "salaryAmount": "1000.00",
                   "bonusPercent": "0.00"
                 }
                 """))
@@ -144,6 +145,11 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.expenses.limitTotalsByCategory.ENTERTAINMENT").value("1200.00"))
             .andExpect(jsonPath("$.expenses.annualLimitTotal").value("5880.00"))
             .andExpect(jsonPath("$.settings.currentBalance").value("600.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.RESTAURANTS").value("18.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.GROCERIES").value("21.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.ENTERTAINMENT").value("10.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryAmounts.RESTAURANTS").value("180.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryAmounts.ENTERTAINMENT").value("1200.00"))
             .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("390.00"))
             .andExpect(jsonPath("$.settings.annualLimitTotal").value("5880.00"));
     }
@@ -157,7 +163,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "0.00",
-                  "limitCategoryAmounts": {},
+                  "limitCategoryPercents": {},
                   "salaryAmount": "205000.00",
                   "bonusPercent": "30.00"
                 }
@@ -198,8 +204,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "1000.00",
-                  "limitCategoryAmounts": {
-                    "RESTAURANTS": "150.00"
+                  "limitCategoryPercents": {
+                    "RESTAURANTS": "60.00"
                   },
                   "salaryAmount": "200.00",
                   "bonusPercent": "25.00"
@@ -229,6 +235,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.cards[0].name").value("Семейный кэш"))
             .andExpect(jsonPath("$.settings.currentBalance").value("1000.00"))
             .andExpect(jsonPath("$.settings.baselineAmount").value("1000.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.RESTAURANTS").value("60.00"))
             .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("150.00"))
             .andExpect(jsonPath("$.settings.annualLimitTotal").value("1800.00"))
             .andExpect(jsonPath("$.settings.incomeForecast.totalAmount").value("250.00"));
@@ -247,7 +254,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "1000.00",
-                  "limitCategoryAmounts": {},
+                  "limitCategoryPercents": {},
                   "salaryAmount": "0.00",
                   "bonusPercent": "0.00"
                 }
@@ -330,7 +337,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "100.00",
-                  "limitCategoryAmounts": {},
+                  "limitCategoryPercents": {},
                   "salaryAmount": "0.00",
                   "bonusPercent": "0.00"
                 }
@@ -397,7 +404,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "0.00",
-                  "limitCategoryAmounts": {},
+                  "limitCategoryPercents": {},
                   "salaryAmount": "1.00",
                   "bonusPercent": "-0.01"
                 }

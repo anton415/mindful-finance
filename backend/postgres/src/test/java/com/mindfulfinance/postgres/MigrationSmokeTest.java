@@ -39,7 +39,7 @@ class MigrationSmokeTest {
         flyway.clean();
         var result = flyway.migrate();
 
-        assertEquals(7, result.migrationsExecuted);
+        assertEquals(8, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),
@@ -122,6 +122,7 @@ class MigrationSmokeTest {
             .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
             .cleanDisabled(false)
             .locations("classpath:db/migration")
+            .target("7")
             .load();
         latestFlyway.migrate();
 
@@ -207,6 +208,7 @@ class MigrationSmokeTest {
             .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
             .cleanDisabled(false)
             .locations("classpath:db/migration")
+            .target("7")
             .load();
         latestFlyway.migrate();
 
@@ -224,6 +226,77 @@ class MigrationSmokeTest {
             assertThat(rs.getBigDecimal("restaurants")).isEqualByComparingTo("100.00");
             assertThat(rs.getBigDecimal("entertainment")).isEqualByComparingTo("600.00");
             assertThat(rs.getBigDecimal("education")).isEqualByComparingTo("900.00");
+        }
+    }
+
+    @Test
+    void migration_v8_converts_legacy_amount_limits_to_forecast_percents_and_zeros_missing_forecasts() throws Exception {
+        var baseFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .target("7")
+            .load();
+
+        baseFlyway.clean();
+        baseFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword())) {
+            connection.createStatement().executeUpdate("""
+                INSERT INTO accounts (id, name, currency, type, status, created_at)
+                VALUES
+                    ('8c734c16-c5f4-4fb4-9f0d-b15cf42996bf'::uuid, 'Основная карта', 'RUB', 'CASH', 'ACTIVE', now()),
+                    ('f72952f4-92fe-4821-8df3-50a385a0d760'::uuid, 'Без прогноза', 'RUB', 'CASH', 'ACTIVE', now())
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_cards (id, name, linked_account_id, status, created_at)
+                VALUES
+                    ('f23cb642-b7e7-4127-9c61-6902991d2700'::uuid, 'Основная карта', '8c734c16-c5f4-4fb4-9f0d-b15cf42996bf'::uuid, 'ACTIVE', now()),
+                    ('ea5eb515-d503-4b77-b912-66d62a0e6581'::uuid, 'Без прогноза', 'f72952f4-92fe-4821-8df3-50a385a0d760'::uuid, 'ACTIVE', now())
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_income_forecasts (card_id, salary_amount, bonus_percent)
+                VALUES ('f23cb642-b7e7-4127-9c61-6902991d2700'::uuid, 1000.00, 20.00)
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_monthly_expense_limits (
+                    card_id, restaurants, groceries, personal, utilities, transport, gifts, investments,
+                    entertainment, education
+                ) VALUES
+                    ('f23cb642-b7e7-4127-9c61-6902991d2700'::uuid, 120.00, 0, 0, 0, 0, 0, 0, 1440.00, 0),
+                    ('ea5eb515-d503-4b77-b912-66d62a0e6581'::uuid, 150.00, 0, 0, 0, 0, 0, 0, 900.00, 0)
+                """);
+        }
+
+        var latestFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .load();
+        latestFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword());
+             var statement = connection.prepareStatement("""
+                 SELECT card_id::text, restaurants, entertainment
+                 FROM personal_finance_monthly_expense_limits
+                 ORDER BY card_id
+                 """);
+             var rs = statement.executeQuery()) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("card_id")).isEqualTo("ea5eb515-d503-4b77-b912-66d62a0e6581");
+            assertThat(rs.getBigDecimal("restaurants")).isEqualByComparingTo("0.00");
+            assertThat(rs.getBigDecimal("entertainment")).isEqualByComparingTo("0.00");
+
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("card_id")).isEqualTo("f23cb642-b7e7-4127-9c61-6902991d2700");
+            assertThat(rs.getBigDecimal("restaurants")).isEqualByComparingTo("10.00");
+            assertThat(rs.getBigDecimal("entertainment")).isEqualByComparingTo("10.00");
         }
     }
 

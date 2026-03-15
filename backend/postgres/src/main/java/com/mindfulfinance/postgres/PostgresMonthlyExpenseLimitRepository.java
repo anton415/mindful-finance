@@ -1,7 +1,6 @@
 package com.mindfulfinance.postgres;
 
 import java.math.BigDecimal;
-import java.util.Currency;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
@@ -11,28 +10,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
-import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseLimit;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 
 public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpenseLimitRepository {
-    private static final Currency RUB = Currency.getInstance("RUB");
-
     private static final RowMapper<MonthlyExpenseLimit> ROW_MAPPER = (rs, rowNum) -> {
-        Map<PersonalExpenseCategory, Money> amounts = new EnumMap<>(PersonalExpenseCategory.class);
-        amounts.put(PersonalExpenseCategory.RESTAURANTS, new Money(rs.getBigDecimal("restaurants"), RUB));
-        amounts.put(PersonalExpenseCategory.GROCERIES, new Money(rs.getBigDecimal("groceries"), RUB));
-        amounts.put(PersonalExpenseCategory.PERSONAL, new Money(rs.getBigDecimal("personal"), RUB));
-        amounts.put(PersonalExpenseCategory.UTILITIES, new Money(rs.getBigDecimal("utilities"), RUB));
-        amounts.put(PersonalExpenseCategory.TRANSPORT, new Money(rs.getBigDecimal("transport"), RUB));
-        amounts.put(PersonalExpenseCategory.GIFTS, new Money(rs.getBigDecimal("gifts"), RUB));
-        amounts.put(PersonalExpenseCategory.INVESTMENTS, new Money(rs.getBigDecimal("investments"), RUB));
-        amounts.put(PersonalExpenseCategory.ENTERTAINMENT, new Money(rs.getBigDecimal("entertainment"), RUB));
-        amounts.put(PersonalExpenseCategory.EDUCATION, new Money(rs.getBigDecimal("education"), RUB));
+        Map<PersonalExpenseCategory, BigDecimal> percents = new EnumMap<>(PersonalExpenseCategory.class);
+        percents.put(PersonalExpenseCategory.RESTAURANTS, rs.getBigDecimal("restaurants"));
+        percents.put(PersonalExpenseCategory.GROCERIES, rs.getBigDecimal("groceries"));
+        percents.put(PersonalExpenseCategory.PERSONAL, rs.getBigDecimal("personal"));
+        percents.put(PersonalExpenseCategory.UTILITIES, rs.getBigDecimal("utilities"));
+        percents.put(PersonalExpenseCategory.TRANSPORT, rs.getBigDecimal("transport"));
+        percents.put(PersonalExpenseCategory.GIFTS, rs.getBigDecimal("gifts"));
+        percents.put(PersonalExpenseCategory.INVESTMENTS, rs.getBigDecimal("investments"));
+        percents.put(PersonalExpenseCategory.ENTERTAINMENT, rs.getBigDecimal("entertainment"));
+        percents.put(PersonalExpenseCategory.EDUCATION, rs.getBigDecimal("education"));
         return new MonthlyExpenseLimit(
             new PersonalFinanceCardId(rs.getObject("card_id", UUID.class)),
-            amounts
+            percents
         );
     };
 
@@ -77,15 +73,15 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
                     education = EXCLUDED.education
                 """,
             summary.cardId().value(),
-            amount(summary, PersonalExpenseCategory.RESTAURANTS),
-            amount(summary, PersonalExpenseCategory.GROCERIES),
-            amount(summary, PersonalExpenseCategory.PERSONAL),
-            amount(summary, PersonalExpenseCategory.UTILITIES),
-            amount(summary, PersonalExpenseCategory.TRANSPORT),
-            amount(summary, PersonalExpenseCategory.GIFTS),
-            amount(summary, PersonalExpenseCategory.INVESTMENTS),
-            amount(summary, PersonalExpenseCategory.ENTERTAINMENT),
-            amount(summary, PersonalExpenseCategory.EDUCATION)
+            percent(summary, PersonalExpenseCategory.RESTAURANTS),
+            percent(summary, PersonalExpenseCategory.GROCERIES),
+            percent(summary, PersonalExpenseCategory.PERSONAL),
+            percent(summary, PersonalExpenseCategory.UTILITIES),
+            percent(summary, PersonalExpenseCategory.TRANSPORT),
+            percent(summary, PersonalExpenseCategory.GIFTS),
+            percent(summary, PersonalExpenseCategory.INVESTMENTS),
+            percent(summary, PersonalExpenseCategory.ENTERTAINMENT),
+            percent(summary, PersonalExpenseCategory.EDUCATION)
         );
     }
 
@@ -100,7 +96,7 @@ public final class PostgresMonthlyExpenseLimitRepository implements MonthlyExpen
         );
     }
 
-    private static BigDecimal amount(MonthlyExpenseLimit summary, PersonalExpenseCategory category) {
-        return summary.categoryAmounts().get(category).amount();
+    private static BigDecimal percent(MonthlyExpenseLimit summary, PersonalExpenseCategory category) {
+        return summary.categoryPercents().get(category);
     }
 }

@@ -555,8 +555,8 @@ function SettingsDetails({
   const [bonusPercent, setBonusPercent] = useState<string>(
     toDraftAmount(snapshot.settings.incomeForecast?.bonusPercent ?? '0.00'),
   )
-  const [limitValues, setLimitValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
-    toExpenseDraftValues(snapshot.settings.limitCategoryAmounts, snapshot.categories),
+  const [limitPercentValues, setLimitPercentValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
+    toExpenseDraftValues(snapshot.settings.limitCategoryPercents, snapshot.categories),
   )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -570,11 +570,16 @@ function SettingsDetails({
     isValidNonNegativeAmountValue(salaryAmount) &&
     isValidNonNegativeAmountValue(bonusPercent)
   const areLimitsValid = snapshot.categories.every((category) =>
-    isValidNonNegativeAmountValue(limitValues[category.code]),
+    isValidNonNegativeAmountValue(limitPercentValues[category.code]),
   )
   const canSave = !isArchived && areBaseValuesValid && areLimitsValid && status !== 'submitting'
-  const configuredLimitTotals = calculateConfiguredLimitTotals(snapshot.categories, limitValues)
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
+  const configuredLimitTotals = calculateConfiguredLimitTotals(
+    snapshot.categories,
+    limitPercentValues,
+    monthlyForecast,
+  )
+  const isForecastMissing = compareDecimalStrings(monthlyForecast, '0.00') === 0
   const isCardNameValid = cardName.trim().length > 0
   const canSaveCardName =
     !isArchived && isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
@@ -612,10 +617,10 @@ function SettingsDetails({
 
     const saved = await onSaveSettings({
       baselineAmount: toDecimalAmountString(baselineAmount),
-      limitCategoryAmounts: snapshot.categories.reduce(
+      limitCategoryPercents: snapshot.categories.reduce(
         (result, category) => ({
           ...result,
-          [category.code]: toDecimalAmountString(limitValues[category.code]),
+          [category.code]: toDecimalAmountString(limitPercentValues[category.code]),
         }),
         {} as Record<PersonalExpenseCategoryCode, string>,
       ),
@@ -766,8 +771,8 @@ function SettingsDetails({
         <div>
           <h3 className="text-base font-semibold text-slate-900">Настройки карты</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Эти значения задаются один раз: месячные категории попадают в каждый месяц, а развлечения
-            и обучение сравниваются только по итогам года.
+            Лимиты задаются в процентах от recurring monthly forecast: месячные категории сравниваются
+            помесячно, а развлечения и обучение применяются к годовому прогнозу.
           </p>
         </div>
 
@@ -803,8 +808,7 @@ function SettingsDetails({
             <div>
               <h4 className="text-sm font-semibold text-slate-900">Лимиты по категориям</h4>
               <p className="mt-1 text-sm text-slate-600">
-                Для месячных категорий лимит сравнивается в каждом месяце. Для развлечений и обучения
-                лимит задаётся сразу на год.
+                Вводите проценты, а денежные лимиты пересчитываются автоматически от прогноза в месяц.
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -823,24 +827,38 @@ function SettingsDetails({
             </div>
           </div>
 
+          {isForecastMissing ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Прогноз в месяц равен 0.00. Проценты можно сохранить уже сейчас, но денежные лимиты
+              останутся нулевыми, пока не заполнен прогноз доходов.
+            </p>
+          ) : null}
+
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {snapshot.categories.map((category) => (
               <label key={category.code} className="text-sm text-slate-600">
-                {category.label} ({limitPeriodLabel(category.limitPeriod)})
+                {category.label} ({limitPercentInputLabel(category.limitPeriod)})
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={limitValues[category.code]}
+                  value={limitPercentValues[category.code]}
                   disabled={isArchived}
                   onChange={(event) =>
-                    setLimitValues((current) => ({
+                    setLimitPercentValues((current) => ({
                       ...current,
                       [category.code]: normalizeAmountInput(event.target.value),
                     }))
                   }
                   placeholder="0.00"
-                  className={inputClassName(isValidNonNegativeAmountValue(limitValues[category.code]))}
+                  className={inputClassName(isValidNonNegativeAmountValue(limitPercentValues[category.code]))}
                 />
+                <span className="mt-1 block text-xs text-slate-500">
+                  Сейчас: {' '}
+                  {formatAmountWithCurrency(
+                    calculateConfiguredLimitAmount(category, limitPercentValues[category.code], monthlyForecast),
+                    snapshot.currency,
+                  )}
+                </span>
               </label>
             ))}
           </div>
@@ -2151,23 +2169,35 @@ function isMonthlyLimitCategory(category: PersonalExpenseCategoryDto): boolean {
   return category.limitPeriod === 'MONTHLY'
 }
 
-function limitPeriodLabel(limitPeriod: ExpenseLimitPeriod): string {
-  return limitPeriod === 'ANNUAL' ? 'за год' : 'за месяц'
+function limitPercentInputLabel(limitPeriod: ExpenseLimitPeriod): string {
+  return limitPeriod === 'ANNUAL' ? '% от прогноза за год' : '% от прогноза за месяц'
 }
 
 function limitPeriodHeaderLabel(limitPeriod: ExpenseLimitPeriod): string {
   return limitPeriod === 'ANNUAL' ? 'За год' : 'Лимит'
 }
 
+function calculateConfiguredLimitAmount(
+  category: PersonalExpenseCategoryDto,
+  percentValue: string,
+  monthlyForecast: string,
+): string {
+  const baseAmount =
+    category.limitPeriod === 'ANNUAL' ? multiplyDecimalAmount(monthlyForecast, 12) : toDecimalAmountString(monthlyForecast)
+
+  return calculatePercentAmount(baseAmount, percentValue)
+}
+
 function calculateConfiguredLimitTotals(
   categories: PersonalExpenseCategoryDto[],
-  values: Record<PersonalExpenseCategoryCode, string>,
+  percentValues: Record<PersonalExpenseCategoryCode, string>,
+  monthlyForecast: string,
 ): { monthlyLimitTotal: string; annualLimitTotal: string } {
   const monthlyValues: string[] = []
   const annualValues: string[] = []
 
   categories.forEach((category) => {
-    const amount = toDecimalAmountString(values[category.code])
+    const amount = calculateConfiguredLimitAmount(category, percentValues[category.code], monthlyForecast)
     if (category.limitPeriod === 'ANNUAL') {
       annualValues.push(amount)
       return
@@ -2183,6 +2213,12 @@ function calculateConfiguredLimitTotals(
       ...monthlyValues.map((value) => multiplyDecimalAmount(value, 12)),
     ]),
   }
+}
+
+function calculatePercentAmount(baseAmount: string, percentValue: string): string {
+  const base = Number.parseFloat(toDecimalAmountString(baseAmount))
+  const percent = Number.parseFloat(toDecimalAmountString(percentValue))
+  return ((base * percent) / 100).toFixed(2)
 }
 
 function multiplyDecimalAmount(value: string, factor: number): string {

@@ -3,7 +3,6 @@ package com.mindfulfinance.postgres;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Currency;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,7 +29,7 @@ import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
 
 @Testcontainers
 public class PostgresPersonalFinanceRepositoriesTest {
-    private static final Currency RUB = Currency.getInstance("RUB");
+    private static final java.util.Currency RUB = java.util.Currency.getInstance("RUB");
 
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -131,7 +130,7 @@ public class PostgresPersonalFinanceRepositoriesTest {
 
         expenseLimitRepository.upsert(new MonthlyExpenseLimit(
             firstCardId,
-            Map.of(PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("500.00"), RUB))
+            Map.of(PersonalExpenseCategory.RESTAURANTS, new BigDecimal("50.00"))
         ));
         incomeActualRepository.upsert(new MonthlyIncomeActual(
             firstCardId,
@@ -155,6 +154,8 @@ public class PostgresPersonalFinanceRepositoriesTest {
             .get(PersonalExpenseCategory.RESTAURANTS).amount()).isEqualByComparingTo("300.00");
         assertThat(expenseActualRepository.findByCardAndYear(secondCardId, 2026)).hasSize(1);
         assertThat(expenseLimitRepository.findByCardId(firstCardId)).isPresent();
+        assertThat(expenseLimitRepository.findByCardId(firstCardId).orElseThrow().categoryPercents()
+            .get(PersonalExpenseCategory.RESTAURANTS)).isEqualByComparingTo("50.00");
         assertThat(incomeActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(1);
         assertThat(incomeForecastRepository.findByCardId(firstCardId)).isPresent();
         assertThat(incomeForecastRepository.findByCardId(firstCardId).orElseThrow().bonusPercent())

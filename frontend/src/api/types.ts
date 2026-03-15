@@ -145,6 +145,7 @@ export interface PersonalFinanceIncomeDto {
 export interface PersonalFinanceSettingsDto {
   currentBalance: DecimalAmount
   baselineAmount: DecimalAmount
+  limitCategoryPercents: Record<PersonalExpenseCategoryCode, DecimalAmount>
   limitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
   monthlyLimitTotal: DecimalAmount
   annualLimitTotal: DecimalAmount
@@ -174,7 +175,7 @@ export interface UpdateMonthlyIncomeActualRequest {
 
 export interface UpdatePersonalFinanceSettingsRequest {
   baselineAmount: DecimalAmount
-  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  limitCategoryPercents: Record<PersonalExpenseCategoryCode, DecimalAmount>
   salaryAmount: DecimalAmount
   bonusPercent: DecimalAmount
 }
