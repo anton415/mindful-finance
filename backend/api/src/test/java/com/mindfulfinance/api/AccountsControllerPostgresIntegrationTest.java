@@ -354,7 +354,7 @@ public class AccountsControllerPostgresIntegrationTest {
             .content("""
                 {
                   "baselineAmount": "1000.00",
-                  "limitCategoryAmounts": {},
+                  "limitCategoryPercents": {},
                   "salaryAmount": "0.00",
                   "bonusPercent": "0.00"
                 }

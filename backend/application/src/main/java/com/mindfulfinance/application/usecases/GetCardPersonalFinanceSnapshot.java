@@ -75,19 +75,20 @@ public final class GetCardPersonalFinanceSnapshot {
             transactionRepository
         );
 
-        Map<PersonalExpenseCategory, Money> configuredLimitAmounts = expenseLimit.categoryAmounts();
-        Map<PersonalExpenseCategory, Money> monthlyComparableLimitAmounts = expenseLimit.monthlyComparableAmounts();
-        Money monthlyLimitTotal = expenseLimit.monthlyComparableTotal();
+        Map<PersonalExpenseCategory, BigDecimal> configuredLimitPercents = expenseLimit.categoryPercents();
+        Map<PersonalExpenseCategory, Money> configuredLimitAmounts = expenseLimit.configuredAmounts(forecast);
+        Map<PersonalExpenseCategory, Money> monthlyComparableLimitAmounts = expenseLimit.monthlyComparableAmounts(forecast);
+        Money monthlyLimitTotal = expenseLimit.monthlyComparableTotal(forecast);
         Money currentBalance = computeBalance(selectedCard.linkedAccountId());
         Money baselineAmount = linkedAccountLedger.baselineAmount(cardId);
 
         List<ExpenseMonth> expenseMonths = new ArrayList<>();
         List<IncomeMonth> incomeMonths = new ArrayList<>();
         EnumMap<PersonalExpenseCategory, Money> actualTotalsByCategory = zeroByCategory();
-        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = toEnumMap(expenseLimit.annualTotals());
+        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = toEnumMap(expenseLimit.annualTotals(forecast));
 
         Money annualExpenseActualTotal = Money.zero(RUB);
-        Money annualLimitTotal = expenseLimit.annualTotal();
+        Money annualLimitTotal = expenseLimit.annualTotal(forecast);
         Money annualIncomeTotal = Money.zero(RUB);
         int filledExpenseMonths = 0;
         int filledIncomeMonths = 0;
@@ -162,6 +163,7 @@ public final class GetCardPersonalFinanceSnapshot {
                 selectedCard.linkedAccountId(),
                 currentBalance,
                 baselineAmount,
+                configuredLimitPercents,
                 configuredLimitAmounts,
                 monthlyLimitTotal,
                 annualLimitTotal,
@@ -280,6 +282,7 @@ public final class GetCardPersonalFinanceSnapshot {
         com.mindfulfinance.domain.account.AccountId linkedAccountId,
         Money currentBalance,
         Money baselineAmount,
+        Map<PersonalExpenseCategory, BigDecimal> limitCategoryPercents,
         Map<PersonalExpenseCategory, Money> limitCategoryAmounts,
         Money monthlyLimitTotal,
         Money annualLimitTotal,

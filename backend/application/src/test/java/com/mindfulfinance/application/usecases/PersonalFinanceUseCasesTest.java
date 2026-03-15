@@ -99,9 +99,9 @@ public class PersonalFinanceUseCasesTest {
             CARD_ID,
             new BigDecimal("1000.00"),
             Map.of(
-                PersonalExpenseCategory.RESTAURANTS, new BigDecimal("150.00"),
-                PersonalExpenseCategory.GROCERIES, new BigDecimal("50.00"),
-                PersonalExpenseCategory.ENTERTAINMENT, new BigDecimal("1200.00")
+                PersonalExpenseCategory.RESTAURANTS, new BigDecimal("60.00"),
+                PersonalExpenseCategory.GROCERIES, new BigDecimal("20.00"),
+                PersonalExpenseCategory.ENTERTAINMENT, new BigDecimal("40.00")
             ),
             new BigDecimal("200.00"),
             new BigDecimal("25.00")
@@ -157,6 +157,8 @@ public class PersonalFinanceUseCasesTest {
         assertEquals(GetCardPersonalFinanceSnapshot.IncomeMonthStatus.ACTUAL, snapshot.income().months().get(1).status());
         assertEquals(0, snapshot.income().annualTotal().amount().compareTo(new BigDecimal("3750.00")));
         assertEquals(0, snapshot.settings().baselineAmount().amount().compareTo(new BigDecimal("1000.00")));
+        assertEquals(0, snapshot.settings().limitCategoryPercents().get(PersonalExpenseCategory.RESTAURANTS).compareTo(new BigDecimal("60.00")));
+        assertEquals(0, snapshot.settings().limitCategoryPercents().get(PersonalExpenseCategory.ENTERTAINMENT).compareTo(new BigDecimal("40.00")));
         assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("200.00")));
         assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("3600.00")));
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("1700.00")));
@@ -187,7 +189,7 @@ public class PersonalFinanceUseCasesTest {
             new BigDecimal("500.00"),
             Map.of(PersonalExpenseCategory.RESTAURANTS, new BigDecimal("50.00")),
             new BigDecimal("100.00"),
-            new BigDecimal("10.00")
+            BigDecimal.ZERO
         ));
         saveExpenseActual.save(new SaveMonthlyExpenseActual.Command(
             CARD_ID,
@@ -211,6 +213,7 @@ public class PersonalFinanceUseCasesTest {
         ).get(CARD_ID, 2026);
 
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().limitCategoryPercents().get(PersonalExpenseCategory.RESTAURANTS).compareTo(new BigDecimal("0.00")));
         assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("0.00")));
         assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("0.00")));
         assertNull(snapshot.settings().incomeForecast());

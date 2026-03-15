@@ -194,7 +194,7 @@ public class PersonalFinanceController {
         savePersonalFinanceSettings.save(new SavePersonalFinanceSettings.Command(
             cardId,
             request.baselineAmount(),
-            toExpenseCategoryAmounts(request.limitCategoryAmounts(), "Limit category amounts must not be null"),
+            toExpenseCategoryAmounts(request.limitCategoryPercents(), "Limit category percents must not be null"),
             request.salaryAmount(),
             request.bonusPercent()
         ));
@@ -304,6 +304,7 @@ public class PersonalFinanceController {
             new SettingsSectionDto(
                 snapshot.settings().currentBalance().amount().toPlainString(),
                 snapshot.settings().baselineAmount().amount().toPlainString(),
+                toStringDecimalMap(snapshot.settings().limitCategoryPercents()),
                 toStringAmountMap(snapshot.settings().limitCategoryAmounts()),
                 snapshot.settings().monthlyLimitTotal().amount().toPlainString(),
                 snapshot.settings().annualLimitTotal().amount().toPlainString(),
@@ -344,6 +345,16 @@ public class PersonalFinanceController {
             ));
     }
 
+    private static Map<String, String> toStringDecimalMap(Map<PersonalExpenseCategory, BigDecimal> values) {
+        return values.entrySet().stream()
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().name(),
+                entry -> entry.getValue().toPlainString(),
+                (left, right) -> right,
+                LinkedHashMap::new
+            ));
+    }
+
     private static String toCategoryLabel(PersonalExpenseCategory category) {
         return switch (category) {
             case RESTAURANTS -> "Рестораны";
@@ -370,7 +381,7 @@ public class PersonalFinanceController {
 
     public record UpdateCardSettingsRequest(
         BigDecimal baselineAmount,
-        Map<String, BigDecimal> limitCategoryAmounts,
+        Map<String, BigDecimal> limitCategoryPercents,
         BigDecimal salaryAmount,
         BigDecimal bonusPercent
     ) {}
@@ -422,6 +433,7 @@ public class PersonalFinanceController {
     public record SettingsSectionDto(
         String currentBalance,
         String baselineAmount,
+        Map<String, String> limitCategoryPercents,
         Map<String, String> limitCategoryAmounts,
         String monthlyLimitTotal,
         String annualLimitTotal,
