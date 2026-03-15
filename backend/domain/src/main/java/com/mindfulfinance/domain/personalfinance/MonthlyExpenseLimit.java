@@ -16,6 +16,7 @@ public record MonthlyExpenseLimit(
     Map<PersonalExpenseCategory, Money> categoryAmounts
 ) {
     private static final Currency RUB = Currency.getInstance("RUB");
+    private static final int MONTHS_IN_YEAR = 12;
 
     public MonthlyExpenseLimit {
         if (cardId == null) {
@@ -68,8 +69,62 @@ public record MonthlyExpenseLimit(
         return total;
     }
 
+    public Money configuredAmount(PersonalExpenseCategory category) {
+        return categoryAmounts.get(category);
+    }
+
+    public Money monthlyComparableAmount(PersonalExpenseCategory category) {
+        return switch (category.limitPeriod()) {
+            case MONTHLY -> configuredAmount(category);
+            case ANNUAL -> Money.zero(RUB);
+        };
+    }
+
+    public Map<PersonalExpenseCategory, Money> monthlyComparableAmounts() {
+        EnumMap<PersonalExpenseCategory, Money> amounts = new EnumMap<>(PersonalExpenseCategory.class);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            amounts.put(category, monthlyComparableAmount(category));
+        }
+        return Collections.unmodifiableMap(amounts);
+    }
+
+    public Money monthlyComparableTotal() {
+        Money total = Money.zero(RUB);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            total = total.add(monthlyComparableAmount(category));
+        }
+        return total;
+    }
+
+    public Money annualTotalAmount(PersonalExpenseCategory category) {
+        return switch (category.limitPeriod()) {
+            case MONTHLY -> multiplyByMonths(configuredAmount(category), MONTHS_IN_YEAR);
+            case ANNUAL -> configuredAmount(category);
+        };
+    }
+
+    public Map<PersonalExpenseCategory, Money> annualTotals() {
+        EnumMap<PersonalExpenseCategory, Money> amounts = new EnumMap<>(PersonalExpenseCategory.class);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            amounts.put(category, annualTotalAmount(category));
+        }
+        return Collections.unmodifiableMap(amounts);
+    }
+
+    public Money annualTotal() {
+        Money total = Money.zero(RUB);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            total = total.add(annualTotalAmount(category));
+        }
+        return total;
+    }
+
     public boolean isEmpty() {
         return total().isZero();
+    }
+
+    private static Money multiplyByMonths(Money amount, int months) {
+        return new Money(amount.amount().multiply(java.math.BigDecimal.valueOf(months)), amount.currency());
     }
 
     private static void validateAmount(PersonalExpenseCategory category, Money amount) {

@@ -71,11 +71,13 @@ public class PersonalFinanceUseCasesTest {
         assertEquals(0, snapshot.income().annualTotal().amount().compareTo(new BigDecimal("0.00")));
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("0.00")));
         assertEquals(0, snapshot.settings().baselineAmount().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("0.00")));
         assertNull(snapshot.settings().incomeForecast());
     }
 
     @Test
-    void recurring_settings_and_actuals_compute_snapshot_totals_and_linked_balance() {
+    void mixed_limit_periods_compute_monthly_and_annual_totals_correctly() {
         InMemoryCardRepository cards = new InMemoryCardRepository();
         InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
         InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
@@ -98,7 +100,8 @@ public class PersonalFinanceUseCasesTest {
             new BigDecimal("1000.00"),
             Map.of(
                 PersonalExpenseCategory.RESTAURANTS, new BigDecimal("150.00"),
-                PersonalExpenseCategory.GROCERIES, new BigDecimal("50.00")
+                PersonalExpenseCategory.GROCERIES, new BigDecimal("50.00"),
+                PersonalExpenseCategory.ENTERTAINMENT, new BigDecimal("1200.00")
             ),
             new BigDecimal("200.00"),
             new BigDecimal("25.00")
@@ -133,16 +136,29 @@ public class PersonalFinanceUseCasesTest {
         ).get(CARD_ID, 2026);
 
         assertEquals(0, snapshot.expenses().annualActualTotal().amount().compareTo(new BigDecimal("300.00")));
-        assertEquals(0, snapshot.expenses().annualLimitTotal().amount().compareTo(new BigDecimal("2400.00")));
+        assertEquals(0, snapshot.expenses().months().get(0).limitTotal().amount().compareTo(new BigDecimal("200.00")));
+        assertEquals(
+            0,
+            snapshot.expenses().months().get(0).limitCategoryAmounts().get(PersonalExpenseCategory.ENTERTAINMENT).amount()
+                .compareTo(new BigDecimal("0.00"))
+        );
+        assertEquals(0, snapshot.expenses().annualLimitTotal().amount().compareTo(new BigDecimal("3600.00")));
         assertEquals(
             0,
             snapshot.expenses().limitTotalsByCategory().get(PersonalExpenseCategory.RESTAURANTS).amount()
                 .compareTo(new BigDecimal("1800.00"))
         );
+        assertEquals(
+            0,
+            snapshot.expenses().limitTotalsByCategory().get(PersonalExpenseCategory.ENTERTAINMENT).amount()
+                .compareTo(new BigDecimal("1200.00"))
+        );
         assertEquals(GetCardPersonalFinanceSnapshot.IncomeMonthStatus.FORECAST, snapshot.income().months().get(0).status());
         assertEquals(GetCardPersonalFinanceSnapshot.IncomeMonthStatus.ACTUAL, snapshot.income().months().get(1).status());
         assertEquals(0, snapshot.income().annualTotal().amount().compareTo(new BigDecimal("3750.00")));
         assertEquals(0, snapshot.settings().baselineAmount().amount().compareTo(new BigDecimal("1000.00")));
+        assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("200.00")));
+        assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("3600.00")));
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("1700.00")));
         assertEquals(3, transactions.findByAccountId(LINKED_ACCOUNT_ID).size());
     }
@@ -195,7 +211,8 @@ public class PersonalFinanceUseCasesTest {
         ).get(CARD_ID, 2026);
 
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("0.00")));
-        assertEquals(0, snapshot.settings().recurringLimitTotal().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("0.00")));
         assertNull(snapshot.settings().incomeForecast());
         assertTrue(expenseActuals.findByCardAndYear(CARD_ID, 2026).isEmpty());
         assertTrue(expenseLimits.findByCardId(CARD_ID).isEmpty());

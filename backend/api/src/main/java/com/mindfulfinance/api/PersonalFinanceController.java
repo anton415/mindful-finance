@@ -268,7 +268,11 @@ public class PersonalFinanceController {
             snapshot.year(),
             snapshot.currency().getCurrencyCode(),
             snapshot.categories().stream()
-                .map(category -> new ExpenseCategoryDto(category.name(), toCategoryLabel(category)))
+                .map(category -> new ExpenseCategoryDto(
+                    category.name(),
+                    toCategoryLabel(category),
+                    category.limitPeriod().name()
+                ))
                 .toList(),
             new ExpensesSectionDto(
                 snapshot.expenses().months().stream()
@@ -300,8 +304,9 @@ public class PersonalFinanceController {
             new SettingsSectionDto(
                 snapshot.settings().currentBalance().amount().toPlainString(),
                 snapshot.settings().baselineAmount().amount().toPlainString(),
-                toStringAmountMap(snapshot.settings().recurringLimitCategoryAmounts()),
-                snapshot.settings().recurringLimitTotal().amount().toPlainString(),
+                toStringAmountMap(snapshot.settings().limitCategoryAmounts()),
+                snapshot.settings().monthlyLimitTotal().amount().toPlainString(),
+                snapshot.settings().annualLimitTotal().amount().toPlainString(),
                 toForecastDto(snapshot.settings().incomeForecast())
             )
         );
@@ -383,7 +388,7 @@ public class PersonalFinanceController {
 
     public record PersonalFinanceCardDto(String id, String name, String createdAt, String status) {}
 
-    public record ExpenseCategoryDto(String code, String label) {}
+    public record ExpenseCategoryDto(String code, String label, String limitPeriod) {}
 
     public record ExpensesSectionDto(
         List<ExpenseMonthDto> months,
@@ -417,8 +422,9 @@ public class PersonalFinanceController {
     public record SettingsSectionDto(
         String currentBalance,
         String baselineAmount,
-        Map<String, String> recurringLimitCategoryAmounts,
-        String recurringLimitTotal,
+        Map<String, String> limitCategoryAmounts,
+        String monthlyLimitTotal,
+        String annualLimitTotal,
         IncomeForecastDto incomeForecast
     ) {}
 

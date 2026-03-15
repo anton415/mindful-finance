@@ -71,17 +71,21 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.currency").value("RUB"))
             .andExpect(jsonPath("$.cards", hasSize(1)))
             .andExpect(jsonPath("$.categories", hasSize(9)))
+            .andExpect(jsonPath("$.categories[0].limitPeriod").value("MONTHLY"))
+            .andExpect(jsonPath("$.categories[7].limitPeriod").value("ANNUAL"))
             .andExpect(jsonPath("$.expenses.months", hasSize(12)))
             .andExpect(jsonPath("$.income.months", hasSize(12)))
             .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"))
             .andExpect(jsonPath("$.expenses.annualLimitTotal").value("0.00"))
             .andExpect(jsonPath("$.income.annualTotal").value("0.00"))
             .andExpect(jsonPath("$.settings.currentBalance").value("0.00"))
-            .andExpect(jsonPath("$.settings.baselineAmount").value("0.00"));
+            .andExpect(jsonPath("$.settings.baselineAmount").value("0.00"))
+            .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("0.00"))
+            .andExpect(jsonPath("$.settings.annualLimitTotal").value("0.00"));
     }
 
     @Test
-    void expense_actual_and_settings_upserts_update_single_month_without_duplicates() throws Exception {
+    void expense_actual_and_mixed_limit_settings_update_single_month_without_duplicates() throws Exception {
         String cardId = createCard("Основная карта");
 
         mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
@@ -91,7 +95,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                   "baselineAmount": "1000.00",
                   "limitCategoryAmounts": {
                     "RESTAURANTS": "180.00",
-                    "GROCERIES": "210.00"
+                    "GROCERIES": "210.00",
+                    "ENTERTAINMENT": "1200.00"
                   },
                   "salaryAmount": "0.00",
                   "bonusPercent": "0.00"
@@ -132,11 +137,15 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.expenses.months[1].actualCategoryAmounts.GROCERIES").value("250.00"))
             .andExpect(jsonPath("$.expenses.months[1].limitCategoryAmounts.RESTAURANTS").value("180.00"))
             .andExpect(jsonPath("$.expenses.months[1].limitCategoryAmounts.GROCERIES").value("210.00"))
+            .andExpect(jsonPath("$.expenses.months[1].limitCategoryAmounts.ENTERTAINMENT").value("0.00"))
             .andExpect(jsonPath("$.expenses.months[1].actualTotal").value("400.00"))
             .andExpect(jsonPath("$.expenses.months[1].limitTotal").value("390.00"))
             .andExpect(jsonPath("$.expenses.annualActualTotal").value("400.00"))
-            .andExpect(jsonPath("$.expenses.annualLimitTotal").value("4680.00"))
-            .andExpect(jsonPath("$.settings.currentBalance").value("600.00"));
+            .andExpect(jsonPath("$.expenses.limitTotalsByCategory.ENTERTAINMENT").value("1200.00"))
+            .andExpect(jsonPath("$.expenses.annualLimitTotal").value("5880.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("600.00"))
+            .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("390.00"))
+            .andExpect(jsonPath("$.settings.annualLimitTotal").value("5880.00"));
     }
 
     @Test
@@ -220,7 +229,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.cards[0].name").value("Семейный кэш"))
             .andExpect(jsonPath("$.settings.currentBalance").value("1000.00"))
             .andExpect(jsonPath("$.settings.baselineAmount").value("1000.00"))
-            .andExpect(jsonPath("$.settings.recurringLimitTotal").value("150.00"))
+            .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("150.00"))
+            .andExpect(jsonPath("$.settings.annualLimitTotal").value("1800.00"))
             .andExpect(jsonPath("$.settings.incomeForecast.totalAmount").value("250.00"));
 
         mockMvc.perform(get("/accounts"))
