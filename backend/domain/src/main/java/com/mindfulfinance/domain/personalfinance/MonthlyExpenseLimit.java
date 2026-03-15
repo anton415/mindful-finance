@@ -115,6 +115,16 @@ public record MonthlyExpenseLimit(
         return total;
     }
 
+    public Money monthlyComparableExpenseTotal(IncomeForecast forecast) {
+        Money total = Money.zero(RUB);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            if (category.classification() == ExpenseCategoryClassification.EXPENSE) {
+                total = total.add(monthlyComparableAmount(category, forecast));
+            }
+        }
+        return total;
+    }
+
     public Money annualTotalAmount(PersonalExpenseCategory category, IncomeForecast forecast) {
         return switch (category.limitPeriod()) {
             case MONTHLY -> multiplyByMonths(configuredAmount(category, forecast), MONTHS_IN_YEAR);
@@ -134,6 +144,16 @@ public record MonthlyExpenseLimit(
         Money total = Money.zero(RUB);
         for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
             total = total.add(annualTotalAmount(category, forecast));
+        }
+        return total;
+    }
+
+    public Money annualExpenseTotal(IncomeForecast forecast) {
+        Money total = Money.zero(RUB);
+        for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
+            if (category.classification() == ExpenseCategoryClassification.EXPENSE) {
+                total = total.add(annualTotalAmount(category, forecast));
+            }
         }
         return total;
     }

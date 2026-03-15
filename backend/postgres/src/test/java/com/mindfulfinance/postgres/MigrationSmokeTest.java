@@ -39,7 +39,7 @@ class MigrationSmokeTest {
         flyway.clean();
         var result = flyway.migrate();
 
-        assertEquals(8, result.migrationsExecuted);
+        assertEquals(9, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),
@@ -297,6 +297,71 @@ class MigrationSmokeTest {
             assertThat(rs.getString("card_id")).isEqualTo("f23cb642-b7e7-4127-9c61-6902991d2700");
             assertThat(rs.getBigDecimal("restaurants")).isEqualByComparingTo("10.00");
             assertThat(rs.getBigDecimal("entertainment")).isEqualByComparingTo("10.00");
+        }
+    }
+
+    @Test
+    void migration_v9_converts_investment_limit_percents_to_annual_goal_percents() throws Exception {
+        var baseFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .target("8")
+            .load();
+
+        baseFlyway.clean();
+        baseFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword())) {
+            connection.createStatement().executeUpdate("""
+                INSERT INTO accounts (id, name, currency, type, status, created_at)
+                VALUES ('7bb074a7-e59f-42f2-b9f5-a0d19ad83073'::uuid, 'Основная карта', 'RUB', 'CASH', 'ACTIVE', now())
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_cards (id, name, linked_account_id, status, created_at)
+                VALUES (
+                    'b70cfe40-3045-4332-a698-e090753fb1d0'::uuid,
+                    'Основная карта',
+                    '7bb074a7-e59f-42f2-b9f5-a0d19ad83073'::uuid,
+                    'ACTIVE',
+                    now()
+                )
+                """);
+            connection.createStatement().executeUpdate("""
+                INSERT INTO personal_finance_monthly_expense_limits (
+                    card_id, restaurants, groceries, personal, utilities, transport, gifts, investments,
+                    entertainment, education
+                ) VALUES (
+                    'b70cfe40-3045-4332-a698-e090753fb1d0'::uuid,
+                    10.00, 0, 0, 0, 0, 0, 15.00, 20.00, 0
+                )
+                """);
+        }
+
+        var latestFlyway = Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .cleanDisabled(false)
+            .locations("classpath:db/migration")
+            .load();
+        latestFlyway.migrate();
+
+        try (var connection = DriverManager.getConnection(
+            postgres.getJdbcUrl(),
+            postgres.getUsername(),
+            postgres.getPassword());
+             var statement = connection.prepareStatement("""
+                 SELECT restaurants, investments, entertainment
+                 FROM personal_finance_monthly_expense_limits
+                 WHERE card_id = 'b70cfe40-3045-4332-a698-e090753fb1d0'::uuid
+                 """);
+             var rs = statement.executeQuery()) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getBigDecimal("restaurants")).isEqualByComparingTo("10.00");
+            assertThat(rs.getBigDecimal("investments")).isEqualByComparingTo("180.00");
+            assertThat(rs.getBigDecimal("entertainment")).isEqualByComparingTo("20.00");
         }
     }
 

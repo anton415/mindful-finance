@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type {
   CreatePersonalFinanceCardRequest,
-  ExpenseLimitPeriod,
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
@@ -213,8 +212,8 @@ export function PersonalFinanceView({
             <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
               У каждой карты есть внутренний cash-ledger: факт расходов и доходов меняет баланс,
-              а лимиты и прогноз живут в настройках. Большинство лимитов задаются на месяц,
-              а развлечения и обучение задаются сразу на год.
+              а лимиты, цели и прогноз живут в настройках. Большинство расходных категорий задаются на месяц,
+              развлечения и обучение задаются на год, а инвестиции идут отдельной годовой целью перевода.
             </p>
           </div>
 
@@ -404,7 +403,7 @@ function ExpenseEntryDrawerPanel({
     <ExpenseEntryFormCard
       key={`actual-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, selectedSnapshot.categories)}`}
       title="Расходы по категориям"
-      description="Лимиты задаются на вкладке настроек: большинство категорий помесячно, развлечения и обучение на год."
+      description="Лимиты и цели задаются на вкладке настроек: большинство расходов помесячно, развлечения и обучение на год, инвестиции как годовая цель перевода."
       submitLabel="Сохранить факт"
       cards={activeSnapshots.map((snapshot) => snapshot.card)}
       selectedCardId={selectedSnapshot.card.id}
@@ -751,14 +750,14 @@ function SettingsDetails({
           hint="Считается из baseline и фактических доходов/расходов."
         />
         <MetricTile
-          label="Месячные лимиты"
+          label="Месячные лимиты расходов"
           value={formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
           hint="Сумма категорий, которые сравниваются по каждому месяцу."
         />
         <MetricTile
-          label="Годовой лимит"
+          label="Годовой лимит расходов"
           value={formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
-          hint="Полный бюджет на год: месячные категории умножаются на 12, годовые добавляются сверху."
+          hint="Полный бюджет расходов на год: месячные категории умножаются на 12, годовые расходные категории добавляются сверху."
         />
       </section>
 
@@ -771,8 +770,8 @@ function SettingsDetails({
         <div>
           <h3 className="text-base font-semibold text-slate-900">Настройки карты</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Лимиты задаются в процентах от recurring monthly forecast: месячные категории сравниваются
-            помесячно, а развлечения и обучение применяются к годовому прогнозу.
+            Проценты задаются от recurring monthly forecast: расходные категории сравниваются
+            по месяцу или по году, а инвестиции используются как годовая цель перевода в инвестиционные счета.
           </p>
         </div>
 
@@ -806,20 +805,20 @@ function SettingsDetails({
         <section className="rounded-2xl bg-slate-50 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Лимиты по категориям</h4>
+              <h4 className="text-sm font-semibold text-slate-900">Лимиты и цели по категориям</h4>
               <p className="mt-1 text-sm text-slate-600">
-                Вводите проценты, а денежные лимиты пересчитываются автоматически от прогноза в месяц.
+                Вводите проценты, а денежные лимиты и цели пересчитываются автоматически от прогноза.
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месячные лимиты</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месячные лимиты расходов</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">
                   {formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Годовой лимит</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Годовой лимит расходов</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">
                   {formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
                 </p>
@@ -837,7 +836,7 @@ function SettingsDetails({
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {snapshot.categories.map((category) => (
               <label key={category.code} className="text-sm text-slate-600">
-                {category.label} ({limitPercentInputLabel(category.limitPeriod)})
+                {category.label} ({limitPercentInputLabel(category)})
                 <input
                   type="text"
                   inputMode="decimal"
@@ -853,7 +852,7 @@ function SettingsDetails({
                   className={inputClassName(isValidNonNegativeAmountValue(limitPercentValues[category.code]))}
                 />
                 <span className="mt-1 block text-xs text-slate-500">
-                  Сейчас: {' '}
+                  {categoryAmountLabel(category)}:{' '}
                   {formatAmountWithCurrency(
                     calculateConfiguredLimitAmount(category, limitPercentValues[category.code], monthlyForecast),
                     snapshot.currency,
@@ -1551,8 +1550,8 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица расходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Факт суммируется по всем активным картам каждый месяц. Годовые лимиты для развлечений и обучения
-          сравниваются только в итогах года.
+          Факт и totals считаются только по расходным категориям. Инвестиции остаются в таблице отдельной серой
+          колонкой как перевод на инвестиционные счета и не входят в общий расход.
         </p>
       </div>
 
@@ -1576,19 +1575,28 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                   const isMonthlyLimit = isMonthlyLimitCategory(category)
                   const isOverLimit =
                     isMonthlyLimit && isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+                  const isTransfer = isTransferCategory(category)
 
                   return (
                     <div
                       key={category.code}
                       className={`rounded-2xl border px-3 py-2 ${
-                        isOverLimit
+                        isTransfer
+                          ? 'border-slate-300 bg-slate-100'
+                          : isOverLimit
                           ? 'border-rose-200 bg-rose-50'
                           : 'border-slate-200 bg-white'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-900">{category.label}</p>
-                        <p className={`text-sm font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
+                        <p className={`text-sm font-medium ${isTransfer ? 'text-slate-700' : 'text-slate-900'}`}>
+                          {category.label}
+                        </p>
+                        <p
+                          className={`text-sm font-semibold ${
+                            isTransfer ? 'text-slate-700' : isOverLimit ? 'text-rose-700' : 'text-slate-900'
+                          }`}
+                        >
                           {formatAmountOrDash(actual)}
                         </p>
                       </div>
@@ -1611,13 +1619,20 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
             <h4 className="text-sm font-semibold text-slate-900">Итоги года</h4>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {aggregate.categories.map((category) => (
-                <div key={category.code} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-sm font-medium text-slate-900">{category.label}</p>
+                <div
+                  key={category.code}
+                  className={`rounded-2xl border px-3 py-2 ${
+                    isTransferCategory(category) ? 'border-slate-300 bg-slate-100' : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <p className={`text-sm font-medium ${isTransferCategory(category) ? 'text-slate-700' : 'text-slate-900'}`}>
+                    {category.label}
+                  </p>
                   <p className="mt-2 text-xs text-slate-500">
                     Факт {formatAmount(aggregate.actualTotalsByCategory[category.code])}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Лимит {formatAmount(aggregate.limitTotalsByCategory[category.code])}
+                    {categoryAmountLabel(category)} {formatAmount(aggregate.limitTotalsByCategory[category.code])}
                   </p>
                 </div>
               ))}
@@ -1628,7 +1643,7 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 value={formatAmountWithCurrency(aggregate.annualActualTotal, aggregate.currency)}
               />
               <MetricTile
-                label="Годовой лимит"
+                label="Годовой лимит расходов"
                 value={formatAmountWithCurrency(aggregate.annualLimitTotal, aggregate.currency)}
               />
               <MetricTile
@@ -1650,11 +1665,13 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
               {aggregate.categories.map((category) => (
                 <th
                   key={category.code}
-                  className="border-b border-r border-slate-200 px-3 py-3 text-left text-slate-900"
+                  className={`border-b border-r border-slate-200 px-3 py-3 text-left ${
+                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                  }`}
                 >
                   <span className="block whitespace-nowrap font-semibold">{category.label}</span>
                   <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
-                    {limitPeriodHeaderLabel(category.limitPeriod)}{' '}
+                    {limitPeriodHeaderLabel(category)}{' '}
                     {formatAmountOrDash(aggregate.limitCategoryAmounts[category.code])}
                   </span>
                 </th>
@@ -1684,10 +1701,18 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                     <td
                       key={category.code}
                       className={`border-b border-r border-slate-200 px-2 py-2 ${
-                        isOverLimit ? 'bg-rose-50' : ''
+                        isTransferCategory(category) ? 'bg-slate-100' : isOverLimit ? 'bg-rose-50' : ''
                       }`}
                     >
-                      <p className={`font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
+                      <p
+                        className={`font-semibold ${
+                          isTransferCategory(category)
+                            ? 'text-slate-700'
+                            : isOverLimit
+                              ? 'text-rose-700'
+                              : 'text-slate-900'
+                        }`}
+                      >
                         {formatAmountOrDash(actual)}
                       </p>
                     </td>
@@ -1708,7 +1733,12 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 Годовой факт
               </td>
               {aggregate.categories.map((category) => (
-                <td key={category.code} className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
+                <td
+                  key={category.code}
+                  className={`border-t border-r border-slate-200 px-2 py-3 font-semibold ${
+                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                  }`}
+                >
                   {formatAmount(aggregate.actualTotalsByCategory[category.code])}
                 </td>
               ))}
@@ -1722,7 +1752,12 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 Годовой лимит
               </td>
               {aggregate.categories.map((category) => (
-                <td key={category.code} className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
+                <td
+                  key={category.code}
+                  className={`border-t border-r border-slate-200 px-2 py-3 font-semibold ${
+                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                  }`}
+                >
                   {formatAmount(aggregate.limitTotalsByCategory[category.code])}
                 </td>
               ))}
@@ -2166,15 +2201,31 @@ function compareDecimalStrings(left: string, right: string): number {
 }
 
 function isMonthlyLimitCategory(category: PersonalExpenseCategoryDto): boolean {
-  return category.limitPeriod === 'MONTHLY'
+  return category.limitPeriod === 'MONTHLY' && !isTransferCategory(category)
 }
 
-function limitPercentInputLabel(limitPeriod: ExpenseLimitPeriod): string {
-  return limitPeriod === 'ANNUAL' ? '% от прогноза за год' : '% от прогноза за месяц'
+function isTransferCategory(category: PersonalExpenseCategoryDto): boolean {
+  return category.classification === 'TRANSFER'
 }
 
-function limitPeriodHeaderLabel(limitPeriod: ExpenseLimitPeriod): string {
-  return limitPeriod === 'ANNUAL' ? 'За год' : 'Лимит'
+function limitPercentInputLabel(category: PersonalExpenseCategoryDto): string {
+  if (isTransferCategory(category)) {
+    return '% цели от прогноза за год'
+  }
+
+  return category.limitPeriod === 'ANNUAL' ? '% от прогноза за год' : '% от прогноза за месяц'
+}
+
+function limitPeriodHeaderLabel(category: PersonalExpenseCategoryDto): string {
+  if (isTransferCategory(category)) {
+    return 'Цель за год'
+  }
+
+  return category.limitPeriod === 'ANNUAL' ? 'За год' : 'Лимит'
+}
+
+function categoryAmountLabel(category: PersonalExpenseCategoryDto): string {
+  return isTransferCategory(category) ? 'Цель' : 'Лимит'
 }
 
 function calculateConfiguredLimitAmount(
@@ -2198,6 +2249,10 @@ function calculateConfiguredLimitTotals(
 
   categories.forEach((category) => {
     const amount = calculateConfiguredLimitAmount(category, percentValues[category.code], monthlyForecast)
+    if (isTransferCategory(category)) {
+      return
+    }
+
     if (category.limitPeriod === 'ANNUAL') {
       annualValues.push(amount)
       return

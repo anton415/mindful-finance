@@ -28,13 +28,15 @@ public class MonthlyExpenseActualTest {
             2,
             Map.of(
                 PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("1500.00"), RUB),
-                PersonalExpenseCategory.GROCERIES, new Money(new BigDecimal("2500.00"), RUB)
+                PersonalExpenseCategory.GROCERIES, new Money(new BigDecimal("2500.00"), RUB),
+                PersonalExpenseCategory.INVESTMENTS, new Money(new BigDecimal("1000.00"), RUB)
             )
         );
 
         assertEquals(PersonalExpenseCategory.values().length, summary.categoryAmounts().size());
         assertEquals(0, summary.categoryAmounts().get(PersonalExpenseCategory.PERSONAL).amount().compareTo(new BigDecimal("0.00")));
-        assertEquals(0, summary.total().amount().compareTo(new BigDecimal("4000.00")));
+        assertEquals(0, summary.total().amount().compareTo(new BigDecimal("5000.00")));
+        assertEquals(0, summary.expenseTotal().amount().compareTo(new BigDecimal("4000.00")));
         assertFalse(summary.isEmpty());
     }
 

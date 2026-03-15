@@ -86,6 +86,16 @@ public record MonthlyExpenseActual(
         return total;
     }
 
+    public Money expenseTotal() {
+        Money total = Money.zero(RUB);
+        for (Map.Entry<PersonalExpenseCategory, Money> entry : categoryAmounts.entrySet()) {
+            if (entry.getKey().classification() == ExpenseCategoryClassification.EXPENSE) {
+                total = total.add(entry.getValue());
+            }
+        }
+        return total;
+    }
+
     public boolean isEmpty() {
         return total().isZero();
     }

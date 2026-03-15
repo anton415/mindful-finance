@@ -76,6 +76,7 @@ export type PersonalExpenseCategoryCode =
   | 'EDUCATION'
 
 export type ExpenseLimitPeriod = 'MONTHLY' | 'ANNUAL'
+export type ExpenseCategoryClassification = 'EXPENSE' | 'TRANSFER'
 
 export type PersonalFinanceCardStatus = 'ACTIVE' | 'ARCHIVED'
 
@@ -83,6 +84,7 @@ export interface PersonalExpenseCategoryDto {
   code: PersonalExpenseCategoryCode
   label: string
   limitPeriod: ExpenseLimitPeriod
+  classification: ExpenseCategoryClassification
 }
 
 export interface PersonalFinanceCardDto {
