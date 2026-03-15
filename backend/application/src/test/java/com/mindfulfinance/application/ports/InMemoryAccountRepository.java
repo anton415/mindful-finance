@@ -28,4 +28,9 @@ public final class InMemoryAccountRepository implements AccountRepository {
     public List<Account> findAll() { 
       return List.copyOf(store.values()); 
     }
+
+    @Override
+    public void delete(AccountId id) {
+      store.remove(id);
+    }
 }

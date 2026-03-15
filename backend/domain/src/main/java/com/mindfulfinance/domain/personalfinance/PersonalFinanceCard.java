@@ -9,7 +9,8 @@ public record PersonalFinanceCard(
     PersonalFinanceCardId id,
     String name,
     AccountId linkedAccountId,
-    Instant createdAt
+    Instant createdAt,
+    PersonalFinanceCardStatus status
 ) {
     public PersonalFinanceCard {
         if (id == null) {
@@ -22,5 +23,20 @@ public record PersonalFinanceCard(
         if (createdAt == null) {
             throw new IllegalArgumentException("createdAt must not be null");
         }
+        if (status == null) {
+            throw new IllegalArgumentException("status must not be null");
+        }
+    }
+
+    public boolean isActive() {
+        return status == PersonalFinanceCardStatus.ACTIVE;
+    }
+
+    public PersonalFinanceCard archive() {
+        return new PersonalFinanceCard(id, name, linkedAccountId, createdAt, PersonalFinanceCardStatus.ARCHIVED);
+    }
+
+    public PersonalFinanceCard restore() {
+        return new PersonalFinanceCard(id, name, linkedAccountId, createdAt, PersonalFinanceCardStatus.ACTIVE);
     }
 }

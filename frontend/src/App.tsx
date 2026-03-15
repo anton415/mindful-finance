@@ -16,10 +16,15 @@ import {
   type TransactionDto,
   type UpdateMonthlyExpenseRequest,
   type UpdateMonthlyIncomeActualRequest,
+  type UpdatePersonalFinanceCardRequest,
   type UpdatePersonalFinanceSettingsRequest,
   type UpdateTransactionRequest,
 } from './api'
-import { PersonalFinanceView, type PersonalFinanceTab } from './features/personal-finance/PersonalFinanceView'
+import {
+  PersonalFinanceView,
+  type PersonalFinanceCardListItem,
+  type PersonalFinanceTab,
+} from './features/personal-finance/PersonalFinanceView'
 
 interface DashboardData {
   asOf: string
@@ -98,7 +103,7 @@ function App() {
   const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<string | null>(null)
   const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
   const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
-  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardDto[]>([])
+  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardListItem[]>([])
   const [personalFinanceSnapshot, setPersonalFinanceSnapshot] = useState<PersonalFinanceSnapshotDto | null>(null)
   const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
   const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
@@ -278,14 +283,15 @@ function App() {
 
       try {
         const cards = await apiClient.listPersonalFinanceCards(controller.signal)
+        const activeCards = cards.filter((card) => card.status === 'ACTIVE')
 
         if (controller.signal.aborted) {
           return
         }
 
-        setPersonalFinanceCards(cards)
-
         if (cards.length === 0) {
+          setPersonalFinanceCards([])
+          setActivePersonalFinanceTab('settings')
           setSelectedPersonalFinanceCardId(null)
           setPersonalFinanceSnapshot(null)
           setPersonalFinanceStatus('ready')
@@ -295,13 +301,20 @@ function App() {
         const resolvedCardId =
           selectedPersonalFinanceCardId && cards.some((card) => card.id === selectedPersonalFinanceCardId)
             ? selectedPersonalFinanceCardId
-            : cards[0].id
+            : (activeCards[0]?.id ?? null)
 
         if (resolvedCardId !== selectedPersonalFinanceCardId) {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
-        const snapshot = await apiClient.getPersonalFinanceSnapshot(
+        if (!resolvedCardId) {
+          setPersonalFinanceCards(enrichPersonalFinanceCards(cards))
+          setPersonalFinanceSnapshot(null)
+          setPersonalFinanceStatus('ready')
+          return
+        }
+
+        const selectedSnapshot = await apiClient.getPersonalFinanceSnapshot(
           resolvedCardId,
           selectedPersonalFinanceYear,
           controller.signal,
@@ -311,9 +324,61 @@ function App() {
           return
         }
 
-        setPersonalFinanceCards(snapshot.cards)
-        setPersonalFinanceSnapshot(snapshot)
+        setPersonalFinanceCards(
+          enrichPersonalFinanceCards(cards, new Map([
+            [
+              selectedSnapshot.card.id,
+              {
+                currentBalance: selectedSnapshot.settings.currentBalance,
+                currency: selectedSnapshot.currency,
+              },
+            ],
+          ])),
+        )
+        setPersonalFinanceSnapshot(selectedSnapshot)
         setPersonalFinanceStatus('ready')
+
+        const otherCards = cards.filter((card) => card.id !== resolvedCardId)
+        const otherSnapshotResults = await Promise.allSettled(
+          otherCards.map((card) =>
+            apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
+          ),
+        )
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        const summaryByCardId = new Map<
+          string,
+          {
+            currentBalance: string | null
+            currency: string | null
+          }
+        >([
+          [
+            selectedSnapshot.card.id,
+            {
+              currentBalance: selectedSnapshot.settings.currentBalance,
+              currency: selectedSnapshot.currency,
+            },
+          ],
+        ])
+
+        otherSnapshotResults.forEach((result, index) => {
+          if (result.status !== 'fulfilled') {
+            return
+          }
+
+          summaryByCardId.set(otherCards[index].id, {
+            currentBalance: result.value.settings.currentBalance,
+            currency: result.value.currency,
+          })
+        })
+
+        setPersonalFinanceCards(
+          enrichPersonalFinanceCards(cards, summaryByCardId),
+        )
       } catch (error) {
         if (controller.signal.aborted) {
           return
@@ -463,13 +528,15 @@ function App() {
   const handleCreatePersonalFinanceCard = async (
     request: CreatePersonalFinanceCardRequest,
   ): Promise<boolean> => {
+    setActivePersonalFinanceTab('settings')
+    setPersonalFinanceErrorMessage(null)
+
     try {
       const created = await apiClient.createPersonalFinanceCard(request)
       setSelectedPersonalFinanceCardId(created.cardId)
       refreshPersonalFinanceDerivedViews()
       return true
-    } catch (error) {
-      setPersonalFinanceErrorMessage(toErrorMessage(error))
+    } catch {
       return false
     }
   }
@@ -528,8 +595,64 @@ function App() {
     }
   }
 
+  const handleRenamePersonalFinanceCard = async (
+    request: UpdatePersonalFinanceCardRequest,
+  ): Promise<boolean> => {
+    if (!selectedPersonalFinanceCardId) {
+      return false
+    }
+
+    try {
+      await apiClient.updatePersonalFinanceCard(selectedPersonalFinanceCardId, request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleArchivePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.archivePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId(null)
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleRestorePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.restorePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId(cardId)
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleDeletePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+    try {
+      await apiClient.deletePersonalFinanceCard(cardId)
+      setSelectedPersonalFinanceCardId((current) => (current === cardId ? null : current))
+      setActivePersonalFinanceTab('settings')
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
+    <main
+      className={`mx-auto min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14 ${
+        activeView === 'personal-finance' ? 'max-w-screen-2xl' : 'max-w-5xl'
+      }`}
+    >
       <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -592,7 +715,11 @@ function App() {
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
               onSaveIncomeActual={handleSaveIncomeActual}
+              onRenameCard={handleRenamePersonalFinanceCard}
               onSaveSettings={handleSavePersonalFinanceSettings}
+              onArchiveCard={handleArchivePersonalFinanceCard}
+              onRestoreCard={handleRestorePersonalFinanceCard}
+              onDeleteCard={handleDeletePersonalFinanceCard}
             />
           ) : (
             <AccountsView
@@ -1556,7 +1683,31 @@ function toAccountStatusLabel(status: AccountStatus): string {
   if (status === 'ACTIVE') {
     return 'Активный'
   }
+  if (status === 'ARCHIVED') {
+    return 'Архивный'
+  }
   return status
+}
+
+function enrichPersonalFinanceCards(
+  cards: PersonalFinanceCardDto[],
+  summaryByCardId: Map<
+    string,
+    {
+      currentBalance: string | null
+      currency: string | null
+    }
+  > = new Map(),
+): PersonalFinanceCardListItem[] {
+  return cards.map((card) => {
+    const summary = summaryByCardId.get(card.id)
+
+    return {
+      ...card,
+      currentBalance: summary?.currentBalance ?? null,
+      currency: summary?.currency ?? null,
+    }
+  })
 }
 
 function getAccountCurrencyOptions(): string[] {

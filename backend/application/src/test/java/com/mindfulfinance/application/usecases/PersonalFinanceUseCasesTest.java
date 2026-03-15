@@ -10,7 +10,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +26,7 @@ import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
+import static com.mindfulfinance.domain.account.AccountStatus.ARCHIVED;
 import static com.mindfulfinance.domain.account.AccountType.CASH;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
@@ -33,7 +36,9 @@ import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
+import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
 import com.mindfulfinance.domain.transaction.Transaction;
+import com.mindfulfinance.domain.transaction.TransactionDirection;
 import com.mindfulfinance.domain.transaction.TransactionId;
 
 public class PersonalFinanceUseCasesTest {
@@ -216,10 +221,201 @@ public class PersonalFinanceUseCasesTest {
         assertEquals(CASH, linkedAccount.type());
         assertEquals(ACTIVE, linkedAccount.status());
         assertEquals("RUB", linkedAccount.currency().getCurrencyCode());
+        assertEquals(PersonalFinanceCardStatus.ACTIVE, created.status());
+    }
+
+    @Test
+    void rename_personal_finance_card_updates_card_and_linked_account_name() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(card("Основная карта"));
+        accounts.save(new Account(
+            LINKED_ACCOUNT_ID,
+            "Основная карта",
+            java.util.Currency.getInstance("RUB"),
+            CASH,
+            ACTIVE,
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+
+        PersonalFinanceCard renamed = new RenamePersonalFinanceCard(cards, accounts).rename(
+            new RenamePersonalFinanceCard.Command(CARD_ID, "  Семейный кэш  ")
+        );
+
+        assertEquals(CARD_ID, renamed.id());
+        assertEquals("Семейный кэш", renamed.name());
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z"), renamed.createdAt());
+
+        Account linkedAccount = accounts.find(LINKED_ACCOUNT_ID).orElseThrow();
+        assertEquals("Семейный кэш", linkedAccount.name());
+        assertEquals(CASH, linkedAccount.type());
+        assertEquals(ACTIVE, linkedAccount.status());
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z"), linkedAccount.createdAt());
+    }
+
+    @Test
+    void archive_personal_finance_card_archives_card_and_linked_account() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(card("Основная карта"));
+        accounts.save(activeLinkedAccount());
+
+        PersonalFinanceCard archived = new ArchivePersonalFinanceCard(cards, accounts).archive(
+            new ArchivePersonalFinanceCard.Command(CARD_ID)
+        );
+
+        assertEquals(PersonalFinanceCardStatus.ARCHIVED, archived.status());
+        assertEquals(PersonalFinanceCardStatus.ARCHIVED, cards.find(CARD_ID).orElseThrow().status());
+        assertEquals(ARCHIVED, accounts.find(LINKED_ACCOUNT_ID).orElseThrow().status());
+    }
+
+    @Test
+    void restore_personal_finance_card_restores_card_and_linked_account() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(archivedCard("Архив"));
+        accounts.save(new Account(
+            LINKED_ACCOUNT_ID,
+            "Архив",
+            java.util.Currency.getInstance("RUB"),
+            CASH,
+            ARCHIVED,
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+
+        PersonalFinanceCard restored = new RestorePersonalFinanceCard(cards, accounts).restore(
+            new RestorePersonalFinanceCard.Command(CARD_ID)
+        );
+
+        assertEquals(PersonalFinanceCardStatus.ACTIVE, restored.status());
+        assertEquals(ACTIVE, accounts.find(LINKED_ACCOUNT_ID).orElseThrow().status());
+    }
+
+    @Test
+    void delete_personal_finance_card_removes_card_linked_account_and_transactions() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card("Основная карта"));
+        accounts.save(activeLinkedAccount());
+        transactions.save(new Transaction(
+            TransactionId.random(),
+            LINKED_ACCOUNT_ID,
+            java.time.LocalDate.parse("2026-01-31"),
+            TransactionDirection.INFLOW,
+            new Money(new BigDecimal("1000.00"), java.util.Currency.getInstance("RUB")),
+            "[personal-finance:baseline]",
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+
+        new DeletePersonalFinanceCard(cards, accounts, transactions).delete(new DeletePersonalFinanceCard.Command(CARD_ID));
+
+        assertTrue(cards.find(CARD_ID).isEmpty());
+        assertTrue(accounts.find(LINKED_ACCOUNT_ID).isEmpty());
+        assertTrue(transactions.findByAccountId(LINKED_ACCOUNT_ID).isEmpty());
+    }
+
+    @Test
+    void archived_personal_finance_card_is_read_only_for_mutations() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
+        InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
+        InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
+        InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(archivedCard("Архив"));
+        accounts.save(new Account(
+            LINKED_ACCOUNT_ID,
+            "Архив",
+            java.util.Currency.getInstance("RUB"),
+            CASH,
+            ARCHIVED,
+            Instant.parse("2026-01-01T00:00:00Z")
+        ));
+
+        IllegalStateException renameError = assertThrows(
+            IllegalStateException.class,
+            () -> new RenamePersonalFinanceCard(cards, accounts).rename(
+                new RenamePersonalFinanceCard.Command(CARD_ID, "Новое имя")
+            )
+        );
+        IllegalStateException settingsError = assertThrows(
+            IllegalStateException.class,
+            () -> new SavePersonalFinanceSettings(expenseLimits, incomeForecasts, cards, transactions).save(
+                new SavePersonalFinanceSettings.Command(
+                    CARD_ID,
+                    BigDecimal.ZERO,
+                    Map.of(),
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO
+                )
+            )
+        );
+        IllegalStateException expenseError = assertThrows(
+            IllegalStateException.class,
+            () -> new SaveMonthlyExpenseActual(expenseActuals, cards, transactions).save(
+                new SaveMonthlyExpenseActual.Command(CARD_ID, 2026, 1, Map.of())
+            )
+        );
+        IllegalStateException incomeError = assertThrows(
+            IllegalStateException.class,
+            () -> new SaveMonthlyIncomeActual(incomeActuals, cards, transactions).save(
+                new SaveMonthlyIncomeActual.Command(CARD_ID, 2026, 1, BigDecimal.ZERO)
+            )
+        );
+
+        assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, renameError.getMessage());
+        assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, settingsError.getMessage());
+        assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, expenseError.getMessage());
+        assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, incomeError.getMessage());
+    }
+
+    @Test
+    void rename_personal_finance_card_requires_existing_linked_account() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryAccountRepository accounts = new InMemoryAccountRepository();
+        cards.save(card("Основная карта"));
+
+        IllegalStateException error = assertThrows(
+            IllegalStateException.class,
+            () -> new RenamePersonalFinanceCard(cards, accounts).rename(
+                new RenamePersonalFinanceCard.Command(CARD_ID, "Новое имя")
+            )
+        );
+
+        assertEquals("Linked account not found for personal finance card", error.getMessage());
     }
 
     private static PersonalFinanceCard card(String name) {
-        return new PersonalFinanceCard(CARD_ID, name, LINKED_ACCOUNT_ID, Instant.parse("2026-01-01T00:00:00Z"));
+        return new PersonalFinanceCard(
+            CARD_ID,
+            name,
+            LINKED_ACCOUNT_ID,
+            Instant.parse("2026-01-01T00:00:00Z"),
+            PersonalFinanceCardStatus.ACTIVE
+        );
+    }
+
+    private static PersonalFinanceCard archivedCard(String name) {
+        return new PersonalFinanceCard(
+            CARD_ID,
+            name,
+            LINKED_ACCOUNT_ID,
+            Instant.parse("2026-01-01T00:00:00Z"),
+            PersonalFinanceCardStatus.ARCHIVED
+        );
+    }
+
+    private static Account activeLinkedAccount() {
+        return new Account(
+            LINKED_ACCOUNT_ID,
+            "Основная карта",
+            java.util.Currency.getInstance("RUB"),
+            CASH,
+            ACTIVE,
+            Instant.parse("2026-01-01T00:00:00Z")
+        );
     }
 
     private static final class InMemoryCardRepository implements PersonalFinanceCardRepository {
@@ -248,6 +444,11 @@ public class PersonalFinanceUseCasesTest {
         public void save(PersonalFinanceCard card) {
             store.put(card.id(), card);
         }
+
+        @Override
+        public void delete(PersonalFinanceCardId id) {
+            store.remove(id);
+        }
     }
 
     private static final class InMemoryAccountRepository implements AccountRepository {
@@ -266,6 +467,11 @@ public class PersonalFinanceUseCasesTest {
         @Override
         public List<Account> findAll() {
             return List.copyOf(store.values());
+        }
+
+        @Override
+        public void delete(AccountId id) {
+            store.remove(id);
         }
     }
 

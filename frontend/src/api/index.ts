@@ -27,6 +27,7 @@ export type {
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
+  PersonalFinanceCardStatus,
   PersonalFinanceExpenseMonthDto,
   PersonalFinanceExpensesDto,
   PersonalFinanceIncomeForecastDto,
@@ -39,6 +40,7 @@ export type {
   TransactionDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'

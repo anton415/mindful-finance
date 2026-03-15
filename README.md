@@ -17,38 +17,42 @@
 `mvn -f backend/pom.xml test`
 
 ## 🐘 Локальный запуск с PostgreSQL (БД + API + Frontend)
-Требования: Java 21, Maven, Docker, Node.js и npm.
+Требования: Java 21, Maven, Docker, Node.js, npm и `make`.
 
-1. Запустите PostgreSQL:
+Запуск всего локального стека одной командой из корня репозитория:
 ```bash
-docker compose -f backend/docker-compose.yml up -d
-docker compose -f backend/docker-compose.yml ps
+make dev
 ```
 
-2. Если запускаете модуль `api` отдельно, один раз установите backend-модули из корня репозитория:
-```bash
-mvn -f backend/pom.xml install
-```
+Что делает `make dev`:
+- подготавливает backend-модули для запуска API без отдельного ручного `mvn install`;
+- поднимает PostgreSQL из `backend/docker-compose.yml`;
+- ждёт healthcheck контейнера;
+- запускает Spring Boot API с профилем `postgres`;
+- запускает Vite frontend;
+- при первом запуске или изменении `frontend/package-lock.json` автоматически выполняет `npm ci`.
 
-3. Запустите API с профилем `postgres`:
-```bash
-mvn -f backend/api/pom.xml -Dspring-boot.run.profiles=postgres spring-boot:run
-```
-
-4. Проверьте, что API поднялся:
-```bash
-curl http://localhost:8080/health
-```
-Ожидаемый ответ:
+После старта:
+- API доступен на `http://localhost:8080`;
+- health-check: `curl http://localhost:8080/health`;
+- ожидаемый ответ:
 ```json
 {"status":"ok"}
 ```
+- frontend доступен на `http://localhost:5173`.
 
-5. В отдельном терминале запустите frontend:
+Остановка приложения:
+- `Ctrl+C` завершает backend и frontend;
+- PostgreSQL остаётся запущенным для быстрого следующего старта.
+
+Остановить локальный PostgreSQL:
 ```bash
-cd frontend
-npm install
-npm run dev
+make down
+```
+
+Собрать backend и frontend одной командой:
+```bash
+make build
 ```
 
 Локальная база данных доступна на `localhost:55432`, чтобы не конфликтовать с PostgreSQL на `5432`.
@@ -59,11 +63,6 @@ npm run dev
 - `MINDFUL_FINANCE_DB_URL`
 - `MINDFUL_FINANCE_DB_USERNAME`
 - `MINDFUL_FINANCE_DB_PASSWORD`
-
-Остановить локальный PostgreSQL:
-```bash
-docker compose -f backend/docker-compose.yml down
-```
 
 ## 🧘 Принципы системы
 1. **Сначала Truth:** никаких float/double для денег. Только `BigDecimal`.

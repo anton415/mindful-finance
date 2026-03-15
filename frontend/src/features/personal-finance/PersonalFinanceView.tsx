@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type {
   CreatePersonalFinanceCardRequest,
   PersonalExpenseCategoryCode,
@@ -8,15 +8,20 @@ import type {
   PersonalFinanceSnapshotDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
 } from '../../api'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type PersonalFinanceTab = 'expenses' | 'income' | 'settings'
+export interface PersonalFinanceCardListItem extends PersonalFinanceCardDto {
+  currentBalance: string | null
+  currency: string | null
+}
 
 interface PersonalFinanceViewProps {
   status: LoadStatus
-  cards: PersonalFinanceCardDto[]
+  cards: PersonalFinanceCardListItem[]
   snapshot: PersonalFinanceSnapshotDto | null
   selectedCardId: string | null
   activeTab: PersonalFinanceTab
@@ -29,7 +34,11 @@ interface PersonalFinanceViewProps {
   onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
   onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
 }
 
 const MONTH_LABELS = [
@@ -47,6 +56,38 @@ const MONTH_LABELS = [
   'Декабрь',
 ] as const
 
+interface PersonalFinanceTabCopy {
+  title: string
+  description: string
+  actionLabel: string
+  panelTitle: string
+  panelDescription: string
+}
+
+const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCopy> = {
+  expenses: {
+    title: 'Фактические расходы',
+    description: 'Добавляйте расходы через панель справа, не теряя из виду годовую таблицу.',
+    actionLabel: '+ Добавить расходы',
+    panelTitle: 'Добавить фактические расходы',
+    panelDescription: 'Выберите месяц и сохраните факт по категориям для выбранной карты.',
+  },
+  income: {
+    title: 'Фактические доходы',
+    description: 'Добавляйте доходы через панель справа, не теряя из виду годовую таблицу.',
+    actionLabel: '+ Добавить доходы',
+    panelTitle: 'Добавить фактический доход',
+    panelDescription: 'Сохраните итоговый доход за выбранный месяц, не скрывая годовой обзор.',
+  },
+  settings: {
+    title: 'Настройки карты',
+    description: 'Настройки остаются в основном контенте, а новую карту можно добавить через панель справа.',
+    actionLabel: '+ Добавить карту',
+    panelTitle: 'Добавить новую карту',
+    panelDescription: 'Создайте personal finance card со своим связанным cash ledger.',
+  },
+}
+
 export function PersonalFinanceView({
   status,
   cards,
@@ -62,32 +103,13 @@ export function PersonalFinanceView({
   onCreateCard,
   onSaveExpenseActual,
   onSaveIncomeActual,
+  onRenameCard,
   onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
 }: PersonalFinanceViewProps) {
-  const [newCardName, setNewCardName] = useState<string>('')
-  const [createCardStatus, setCreateCardStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [createCardErrorMessage, setCreateCardErrorMessage] = useState<string | null>(null)
-
-  const handleCreateCardSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-
-    if (newCardName.trim().length === 0 || createCardStatus === 'submitting') {
-      return
-    }
-
-    setCreateCardStatus('submitting')
-    setCreateCardErrorMessage(null)
-
-    const created = await onCreateCard({ name: newCardName.trim() })
-    if (created) {
-      setNewCardName('')
-      setCreateCardStatus('idle')
-      return
-    }
-
-    setCreateCardStatus('error')
-    setCreateCardErrorMessage('Не удалось добавить карту.')
-  }
+  const [isActionPanelOpen, setIsActionPanelOpen] = useState<boolean>(false)
 
   if (status === 'loading' || status === 'idle') {
     return <InlineStatus tone="neutral" message="Загружаем личные финансы..." />
@@ -104,203 +126,208 @@ export function PersonalFinanceView({
     )
   }
 
-  const hasCards = cards.length > 0
+  const activeCards = cards.filter((card) => card.status === 'ACTIVE')
+  const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
+  const hasAnyCards = cards.length > 0
+  const hasActiveCards = activeCards.length > 0
   const selectedCard = snapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
+  const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
+  const yearOptions = selectableYearOptions(year)
+  const canOpenActionPanel = activeTab === 'settings' || Boolean(snapshot && snapshot.card.status === 'ACTIVE')
+
+  const handleTabSelect = (tab: PersonalFinanceTab): void => {
+    setIsActionPanelOpen(false)
+    onSelectTab(tab)
+  }
+
+  const handleYearSelect = (nextYear: number): void => {
+    setIsActionPanelOpen(false)
+    onSelectYear(nextYear)
+  }
+
+  const handleCardSelect = (cardId: string): void => {
+    setIsActionPanelOpen(false)
+    onSelectCard(cardId)
+  }
 
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 lg:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
-              <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
-                лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="min-w-64 text-sm text-slate-600">
-                Карта
-                <select
-                  value={selectedCard?.id ?? ''}
-                  onChange={(event) => onSelectCard(event.target.value)}
-                  disabled={!hasCards}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"
-                >
-                  {hasCards ? (
-                    cards.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">Сначала добавьте карту</option>
-                  )}
-                </select>
-              </label>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onSelectYear(year - 1)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                >
-                  Назад
-                </button>
-                <div className="min-w-24 rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-900">
-                  {year}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onSelectYear(year + 1)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                >
-                  Вперёд
-                </button>
-              </div>
-            </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
+              лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
+            </p>
           </div>
 
-          <form
-            className="rounded-2xl border border-slate-200 bg-white p-3 sm:min-w-80"
-            onSubmit={(event) => {
-              void handleCreateCardSubmit(event)
-            }}
-          >
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Добавить карту
-            </p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                value={newCardName}
-                onChange={(event) => setNewCardName(event.target.value)}
-                placeholder="Например, T-Банк Black"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none"
-              />
-              <button
-                type="submit"
-                disabled={newCardName.trim().length === 0 || createCardStatus === 'submitting'}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {createCardStatus === 'submitting' ? 'Добавляем...' : 'Добавить'}
-              </button>
-            </div>
-            {createCardErrorMessage ? (
-              <p className="mt-2 text-xs text-rose-600">{createCardErrorMessage}</p>
-            ) : null}
-          </form>
+          <label className="w-full text-sm text-slate-600 sm:max-w-52">
+            Год
+            <select
+              value={year}
+              onChange={(event) => handleYearSelect(Number(event.target.value))}
+              disabled={!hasAnyCards}
+              className={selectClassName()}
+            >
+              {yearOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        <nav className="mt-4 inline-flex rounded-2xl border border-slate-200 bg-white p-1">
-          <NestedTabButton
-            label="Расходы"
-            isActive={activeTab === 'expenses'}
-            onClick={() => onSelectTab('expenses')}
-          />
-          <NestedTabButton
-            label="Доходы"
-            isActive={activeTab === 'income'}
-            onClick={() => onSelectTab('income')}
-          />
-          <NestedTabButton
-            label="Настройки"
-            isActive={activeTab === 'settings'}
-            onClick={() => onSelectTab('settings')}
-          />
-        </nav>
+        <PersonalFinanceCardSelector
+          cards={cards}
+          selectedCardId={selectedCard?.id ?? null}
+          onSelectCard={handleCardSelect}
+        />
       </section>
 
-      {!hasCards ? (
-        <InlineStatus tone="neutral" message="Добавьте первую карту, чтобы начать review по месяцам." />
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 lg:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <nav className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <NestedTabButton
+              label="Расходы"
+              isActive={activeTab === 'expenses'}
+              disabled={!snapshot}
+              onClick={() => handleTabSelect('expenses')}
+            />
+            <NestedTabButton
+              label="Доходы"
+              isActive={activeTab === 'income'}
+              disabled={!snapshot}
+              onClick={() => handleTabSelect('income')}
+            />
+            <NestedTabButton
+              label="Настройки"
+              isActive={activeTab === 'settings'}
+              onClick={() => handleTabSelect('settings')}
+            />
+          </nav>
+
+          <button
+            type="button"
+            onClick={() => setIsActionPanelOpen(true)}
+            disabled={!canOpenActionPanel}
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {activeTabCopy.actionLabel}
+          </button>
+        </div>
+
+        <div className="mt-4 border-t border-slate-200 pt-4">
+          <h3 className="text-base font-semibold text-slate-900">{activeTabCopy.title}</h3>
+          <p className="mt-1 text-sm text-slate-600">{activeTabCopy.description}</p>
+        </div>
+      </section>
+
+      {snapshot?.card.status === 'ARCHIVED' ? (
+        <ArchivedCardBanner cardName={snapshot.card.name} />
+      ) : null}
+
+      {!hasActiveCards && !snapshot ? (
+        <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
       ) : !snapshot ? (
         <InlineStatus tone="neutral" message="Выберите карту, чтобы загрузить данные." />
       ) : activeTab === 'expenses' ? (
-        <ExpensesTab
-          key={`expenses-${snapshot.card.id}-${snapshot.year}`}
-          snapshot={snapshot}
-          onSaveExpenseActual={onSaveExpenseActual}
-        />
+        <ExpensesTab key={`expenses-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
       ) : activeTab === 'income' ? (
-        <IncomeTab
-          key={`income-${snapshot.card.id}-${snapshot.year}`}
-          snapshot={snapshot}
-          onSaveIncomeActual={onSaveIncomeActual}
-        />
+        <IncomeTab key={`income-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
       ) : (
         <SettingsTab
-          key={`settings-${snapshot.card.id}-${snapshot.year}-${snapshot.settings.currentBalance}`}
+          key={`settings-${snapshot.card.id}-${snapshot.card.name}-${snapshot.year}-${snapshot.settings.currentBalance}`}
           snapshot={snapshot}
+          onRenameCard={onRenameCard}
           onSaveSettings={onSaveSettings}
+          onArchiveCard={onArchiveCard}
+          onRestoreCard={onRestoreCard}
+          onDeleteCard={onDeleteCard}
         />
       )}
+
+      {isActionPanelOpen ? (
+        <DrawerShell
+          title={activeTabCopy.panelTitle}
+          description={activeTabCopy.panelDescription}
+          onClose={() => setIsActionPanelOpen(false)}
+        >
+          {activeTab === 'expenses' && snapshot && snapshot.card.status === 'ACTIVE' ? (
+            <ExpenseEntryDrawerPanel
+              snapshot={snapshot}
+              onSaveExpenseActual={onSaveExpenseActual}
+              onClose={() => setIsActionPanelOpen(false)}
+            />
+          ) : null}
+          {activeTab === 'income' && snapshot && snapshot.card.status === 'ACTIVE' ? (
+            <IncomeEntryDrawerPanel
+              snapshot={snapshot}
+              onSaveIncomeActual={onSaveIncomeActual}
+              onClose={() => setIsActionPanelOpen(false)}
+            />
+          ) : null}
+          {activeTab === 'settings' ? (
+            <CreateCardDrawerPanel
+              onCreateCard={onCreateCard}
+              onSuccess={() => setIsActionPanelOpen(false)}
+            />
+          ) : null}
+        </DrawerShell>
+      ) : null}
     </div>
   )
 }
 
 interface ExpensesTabProps {
   snapshot: PersonalFinanceSnapshotDto
-  onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
 }
 
-function ExpensesTab({ snapshot, onSaveExpenseActual }: ExpensesTabProps) {
+function ExpensesTab({ snapshot }: ExpensesTabProps) {
+  return <ExpenseReviewTable snapshot={snapshot} />
+}
+
+interface ExpenseEntryDrawerPanelProps {
+  snapshot: PersonalFinanceSnapshotDto
+  onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
+  onClose: () => void
+}
+
+function ExpenseEntryDrawerPanel({
+  snapshot,
+  onSaveExpenseActual,
+  onClose,
+}: ExpenseEntryDrawerPanelProps) {
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
   const selectedMonthData =
     snapshot.expenses.months.find((month) => month.month === selectedMonth) ?? snapshot.expenses.months[0]
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-        <MonthSelectorCard
-          title="Месяц для ввода"
-          description="Выберите месяц, для которого сохраняется фактический расход."
-          selectedMonth={selectedMonth}
-          onSelectMonth={setSelectedMonth}
-        />
-
-        <ExpenseEntryFormCard
-          key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
-          title="Фактические расходы"
-          description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
-          submitLabel="Сохранить факт"
-          month={selectedMonth}
-          year={snapshot.year}
-          currency={snapshot.currency}
-          categories={snapshot.categories}
-          initialValues={selectedMonthData.actualCategoryAmounts}
-          onSave={onSaveExpenseActual}
-        />
-      </div>
-
-      <ExpenseReviewTable snapshot={snapshot} />
-    </div>
+    <ExpenseEntryFormCard
+      key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
+      title="Расходы по категориям"
+      description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
+      submitLabel="Сохранить факт"
+      selectedMonth={selectedMonth}
+      onSelectMonth={setSelectedMonth}
+      year={snapshot.year}
+      currency={snapshot.currency}
+      categories={snapshot.categories}
+      initialValues={selectedMonthData.actualCategoryAmounts}
+      onSave={onSaveExpenseActual}
+      onSaved={onClose}
+    />
   )
 }
 
 interface IncomeTabProps {
   snapshot: PersonalFinanceSnapshotDto
-  onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
 }
 
-function IncomeTab({ snapshot, onSaveIncomeActual }: IncomeTabProps) {
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
-  const selectedMonthData =
-    snapshot.income.months.find((month) => month.month === selectedMonth) ?? snapshot.income.months[0]
-
+function IncomeTab({ snapshot }: IncomeTabProps) {
   return (
     <div className="space-y-4">
-      <IncomeActualFormCard
-        key={`actual-income-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
-        year={snapshot.year}
-        currency={snapshot.currency}
-        selectedMonth={selectedMonth}
-        onSelectMonth={setSelectedMonth}
-        initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
-        onSave={onSaveIncomeActual}
-      />
-
       <RecurringIncomeSummaryCard
         currency={snapshot.currency}
         forecast={snapshot.settings.incomeForecast}
@@ -311,12 +338,81 @@ function IncomeTab({ snapshot, onSaveIncomeActual }: IncomeTabProps) {
   )
 }
 
-interface SettingsTabProps {
+interface IncomeEntryDrawerPanelProps {
   snapshot: PersonalFinanceSnapshotDto
-  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onClose: () => void
 }
 
-function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
+function IncomeEntryDrawerPanel({
+  snapshot,
+  onSaveIncomeActual,
+  onClose,
+}: IncomeEntryDrawerPanelProps) {
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
+  const selectedMonthData =
+    snapshot.income.months.find((month) => month.month === selectedMonth) ?? snapshot.income.months[0]
+
+  return (
+    <IncomeActualFormCard
+      key={`actual-income-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
+      year={snapshot.year}
+      currency={snapshot.currency}
+      selectedMonth={selectedMonth}
+      onSelectMonth={setSelectedMonth}
+      initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
+      onSave={onSaveIncomeActual}
+      onSaved={onClose}
+    />
+  )
+}
+
+interface SettingsTabProps {
+  snapshot: PersonalFinanceSnapshotDto
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
+  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
+}
+
+function SettingsTab({
+  snapshot,
+  onRenameCard,
+  onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
+}: SettingsTabProps) {
+  return (
+    <SettingsDetails
+      snapshot={snapshot}
+      onRenameCard={onRenameCard}
+      onSaveSettings={onSaveSettings}
+      onArchiveCard={onArchiveCard}
+      onRestoreCard={onRestoreCard}
+      onDeleteCard={onDeleteCard}
+    />
+  )
+}
+
+function SettingsDetails({
+  snapshot,
+  onRenameCard,
+  onSaveSettings,
+  onArchiveCard,
+  onRestoreCard,
+  onDeleteCard,
+}: {
+  snapshot: PersonalFinanceSnapshotDto
+  onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
+  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onArchiveCard: (cardId: string) => Promise<boolean>
+  onRestoreCard: (cardId: string) => Promise<boolean>
+  onDeleteCard: (cardId: string) => Promise<boolean>
+}) {
+  const isArchived = snapshot.card.status === 'ARCHIVED'
+  const [cardName, setCardName] = useState<string>(snapshot.card.name)
   const [baselineAmount, setBaselineAmount] = useState<string>(
     toDraftAmount(snapshot.settings.baselineAmount),
   )
@@ -331,6 +427,10 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
   )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [renameStatus, setRenameStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null)
+  const [cardActionStatus, setCardActionStatus] = useState<'idle' | 'archiving' | 'restoring' | 'deleting' | 'error'>('idle')
+  const [cardActionErrorMessage, setCardActionErrorMessage] = useState<string | null>(null)
 
   const areBaseValuesValid =
     isValidNonNegativeAmountValue(baselineAmount) &&
@@ -339,11 +439,35 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
   const areLimitsValid = snapshot.categories.every((category) =>
     isValidNonNegativeAmountValue(limitValues[category.code]),
   )
-  const canSave = areBaseValuesValid && areLimitsValid && status !== 'submitting'
+  const canSave = !isArchived && areBaseValuesValid && areLimitsValid && status !== 'submitting'
   const recurringLimitTotal = sumDecimalAmountStrings(
     snapshot.categories.map((category) => toDecimalAmountString(limitValues[category.code])),
   )
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
+  const isCardNameValid = cardName.trim().length > 0
+  const canSaveCardName =
+    !isArchived && isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
+  const isCardActionBusy = cardActionStatus !== 'idle' && cardActionStatus !== 'error'
+
+  const handleRenameSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!canSaveCardName) {
+      return
+    }
+
+    setRenameStatus('submitting')
+    setRenameErrorMessage(null)
+
+    const renamed = await onRenameCard({ name: cardName.trim() })
+    if (renamed) {
+      setRenameStatus('idle')
+      return
+    }
+
+    setRenameStatus('error')
+    setRenameErrorMessage('Не удалось сохранить название карты.')
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -377,8 +501,113 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
     setErrorMessage('Не удалось сохранить настройки.')
   }
 
+  const handleArchiveClick = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        `Архивировать карту «${snapshot.card.name}»? Она исчезнет из активного контура, а linked account перестанет влиять на текущие метрики.`,
+      )
+    ) {
+      return
+    }
+
+    setCardActionStatus('archiving')
+    setCardActionErrorMessage(null)
+
+    const archived = await onArchiveCard(snapshot.card.id)
+    if (!archived) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось архивировать карту.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
+  const handleRestoreClick = async (): Promise<void> => {
+    setCardActionStatus('restoring')
+    setCardActionErrorMessage(null)
+
+    const restored = await onRestoreCard(snapshot.card.id)
+    if (!restored) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось вернуть карту из архива.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
+  const handleDeleteClick = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        `Удалить карту «${snapshot.card.name}» навсегда? Это удалит связанные доходы, расходы, настройки и linked cash account без возможности восстановления.`,
+      )
+    ) {
+      return
+    }
+
+    setCardActionStatus('deleting')
+    setCardActionErrorMessage(null)
+
+    const deleted = await onDeleteCard(snapshot.card.id)
+    if (!deleted) {
+      setCardActionStatus('error')
+      setCardActionErrorMessage('Не удалось удалить карту.')
+      return
+    }
+
+    setCardActionStatus('idle')
+  }
+
   return (
     <div className="space-y-4">
+      <form
+        className="rounded-3xl border border-slate-200 bg-white p-4"
+        onSubmit={(event) => {
+          void handleRenameSubmit(event)
+        }}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-slate-900">Название карты</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Это же имя будет у связанного cash account в Инвестициях.
+            </p>
+            <label className="mt-4 block text-sm text-slate-600">
+              Как карта называется в обзоре
+              <input
+                type="text"
+                value={cardName}
+                disabled={isArchived}
+                onChange={(event) => {
+                  setCardName(event.target.value)
+                  setRenameStatus('idle')
+                  setRenameErrorMessage(null)
+                }}
+                placeholder="Например, T-Банк Black"
+                className={inputClassName(isCardNameValid)}
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSaveCardName}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {renameStatus === 'submitting' ? 'Сохраняем...' : 'Сохранить название'}
+          </button>
+        </div>
+
+        {renameErrorMessage ? <p className="mt-3 text-xs text-rose-600">{renameErrorMessage}</p> : null}
+        {isArchived ? (
+          <p className="mt-3 text-xs text-slate-500">Архивная карта доступна только для просмотра.</p>
+        ) : null}
+        {!isCardNameValid ? (
+          <p className="mt-3 text-xs text-rose-600">Название карты не может быть пустым.</p>
+        ) : null}
+      </form>
+
       <section className="grid gap-4 lg:grid-cols-3">
         <MetricTile
           label="Текущий баланс карты"
@@ -388,7 +617,11 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
         <MetricTile
           label="Связанный счёт"
           value={snapshot.settings.linkedAccountId}
-          hint="Этот cash account виден в Инвестициях, но редактируется только отсюда."
+          hint={
+            isArchived
+              ? 'Этот linked cash account архивирован и скрыт из активного списка Инвестиций.'
+              : 'Этот cash account виден в Инвестициях, но редактируется только отсюда.'
+          }
         />
         <MetricTile
           label="Повторяющийся лимит"
@@ -418,6 +651,7 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
                 type="text"
                 inputMode="decimal"
                 value={baselineAmount}
+                disabled={isArchived}
                 onChange={(event) => setBaselineAmount(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(baselineAmount))}
@@ -460,6 +694,7 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
                   type="text"
                   inputMode="decimal"
                   value={limitValues[category.code]}
+                  disabled={isArchived}
                   onChange={(event) =>
                     setLimitValues((current) => ({
                       ...current,
@@ -498,6 +733,7 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
                 type="text"
                 inputMode="decimal"
                 value={salaryAmount}
+                disabled={isArchived}
                 onChange={(event) => setSalaryAmount(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(salaryAmount))}
@@ -510,6 +746,7 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
                 type="text"
                 inputMode="decimal"
                 value={bonusPercent}
+                disabled={isArchived}
                 onChange={(event) => setBonusPercent(normalizeAmountInput(event.target.value))}
                 placeholder="0.00"
                 className={inputClassName(isValidNonNegativeAmountValue(bonusPercent))}
@@ -535,15 +772,19 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
           <div className="text-sm text-slate-600">
-            Только фактические доходы и расходы двигают баланс linked account.
+            {isArchived
+              ? 'Архивная карта зафиксирована: сначала верните её в активные, если нужно снова редактировать данные.'
+              : 'Только фактические доходы и расходы двигают баланс linked account.'}
           </div>
-          <button
-            type="submit"
-            disabled={!canSave}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {status === 'submitting' ? 'Сохраняем...' : 'Сохранить настройки'}
-          </button>
+          {!isArchived ? (
+            <button
+              type="submit"
+              disabled={!canSave}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {status === 'submitting' ? 'Сохраняем...' : 'Сохранить настройки'}
+            </button>
+          ) : null}
         </div>
 
         {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
@@ -551,7 +792,165 @@ function SettingsTab({ snapshot, onSaveSettings }: SettingsTabProps) {
           <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
         ) : null}
       </form>
+
+      {isArchived ? (
+        <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-base font-semibold text-slate-900">Карта в архиве</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Данные сохранены, но карта и linked account исключены из активного личного контура и текущих метрик.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleRestoreClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {cardActionStatus === 'restoring' ? 'Возвращаем...' : 'Вернуть из архива'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleDeleteClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+            </button>
+          </div>
+          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+        </section>
+      ) : (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 p-4">
+          <h3 className="text-base font-semibold text-rose-700">Управление картой</h3>
+          <p className="mt-1 text-sm text-rose-700/80">
+            Архивируйте карту, если хотите убрать её из активного контура без потери истории. Удаление навсегда
+            вычищает все связанные данные.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleArchiveClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'archiving' ? 'Архивируем...' : 'Архивировать'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleDeleteClick()
+              }}
+              disabled={isCardActionBusy}
+              className="rounded-xl border border-rose-200 bg-rose-100 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+            </button>
+          </div>
+          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+        </section>
+      )}
     </div>
+  )
+}
+
+function PersonalFinanceSettingsEmptyState({ hasArchivedCards }: { hasArchivedCards: boolean }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-5">
+      <h3 className="text-base font-semibold text-slate-900">Добавьте первую карту</h3>
+      <p className="mt-2 text-sm text-slate-600">
+        Используйте кнопку + Добавить карту вверху справа на вкладке настроек, чтобы создать
+        personal finance card. После этого появятся расходы, доходы и годовой обзор.
+      </p>
+      {hasArchivedCards ? (
+        <p className="mt-3 text-sm text-slate-500">
+          Ниже в секции архива можно открыть старую карту, вернуть её в активные или удалить навсегда.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
+function CreateCardDrawerPanel({
+  onCreateCard,
+  onSuccess,
+}: {
+  onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
+  onSuccess: () => void
+}) {
+  const [newCardName, setNewCardName] = useState<string>('')
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (newCardName.trim().length === 0 || status === 'submitting') {
+      return
+    }
+
+    setStatus('submitting')
+    setErrorMessage(null)
+
+    const created = await onCreateCard({ name: newCardName.trim() })
+    if (created) {
+      setNewCardName('')
+      setStatus('idle')
+      onSuccess()
+      return
+    }
+
+    setStatus('error')
+    setErrorMessage('Не удалось добавить карту.')
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4">
+      <div>
+        <h3 className="text-base font-semibold text-slate-900">Новая карта</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          У каждой карты будет свой linked cash ledger для расходов, доходов и текущего баланса.
+        </p>
+      </div>
+
+      <form
+        className="mt-4 space-y-3"
+        onSubmit={(event) => {
+          void handleSubmit(event)
+        }}
+      >
+        <label className="text-sm text-slate-600">
+          Название карты
+          <input
+            type="text"
+            value={newCardName}
+            onChange={(event) => setNewCardName(event.target.value)}
+            placeholder="Например, T-Банк Black"
+            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none"
+          />
+        </label>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-sm text-slate-600">После создания карта сразу появится в селекторе слева.</p>
+          <button
+            type="submit"
+            disabled={newCardName.trim().length === 0 || status === 'submitting'}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {status === 'submitting' ? 'Добавляем...' : 'Добавить карту'}
+          </button>
+        </div>
+
+        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
+      </form>
+    </section>
   )
 }
 
@@ -590,6 +989,144 @@ function RecurringIncomeSummaryCard({
   )
 }
 
+function PersonalFinanceCardSelector({
+  cards,
+  selectedCardId,
+  onSelectCard,
+}: {
+  cards: PersonalFinanceCardListItem[]
+  selectedCardId: string | null
+  onSelectCard: (cardId: string) => void
+}) {
+  const activeCards = cards.filter((card) => card.status === 'ACTIVE')
+  const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
+
+  return (
+    <article className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Карты личных финансов</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Выберите карту, чтобы открыть расходы, доходы и настройки.
+          </p>
+        </div>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+          Пока нет карт. Создание доступно через кнопку на вкладке настроек.
+        </div>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <CardListSection
+            title="Активные карты"
+            emptyMessage="Активных карт сейчас нет."
+            cards={activeCards}
+            selectedCardId={selectedCardId}
+            onSelectCard={onSelectCard}
+          />
+          {archivedCards.length > 0 ? (
+            <CardListSection
+              title="Архив"
+              cards={archivedCards}
+              selectedCardId={selectedCardId}
+              onSelectCard={onSelectCard}
+              tone="archived"
+            />
+          ) : null}
+        </div>
+      )}
+    </article>
+  )
+}
+
+function CardListSection({
+  title,
+  cards,
+  selectedCardId,
+  onSelectCard,
+  emptyMessage,
+  tone = 'active',
+}: {
+  title: string
+  cards: PersonalFinanceCardListItem[]
+  selectedCardId: string | null
+  onSelectCard: (cardId: string) => void
+  emptyMessage?: string
+  tone?: 'active' | 'archived'
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</h4>
+        <span className="text-xs text-slate-400">{cards.length}</span>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+          {emptyMessage ?? 'Нет карточек в этом разделе.'}
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {cards.map((card) => (
+            <li key={card.id}>
+              <button
+                type="button"
+                onClick={() => onSelectCard(card.id)}
+                className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                  selectedCardId === card.id
+                    ? tone === 'archived'
+                      ? 'border-slate-300 bg-slate-100 shadow-sm'
+                      : 'border-slate-300 bg-slate-50 shadow-sm'
+                    : tone === 'archived'
+                      ? 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{card.name}</p>
+                      {tone === 'archived' ? (
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                          Архив
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                      Наличные · Личные финансы
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      {card.currency ?? 'RUB'}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {card.currentBalance ? formatAmount(card.currentBalance) : '...'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function ArchivedCardBanner({ cardName }: { cardName: string }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-slate-100 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Архив</p>
+      <h3 className="mt-2 text-base font-semibold text-slate-900">{cardName}</h3>
+      <p className="mt-1 text-sm text-slate-600">
+        Карта открыта в режиме просмотра. Доходы, расходы и настройки заморожены, пока вы не вернёте её в активные.
+      </p>
+    </section>
+  )
+}
+
 function MetricTile({
   label,
   value,
@@ -608,59 +1145,32 @@ function MetricTile({
   )
 }
 
-interface MonthSelectorCardProps {
-  title: string
-  description: string
-  selectedMonth: number
-  onSelectMonth: (month: number) => void
-}
-
-function MonthSelectorCard({ title, description, selectedMonth, onSelectMonth }: MonthSelectorCardProps) {
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
-
-      <label className="mt-4 block text-sm text-slate-600">
-        Месяц
-        <select
-          value={selectedMonth}
-          onChange={(event) => onSelectMonth(Number(event.target.value))}
-          className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
-        >
-          {MONTH_LABELS.map((label, index) => (
-            <option key={label} value={index + 1}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </section>
-  )
-}
-
 interface ExpenseEntryFormCardProps {
   title: string
   description: string
   submitLabel: string
-  month: number
+  selectedMonth: number
+  onSelectMonth: (month: number) => void
   year: number
   currency: string
   categories: PersonalExpenseCategoryDto[]
   initialValues: Record<PersonalExpenseCategoryCode, string>
   onSave: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
+  onSaved?: () => void
 }
 
 function ExpenseEntryFormCard({
   title,
   description,
   submitLabel,
-  month,
+  selectedMonth,
+  onSelectMonth,
   year,
   currency,
   categories,
   initialValues,
   onSave,
+  onSaved,
 }: ExpenseEntryFormCardProps) {
   const [draftValues, setDraftValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
     toExpenseDraftValues(initialValues, categories),
@@ -684,7 +1194,7 @@ function ExpenseEntryFormCard({
     setStatus('submitting')
     setErrorMessage(null)
 
-    const saved = await onSave(month, {
+    const saved = await onSave(selectedMonth, {
       year,
       categoryAmounts: categories.reduce(
         (result, category) => ({
@@ -697,6 +1207,7 @@ function ExpenseEntryFormCard({
 
     if (saved) {
       setStatus('idle')
+      onSaved?.()
       return
     }
 
@@ -706,15 +1217,25 @@ function ExpenseEntryFormCard({
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h3 className="text-base font-semibold text-slate-900">{title}</h3>
           <p className="mt-1 text-sm text-slate-600">{description}</p>
         </div>
-        <div className="rounded-xl bg-slate-100 px-3 py-2 text-right">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месяц</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{toMonthLabel(month)}</p>
-        </div>
+        <label className="w-full text-sm text-slate-600 sm:max-w-64">
+          Месяц
+          <select
+            value={selectedMonth}
+            onChange={(event) => onSelectMonth(Number(event.target.value))}
+            className={selectClassName()}
+          >
+            {MONTH_LABELS.map((label, index) => (
+              <option key={label} value={index + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <form
@@ -769,6 +1290,69 @@ function ExpenseEntryFormCard({
   )
 }
 
+function DrawerShell({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string
+  description: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 sm:items-stretch sm:justify-end">
+      <button
+        type="button"
+        aria-label="Закрыть панель"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:h-full sm:max-h-none sm:max-w-2xl sm:rounded-none sm:rounded-l-3xl"
+      >
+        <div className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+              <p className="mt-1 text-sm text-slate-600">{description}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      </aside>
+    </div>
+  )
+}
+
 function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
@@ -779,25 +1363,108 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
         </p>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] table-fixed border-collapse text-[12px] leading-4">
+      <div className="lg:hidden">
+        <div className="space-y-3 p-4">
+          {snapshot.expenses.months.map((month) => (
+            <article key={month.month} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">{toMonthLabel(month.month)}</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Факт {formatAmount(month.actualTotal)} · Лимит {formatAmount(month.limitTotal)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {snapshot.categories.map((category) => {
+                  const actual = month.actualCategoryAmounts[category.code]
+                  const limit = month.limitCategoryAmounts[category.code]
+                  const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+
+                  return (
+                    <div
+                      key={category.code}
+                      className={`rounded-2xl border px-3 py-2 ${
+                        isOverLimit
+                          ? 'border-rose-200 bg-rose-50'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-900">{category.label}</p>
+                        <p className={`text-sm font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
+                          {formatAmountOrDash(actual)}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Лимит {formatAmountOrDash(limit)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <MetricTile label="Факт за месяц" value={formatAmount(month.actualTotal)} />
+                <MetricTile label="Лимит за месяц" value={formatAmount(month.limitTotal)} />
+              </div>
+            </article>
+          ))}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+            <h4 className="text-sm font-semibold text-slate-900">Итоги года</h4>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {snapshot.categories.map((category) => (
+                <div key={category.code} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-medium text-slate-900">{category.label}</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Факт {formatAmount(snapshot.expenses.actualTotalsByCategory[category.code])}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Лимит {formatAmount(snapshot.expenses.limitTotalsByCategory[category.code])}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <MetricTile
+                label="Годовой факт"
+                value={formatAmountWithCurrency(snapshot.expenses.annualActualTotal, snapshot.currency)}
+              />
+              <MetricTile
+                label="Годовой лимит"
+                value={formatAmountWithCurrency(snapshot.expenses.annualLimitTotal, snapshot.currency)}
+              />
+              <MetricTile
+                label="Средний факт"
+                value={formatAmountWithCurrency(snapshot.expenses.averageMonthlyActualTotal, snapshot.currency)}
+              />
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div className="hidden lg:block">
+        <table className="w-full border-collapse text-[11px] leading-4 xl:text-[12px]">
           <thead className="bg-slate-50">
             <tr>
-              <th className="w-28 border-b border-r border-slate-200 px-3 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24 xl:px-3">
                 Месяц
               </th>
               {snapshot.categories.map((category) => (
                 <th
                   key={category.code}
-                  className="border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900"
+                  className="border-b border-r border-slate-200 px-3 py-3 text-left text-slate-900"
                 >
-                  {category.label}
+                  <span className="block whitespace-nowrap font-semibold">{category.label}</span>
+                  <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
+                    Лимит {formatAmountOrDash(snapshot.settings.recurringLimitCategoryAmounts[category.code])}
+                  </span>
                 </th>
               ))}
-              <th className="w-28 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24">
                 Факт
               </th>
-              <th className="w-28 border-b border-slate-200 px-2 py-3 text-left font-semibold text-slate-900">
+              <th className="w-20 border-b border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24">
                 Лимит
               </th>
             </tr>
@@ -805,7 +1472,7 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
           <tbody>
             {snapshot.expenses.months.map((month) => (
               <tr key={month.month} className="align-top">
-                <td className="border-b border-r border-slate-200 px-3 py-3 font-semibold text-slate-900">
+                <td className="border-b border-r border-slate-200 px-2 py-3 font-semibold text-slate-900 xl:px-3">
                   {toMonthLabel(month.month)}
                 </td>
                 {snapshot.categories.map((category) => {
@@ -822,9 +1489,6 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
                     >
                       <p className={`font-semibold ${isOverLimit ? 'text-rose-700' : 'text-slate-900'}`}>
                         {formatAmountOrDash(actual)}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Лимит {formatAmountOrDash(limit)}
                       </p>
                     </td>
                   )
@@ -893,6 +1557,7 @@ interface IncomeActualFormCardProps {
   onSelectMonth: (month: number) => void
   initialAmount: string
   onSave: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onSaved?: () => void
 }
 
 function IncomeActualFormCard({
@@ -902,6 +1567,7 @@ function IncomeActualFormCard({
   onSelectMonth,
   initialAmount,
   onSave,
+  onSaved,
 }: IncomeActualFormCardProps) {
   const [amount, setAmount] = useState<string>(normalizeAmountInput(initialAmount))
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -925,6 +1591,7 @@ function IncomeActualFormCard({
 
     if (saved) {
       setStatus('idle')
+      onSaved?.()
       return
     }
 
@@ -954,7 +1621,7 @@ function IncomeActualFormCard({
           <select
             value={selectedMonth}
             onChange={(event) => onSelectMonth(Number(event.target.value))}
-            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
+            className={selectClassName()}
           >
             {MONTH_LABELS.map((label, index) => (
               <option key={label} value={index + 1}>
@@ -1087,18 +1754,25 @@ function StatusBadge({ status }: { status: 'ACTUAL' | 'FORECAST' }) {
 function NestedTabButton({
   label,
   isActive,
+  disabled = false,
   onClick,
 }: {
   label: string
   isActive: boolean
+  disabled?: boolean
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-        isActive ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+        isActive
+          ? 'bg-slate-900 text-white shadow-sm'
+          : disabled
+            ? 'cursor-not-allowed text-slate-300'
+            : 'text-slate-600 hover:text-slate-900'
       }`}
     >
       {label}
@@ -1141,8 +1815,16 @@ function InlineStatus({
   )
 }
 
+function selectClassName(): string {
+  return controlClassName(true)
+}
+
 function inputClassName(isValid: boolean): string {
-  return `mt-1 block w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none ${
+  return controlClassName(isValid)
+}
+
+function controlClassName(isValid: boolean): string {
+  return `mt-1 block h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100 ${
     isValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
   }`
 }
@@ -1161,6 +1843,10 @@ function currentYear(): number {
 
 function currentMonthNumber(): number {
   return new Date().getMonth() + 1
+}
+
+function selectableYearOptions(selectedYear: number): number[] {
+  return Array.from({ length: 7 }, (_, index) => selectedYear - 3 + index)
 }
 
 function serializeExpenseMonth(
@@ -1250,6 +1936,7 @@ function formatAmountWithCurrency(value: string, currency: string): string {
 function formatAmountOrDash(value: string): string {
   return isPositiveAmount(value) ? formatAmount(value) : '-'
 }
+
 
 function isPositiveAmount(value: string): boolean {
   return compareDecimalStrings(value, '0.00') > 0

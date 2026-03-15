@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
+import static com.mindfulfinance.domain.account.AccountStatus.ARCHIVED;
 import static com.mindfulfinance.domain.account.AccountType.CASH;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_NAME_NULL_OR_BLANK;
 import com.mindfulfinance.domain.shared.DomainException;
@@ -50,5 +51,12 @@ public class AccountTest {
         Account account = new Account(AccountId.random(), "Test Account", Currency.getInstance("USD"), CASH, ACTIVE, Instant.now());
         account = account.archive();
         assertEquals(false, account.isActive());
+    }
+
+    @Test
+    void testActivate() {
+        Account account = new Account(AccountId.random(), "Test Account", Currency.getInstance("USD"), CASH, ARCHIVED, Instant.now());
+        account = account.activate();
+        assertEquals(ACTIVE, account.status());
     }
 }
