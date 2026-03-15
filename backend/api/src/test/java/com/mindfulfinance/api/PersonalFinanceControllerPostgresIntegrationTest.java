@@ -72,6 +72,9 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.cards", hasSize(1)))
             .andExpect(jsonPath("$.categories", hasSize(9)))
             .andExpect(jsonPath("$.categories[0].limitPeriod").value("MONTHLY"))
+            .andExpect(jsonPath("$.categories[0].classification").value("EXPENSE"))
+            .andExpect(jsonPath("$.categories[6].limitPeriod").value("ANNUAL"))
+            .andExpect(jsonPath("$.categories[6].classification").value("TRANSFER"))
             .andExpect(jsonPath("$.categories[7].limitPeriod").value("ANNUAL"))
             .andExpect(jsonPath("$.expenses.months", hasSize(12)))
             .andExpect(jsonPath("$.income.months", hasSize(12)))
@@ -152,6 +155,55 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.settings.limitCategoryAmounts.ENTERTAINMENT").value("1200.00"))
             .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("390.00"))
             .andExpect(jsonPath("$.settings.annualLimitTotal").value("5880.00"));
+    }
+
+    @Test
+    void investments_behave_as_annual_transfer_goal_in_snapshot_totals() throws Exception {
+        String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "1000.00",
+                  "limitCategoryPercents": {
+                    "INVESTMENTS": "10.00"
+                  },
+                  "salaryAmount": "1000.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/expenses/actual/2", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "year": 2026,
+                  "categoryAmounts": {
+                    "RESTAURANTS": "100.00",
+                    "INVESTMENTS": "200.00"
+                  }
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.categories[6].limitPeriod").value("ANNUAL"))
+            .andExpect(jsonPath("$.categories[6].classification").value("TRANSFER"))
+            .andExpect(jsonPath("$.expenses.months[1].actualCategoryAmounts.INVESTMENTS").value("200.00"))
+            .andExpect(jsonPath("$.expenses.months[1].actualTotal").value("100.00"))
+            .andExpect(jsonPath("$.expenses.months[1].limitTotal").value("0.00"))
+            .andExpect(jsonPath("$.expenses.actualTotalsByCategory.INVESTMENTS").value("200.00"))
+            .andExpect(jsonPath("$.expenses.limitTotalsByCategory.INVESTMENTS").value("1200.00"))
+            .andExpect(jsonPath("$.expenses.annualActualTotal").value("100.00"))
+            .andExpect(jsonPath("$.expenses.averageMonthlyActualTotal").value("100.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryPercents.INVESTMENTS").value("10.00"))
+            .andExpect(jsonPath("$.settings.limitCategoryAmounts.INVESTMENTS").value("1200.00"))
+            .andExpect(jsonPath("$.settings.monthlyLimitTotal").value("0.00"))
+            .andExpect(jsonPath("$.settings.annualLimitTotal").value("0.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("700.00"));
     }
 
     @Test

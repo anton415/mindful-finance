@@ -271,7 +271,8 @@ public class PersonalFinanceController {
                 .map(category -> new ExpenseCategoryDto(
                     category.name(),
                     toCategoryLabel(category),
-                    category.limitPeriod().name()
+                    category.limitPeriod().name(),
+                    category.classification().name()
                 ))
                 .toList(),
             new ExpensesSectionDto(
@@ -399,7 +400,7 @@ public class PersonalFinanceController {
 
     public record PersonalFinanceCardDto(String id, String name, String createdAt, String status) {}
 
-    public record ExpenseCategoryDto(String code, String label, String limitPeriod) {}
+    public record ExpenseCategoryDto(String code, String label, String limitPeriod, String classification) {}
 
     public record ExpensesSectionDto(
         List<ExpenseMonthDto> months,

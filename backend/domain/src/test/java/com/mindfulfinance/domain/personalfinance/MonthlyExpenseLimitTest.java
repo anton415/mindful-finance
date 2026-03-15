@@ -49,6 +49,7 @@ public class MonthlyExpenseLimitTest {
             CARD_ID,
             Map.of(
                 PersonalExpenseCategory.RESTAURANTS, new BigDecimal("10.00"),
+                PersonalExpenseCategory.INVESTMENTS, new BigDecimal("15.00"),
                 PersonalExpenseCategory.ENTERTAINMENT, new BigDecimal("10.00"),
                 PersonalExpenseCategory.EDUCATION, new BigDecimal("20.00")
             )
@@ -60,16 +61,23 @@ public class MonthlyExpenseLimitTest {
         );
 
         assertEquals(ExpenseLimitPeriod.MONTHLY, PersonalExpenseCategory.RESTAURANTS.limitPeriod());
+        assertEquals(ExpenseCategoryClassification.TRANSFER, PersonalExpenseCategory.INVESTMENTS.classification());
+        assertEquals(ExpenseLimitPeriod.ANNUAL, PersonalExpenseCategory.INVESTMENTS.limitPeriod());
         assertEquals(ExpenseLimitPeriod.ANNUAL, PersonalExpenseCategory.ENTERTAINMENT.limitPeriod());
         assertEquals(ExpenseLimitPeriod.ANNUAL, PersonalExpenseCategory.EDUCATION.limitPeriod());
         assertEquals(0, summary.configuredAmount(PersonalExpenseCategory.RESTAURANTS, forecast).amount().compareTo(new BigDecimal("120.00")));
+        assertEquals(0, summary.configuredAmount(PersonalExpenseCategory.INVESTMENTS, forecast).amount().compareTo(new BigDecimal("2160.00")));
         assertEquals(0, summary.configuredAmount(PersonalExpenseCategory.ENTERTAINMENT, forecast).amount().compareTo(new BigDecimal("1440.00")));
         assertEquals(0, summary.monthlyComparableAmount(PersonalExpenseCategory.RESTAURANTS, forecast).amount().compareTo(new BigDecimal("120.00")));
+        assertEquals(0, summary.monthlyComparableAmount(PersonalExpenseCategory.INVESTMENTS, forecast).amount().compareTo(new BigDecimal("0.00")));
         assertEquals(0, summary.monthlyComparableAmount(PersonalExpenseCategory.ENTERTAINMENT, forecast).amount().compareTo(new BigDecimal("0.00")));
         assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.RESTAURANTS, forecast).amount().compareTo(new BigDecimal("1440.00")));
+        assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.INVESTMENTS, forecast).amount().compareTo(new BigDecimal("2160.00")));
         assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.ENTERTAINMENT, forecast).amount().compareTo(new BigDecimal("1440.00")));
         assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.EDUCATION, forecast).amount().compareTo(new BigDecimal("2880.00")));
         assertEquals(0, summary.monthlyComparableTotal(forecast).amount().compareTo(new BigDecimal("120.00")));
-        assertEquals(0, summary.annualTotal(forecast).amount().compareTo(new BigDecimal("5760.00")));
+        assertEquals(0, summary.monthlyComparableExpenseTotal(forecast).amount().compareTo(new BigDecimal("120.00")));
+        assertEquals(0, summary.annualExpenseTotal(forecast).amount().compareTo(new BigDecimal("5760.00")));
+        assertEquals(0, summary.annualTotal(forecast).amount().compareTo(new BigDecimal("7920.00")));
     }
 }

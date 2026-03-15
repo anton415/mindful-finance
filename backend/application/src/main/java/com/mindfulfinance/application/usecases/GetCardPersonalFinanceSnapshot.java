@@ -78,7 +78,7 @@ public final class GetCardPersonalFinanceSnapshot {
         Map<PersonalExpenseCategory, BigDecimal> configuredLimitPercents = expenseLimit.categoryPercents();
         Map<PersonalExpenseCategory, Money> configuredLimitAmounts = expenseLimit.configuredAmounts(forecast);
         Map<PersonalExpenseCategory, Money> monthlyComparableLimitAmounts = expenseLimit.monthlyComparableAmounts(forecast);
-        Money monthlyLimitTotal = expenseLimit.monthlyComparableTotal(forecast);
+        Money monthlyLimitTotal = expenseLimit.monthlyComparableExpenseTotal(forecast);
         Money currentBalance = computeBalance(selectedCard.linkedAccountId());
         Money baselineAmount = linkedAccountLedger.baselineAmount(cardId);
 
@@ -88,7 +88,7 @@ public final class GetCardPersonalFinanceSnapshot {
         EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = toEnumMap(expenseLimit.annualTotals(forecast));
 
         Money annualExpenseActualTotal = Money.zero(RUB);
-        Money annualLimitTotal = expenseLimit.annualTotal(forecast);
+        Money annualLimitTotal = expenseLimit.annualExpenseTotal(forecast);
         Money annualIncomeTotal = Money.zero(RUB);
         int filledExpenseMonths = 0;
         int filledIncomeMonths = 0;
@@ -99,7 +99,7 @@ public final class GetCardPersonalFinanceSnapshot {
                 MonthlyExpenseActual.empty(cardId, year, month)
             );
 
-            Money actualTotal = expenseActual.total();
+            Money actualTotal = expenseActual.expenseTotal();
             if (!actualTotal.isZero()) {
                 filledExpenseMonths++;
             }

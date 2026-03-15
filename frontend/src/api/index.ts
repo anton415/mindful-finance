@@ -21,6 +21,7 @@ export type {
   CreateTransactionRequest,
   CreateTransactionResponse,
   DecimalAmount,
+  ExpenseCategoryClassification,
   ExpenseLimitPeriod,
   ImportTransactionsCsvResponse,
   IsoDate,

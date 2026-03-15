@@ -166,6 +166,69 @@ public class PersonalFinanceUseCasesTest {
     }
 
     @Test
+    void investments_stay_in_category_maps_but_drop_from_expense_review_totals() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
+        InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
+        InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
+        InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card("Основная карта"));
+
+        SavePersonalFinanceSettings saveSettings = new SavePersonalFinanceSettings(
+            expenseLimits,
+            incomeForecasts,
+            cards,
+            transactions
+        );
+        SaveMonthlyExpenseActual saveExpenseActual = new SaveMonthlyExpenseActual(expenseActuals, cards, transactions);
+
+        saveSettings.save(new SavePersonalFinanceSettings.Command(
+            CARD_ID,
+            new BigDecimal("1000.00"),
+            Map.of(PersonalExpenseCategory.INVESTMENTS, new BigDecimal("10.00")),
+            new BigDecimal("1000.00"),
+            BigDecimal.ZERO
+        ));
+        saveExpenseActual.save(new SaveMonthlyExpenseActual.Command(
+            CARD_ID,
+            2026,
+            1,
+            Map.of(
+                PersonalExpenseCategory.RESTAURANTS, new BigDecimal("100.00"),
+                PersonalExpenseCategory.INVESTMENTS, new BigDecimal("200.00")
+            )
+        ));
+
+        GetCardPersonalFinanceSnapshot.Result snapshot = new GetCardPersonalFinanceSnapshot(
+            cards,
+            expenseActuals,
+            expenseLimits,
+            incomeActuals,
+            incomeForecasts,
+            transactions
+        ).get(CARD_ID, 2026);
+
+        assertEquals(0, snapshot.expenses().months().get(0).actualTotal().amount().compareTo(new BigDecimal("100.00")));
+        assertEquals(
+            0,
+            snapshot.expenses().months().get(0).actualCategoryAmounts().get(PersonalExpenseCategory.INVESTMENTS).amount()
+                .compareTo(new BigDecimal("200.00"))
+        );
+        assertEquals(0, snapshot.expenses().annualActualTotal().amount().compareTo(new BigDecimal("100.00")));
+        assertEquals(
+            0,
+            snapshot.expenses().actualTotalsByCategory().get(PersonalExpenseCategory.INVESTMENTS).amount()
+                .compareTo(new BigDecimal("200.00"))
+        );
+        assertEquals(0, snapshot.settings().limitCategoryAmounts().get(PersonalExpenseCategory.INVESTMENTS).amount()
+            .compareTo(new BigDecimal("1200.00")));
+        assertEquals(0, snapshot.settings().monthlyLimitTotal().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("700.00")));
+    }
+
+    @Test
     void zero_values_clear_settings_actuals_and_linked_transactions() {
         InMemoryCardRepository cards = new InMemoryCardRepository();
         InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
