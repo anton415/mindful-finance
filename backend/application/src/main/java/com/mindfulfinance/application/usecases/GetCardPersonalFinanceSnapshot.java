@@ -75,17 +75,19 @@ public final class GetCardPersonalFinanceSnapshot {
             transactionRepository
         );
 
-        Map<PersonalExpenseCategory, Money> recurringLimitAmounts = expenseLimit.categoryAmounts();
-        Money recurringLimitMonthlyTotal = expenseLimit.total();
+        Map<PersonalExpenseCategory, Money> configuredLimitAmounts = expenseLimit.categoryAmounts();
+        Map<PersonalExpenseCategory, Money> monthlyComparableLimitAmounts = expenseLimit.monthlyComparableAmounts();
+        Money monthlyLimitTotal = expenseLimit.monthlyComparableTotal();
         Money currentBalance = computeBalance(selectedCard.linkedAccountId());
         Money baselineAmount = linkedAccountLedger.baselineAmount(cardId);
 
         List<ExpenseMonth> expenseMonths = new ArrayList<>();
         List<IncomeMonth> incomeMonths = new ArrayList<>();
         EnumMap<PersonalExpenseCategory, Money> actualTotalsByCategory = zeroByCategory();
-        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = multiplyByYear(recurringLimitAmounts);
+        EnumMap<PersonalExpenseCategory, Money> limitTotalsByCategory = toEnumMap(expenseLimit.annualTotals());
 
         Money annualExpenseActualTotal = Money.zero(RUB);
+        Money annualLimitTotal = expenseLimit.annualTotal();
         Money annualIncomeTotal = Money.zero(RUB);
         int filledExpenseMonths = 0;
         int filledIncomeMonths = 0;
@@ -113,9 +115,9 @@ public final class GetCardPersonalFinanceSnapshot {
             expenseMonths.add(new ExpenseMonth(
                 month,
                 expenseActual.categoryAmounts(),
-                recurringLimitAmounts,
+                monthlyComparableLimitAmounts,
                 actualTotal,
-                recurringLimitMonthlyTotal
+                monthlyLimitTotal
             ));
 
             MonthlyIncomeActual incomeActual = incomeActualsByMonth.get(month);
@@ -148,7 +150,7 @@ public final class GetCardPersonalFinanceSnapshot {
                 toOrderedTotalsMap(actualTotalsByCategory),
                 toOrderedTotalsMap(limitTotalsByCategory),
                 annualExpenseActualTotal,
-                multiplyByMonths(recurringLimitMonthlyTotal, 12),
+                annualLimitTotal,
                 average(annualExpenseActualTotal, filledExpenseMonths)
             ),
             new Income(
@@ -160,8 +162,9 @@ public final class GetCardPersonalFinanceSnapshot {
                 selectedCard.linkedAccountId(),
                 currentBalance,
                 baselineAmount,
-                recurringLimitAmounts,
-                recurringLimitMonthlyTotal,
+                configuredLimitAmounts,
+                monthlyLimitTotal,
+                annualLimitTotal,
                 forecast
             )
         );
@@ -189,16 +192,12 @@ public final class GetCardPersonalFinanceSnapshot {
         return totals;
     }
 
-    private static EnumMap<PersonalExpenseCategory, Money> multiplyByYear(Map<PersonalExpenseCategory, Money> monthlyTotals) {
+    private static EnumMap<PersonalExpenseCategory, Money> toEnumMap(Map<PersonalExpenseCategory, Money> sourceTotals) {
         EnumMap<PersonalExpenseCategory, Money> totals = new EnumMap<>(PersonalExpenseCategory.class);
         for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
-            totals.put(category, multiplyByMonths(monthlyTotals.get(category), 12));
+            totals.put(category, sourceTotals.get(category));
         }
         return totals;
-    }
-
-    private static Money multiplyByMonths(Money amount, int months) {
-        return new Money(amount.amount().multiply(BigDecimal.valueOf(months)), amount.currency());
     }
 
     private static Map<Integer, MonthlyExpenseActual> toExpenseActualMap(List<MonthlyExpenseActual> summaries) {
@@ -281,8 +280,9 @@ public final class GetCardPersonalFinanceSnapshot {
         com.mindfulfinance.domain.account.AccountId linkedAccountId,
         Money currentBalance,
         Money baselineAmount,
-        Map<PersonalExpenseCategory, Money> recurringLimitCategoryAmounts,
-        Money recurringLimitTotal,
+        Map<PersonalExpenseCategory, Money> limitCategoryAmounts,
+        Money monthlyLimitTotal,
+        Money annualLimitTotal,
         IncomeForecast incomeForecast
     ) {}
 

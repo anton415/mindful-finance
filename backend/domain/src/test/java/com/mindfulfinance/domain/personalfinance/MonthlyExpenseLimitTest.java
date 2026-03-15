@@ -46,4 +46,27 @@ public class MonthlyExpenseLimitTest {
         ));
         assertEquals("Expense limit amount must be non-negative RUB", nonRubException.getMessage());
     }
+
+    @Test
+    void annual_categories_use_annual_cadence_while_others_stay_monthly() {
+        MonthlyExpenseLimit summary = new MonthlyExpenseLimit(
+            CARD_ID,
+            Map.of(
+                PersonalExpenseCategory.RESTAURANTS, new Money(new BigDecimal("100.00"), RUB),
+                PersonalExpenseCategory.ENTERTAINMENT, new Money(new BigDecimal("1200.00"), RUB),
+                PersonalExpenseCategory.EDUCATION, new Money(new BigDecimal("2400.00"), RUB)
+            )
+        );
+
+        assertEquals(ExpenseLimitPeriod.MONTHLY, PersonalExpenseCategory.RESTAURANTS.limitPeriod());
+        assertEquals(ExpenseLimitPeriod.ANNUAL, PersonalExpenseCategory.ENTERTAINMENT.limitPeriod());
+        assertEquals(ExpenseLimitPeriod.ANNUAL, PersonalExpenseCategory.EDUCATION.limitPeriod());
+        assertEquals(0, summary.monthlyComparableAmount(PersonalExpenseCategory.RESTAURANTS).amount().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, summary.monthlyComparableAmount(PersonalExpenseCategory.ENTERTAINMENT).amount().compareTo(new BigDecimal("0.00")));
+        assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.RESTAURANTS).amount().compareTo(new BigDecimal("1200.00")));
+        assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.ENTERTAINMENT).amount().compareTo(new BigDecimal("1200.00")));
+        assertEquals(0, summary.annualTotalAmount(PersonalExpenseCategory.EDUCATION).amount().compareTo(new BigDecimal("2400.00")));
+        assertEquals(0, summary.monthlyComparableTotal().amount().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, summary.annualTotal().amount().compareTo(new BigDecimal("4800.00")));
+    }
 }

@@ -75,11 +75,14 @@ export type PersonalExpenseCategoryCode =
   | 'ENTERTAINMENT'
   | 'EDUCATION'
 
+export type ExpenseLimitPeriod = 'MONTHLY' | 'ANNUAL'
+
 export type PersonalFinanceCardStatus = 'ACTIVE' | 'ARCHIVED'
 
 export interface PersonalExpenseCategoryDto {
   code: PersonalExpenseCategoryCode
   label: string
+  limitPeriod: ExpenseLimitPeriod
 }
 
 export interface PersonalFinanceCardDto {
@@ -142,8 +145,9 @@ export interface PersonalFinanceIncomeDto {
 export interface PersonalFinanceSettingsDto {
   currentBalance: DecimalAmount
   baselineAmount: DecimalAmount
-  recurringLimitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
-  recurringLimitTotal: DecimalAmount
+  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>
+  monthlyLimitTotal: DecimalAmount
+  annualLimitTotal: DecimalAmount
   incomeForecast: PersonalFinanceIncomeForecastDto | null
 }
 

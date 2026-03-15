@@ -64,7 +64,7 @@
 - Reuse the existing `LifeGoal` domain foundation instead of inventing a parallel goal model.
 - Keep planning formulas explicit and explainable.
 - Annual `Personal Finance` manual review keeps one shared truth-ledger: each personal-finance card owns a linked `CASH` account, baseline amount is represented as a synthetic ledger transaction, and monthly actual income/expense upserts synthetic account transactions instead of introducing a second ledger.
-- Recurring limits and recurring income template are card-scoped non-versioned defaults in `v1`; they repeat across months and years for review purposes, while only actual income/expense changes the linked account balance and Peace metrics.
+- Recurring limits and recurring income template are card-scoped non-versioned defaults in `v1`. Expense limits use mixed cadence: all categories are monthly except `ENTERTAINMENT` and `EDUCATION`, which are annual and compared only in year totals; only actual income/expense changes the linked account balance and Peace metrics.
 - Decision (2026-03-14): renaming a personal-finance card also renames its internal linked `CASH` account so the card and its ledger stay consistent.
 - Decision (2026-03-14): active linked personal-finance accounts are internal implementation detail: they stay out of the public `Инвестиции` list and `/accounts/*` API, but still contribute to global `net worth`, `monthly burn`, and `monthly savings` while the card is active.
 - Decision (2026-03-14): personal-finance card archive and hard delete are separate actions. `Archive` preserves card-scoped data and synthetic linked-account transactions, archives the linked `CASH` account, removes its contribution from active global metrics, and makes the card read-only until restore.

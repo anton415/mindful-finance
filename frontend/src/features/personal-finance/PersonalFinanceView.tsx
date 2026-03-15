@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type {
   CreatePersonalFinanceCardRequest,
+  ExpenseLimitPeriod,
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
@@ -29,7 +30,7 @@ interface AggregatedExpenseMonthViewModel {
 interface AggregatedExpensesViewModel {
   categories: PersonalExpenseCategoryDto[]
   currency: string
-  recurringLimitCategoryAmounts: Record<PersonalExpenseCategoryCode, string>
+  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, string>
   months: AggregatedExpenseMonthViewModel[]
   actualTotalsByCategory: Record<PersonalExpenseCategoryCode, string>
   limitTotalsByCategory: Record<PersonalExpenseCategoryCode, string>
@@ -212,7 +213,8 @@ export function PersonalFinanceView({
             <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
               У каждой карты есть внутренний cash-ledger: факт расходов и доходов меняет баланс,
-              а лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
+              а лимиты и прогноз живут в настройках. Большинство лимитов задаются на месяц,
+              а развлечения и обучение задаются сразу на год.
             </p>
           </div>
 
@@ -402,7 +404,7 @@ function ExpenseEntryDrawerPanel({
     <ExpenseEntryFormCard
       key={`actual-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, selectedSnapshot.categories)}`}
       title="Расходы по категориям"
-      description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
+      description="Лимиты задаются на вкладке настроек: большинство категорий помесячно, развлечения и обучение на год."
       submitLabel="Сохранить факт"
       cards={activeSnapshots.map((snapshot) => snapshot.card)}
       selectedCardId={selectedSnapshot.card.id}
@@ -554,7 +556,7 @@ function SettingsDetails({
     toDraftAmount(snapshot.settings.incomeForecast?.bonusPercent ?? '0.00'),
   )
   const [limitValues, setLimitValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
-    toExpenseDraftValues(snapshot.settings.recurringLimitCategoryAmounts, snapshot.categories),
+    toExpenseDraftValues(snapshot.settings.limitCategoryAmounts, snapshot.categories),
   )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -571,9 +573,7 @@ function SettingsDetails({
     isValidNonNegativeAmountValue(limitValues[category.code]),
   )
   const canSave = !isArchived && areBaseValuesValid && areLimitsValid && status !== 'submitting'
-  const recurringLimitTotal = sumDecimalAmountStrings(
-    snapshot.categories.map((category) => toDecimalAmountString(limitValues[category.code])),
-  )
+  const configuredLimitTotals = calculateConfiguredLimitTotals(snapshot.categories, limitValues)
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
   const isCardNameValid = cardName.trim().length > 0
   const canSaveCardName =
@@ -746,14 +746,14 @@ function SettingsDetails({
           hint="Считается из baseline и фактических доходов/расходов."
         />
         <MetricTile
-          label="Учётный контур"
-          value="Внутренний cash-ledger"
-          hint="Баланс карты участвует в общих метриках, но управляется только в разделе личных финансов."
+          label="Месячные лимиты"
+          value={formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
+          hint="Сумма категорий, которые сравниваются по каждому месяцу."
         />
         <MetricTile
-          label="Повторяющийся лимит"
-          value={formatAmountWithCurrency(recurringLimitTotal, snapshot.currency)}
-          hint="Одинаковый месячный лимит по всем категориям."
+          label="Годовой лимит"
+          value={formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
+          hint="Сумма категорий, которые сравниваются только в итогах года."
         />
       </section>
 
@@ -766,7 +766,8 @@ function SettingsDetails({
         <div>
           <h3 className="text-base font-semibold text-slate-900">Настройки карты</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Эти значения задаются один раз и переиспользуются для каждого месяца любого выбранного года.
+            Эти значения задаются один раз: месячные категории попадают в каждый месяц, а развлечения
+            и обучение сравниваются только по итогам года.
           </p>
         </div>
 
@@ -802,21 +803,30 @@ function SettingsDetails({
             <div>
               <h4 className="text-sm font-semibold text-slate-900">Лимиты по категориям</h4>
               <p className="mt-1 text-sm text-slate-600">
-                Эти лимиты попадают в каждую строку годовой таблицы расходов.
+                Для месячных категорий лимит сравнивается в каждом месяце. Для развлечений и обучения
+                лимит задаётся сразу на год.
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Итого лимит</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {formatAmountWithCurrency(recurringLimitTotal, snapshot.currency)}
-              </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месячные лимиты</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Годовой лимит</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
+                </p>
+              </div>
             </div>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {snapshot.categories.map((category) => (
               <label key={category.code} className="text-sm text-slate-600">
-                {category.label}
+                {category.label} ({limitPeriodLabel(category.limitPeriod)})
                 <input
                   type="text"
                   inputMode="decimal"
@@ -1523,7 +1533,8 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица расходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Факт и лимиты суммируются по всем активным картам для каждого месяца и каждой категории.
+          Факт суммируется по всем активным картам каждый месяц. Годовые лимиты для развлечений и обучения
+          сравниваются только в итогах года.
         </p>
       </div>
 
@@ -1535,7 +1546,7 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 <div>
                   <h4 className="text-sm font-semibold text-slate-900">{toMonthLabel(month.month)}</h4>
                   <p className="mt-1 text-xs text-slate-500">
-                    Факт {formatAmount(month.actualTotal)} · Лимит {formatAmount(month.limitTotal)}
+                    Факт {formatAmount(month.actualTotal)} · Месячный лимит {formatAmount(month.limitTotal)}
                   </p>
                 </div>
               </div>
@@ -1544,7 +1555,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 {aggregate.categories.map((category) => {
                   const actual = month.actualCategoryAmounts[category.code]
                   const limit = month.limitCategoryAmounts[category.code]
-                  const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+                  const isMonthlyLimit = isMonthlyLimitCategory(category)
+                  const isOverLimit =
+                    isMonthlyLimit && isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
 
                   return (
                     <div
@@ -1561,7 +1574,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                           {formatAmountOrDash(actual)}
                         </p>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">Лимит {formatAmountOrDash(limit)}</p>
+                      {isMonthlyLimit ? (
+                        <p className="mt-1 text-xs text-slate-500">Лимит {formatAmountOrDash(limit)}</p>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -1621,7 +1636,8 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 >
                   <span className="block whitespace-nowrap font-semibold">{category.label}</span>
                   <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
-                    Лимит {formatAmountOrDash(aggregate.recurringLimitCategoryAmounts[category.code])}
+                    {limitPeriodHeaderLabel(category.limitPeriod)}{' '}
+                    {formatAmountOrDash(aggregate.limitCategoryAmounts[category.code])}
                   </span>
                 </th>
               ))}
@@ -1642,7 +1658,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 {aggregate.categories.map((category) => {
                   const actual = month.actualCategoryAmounts[category.code]
                   const limit = month.limitCategoryAmounts[category.code]
-                  const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+                  const isMonthlyLimit = isMonthlyLimitCategory(category)
+                  const isOverLimit =
+                    isMonthlyLimit && isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
 
                   return (
                     <td
@@ -2121,13 +2139,47 @@ function formatAmountOrDash(value: string): string {
   return isPositiveAmount(value) ? formatAmount(value) : '-'
 }
 
-
 function isPositiveAmount(value: string): boolean {
   return compareDecimalStrings(value, '0.00') > 0
 }
 
 function compareDecimalStrings(left: string, right: string): number {
   return Number.parseFloat(left || '0') - Number.parseFloat(right || '0')
+}
+
+function isMonthlyLimitCategory(category: PersonalExpenseCategoryDto): boolean {
+  return category.limitPeriod === 'MONTHLY'
+}
+
+function limitPeriodLabel(limitPeriod: ExpenseLimitPeriod): string {
+  return limitPeriod === 'ANNUAL' ? 'за год' : 'за месяц'
+}
+
+function limitPeriodHeaderLabel(limitPeriod: ExpenseLimitPeriod): string {
+  return limitPeriod === 'ANNUAL' ? 'За год' : 'Лимит'
+}
+
+function calculateConfiguredLimitTotals(
+  categories: PersonalExpenseCategoryDto[],
+  values: Record<PersonalExpenseCategoryCode, string>,
+): { monthlyLimitTotal: string; annualLimitTotal: string } {
+  const monthlyValues: string[] = []
+  const annualValues: string[] = []
+
+  categories.forEach((category) => {
+    const amount = toDecimalAmountString(values[category.code])
+    if (category.limitPeriod === 'ANNUAL') {
+      annualValues.push(amount)
+      return
+    }
+
+    monthlyValues.push(amount)
+  })
+
+  return {
+    monthlyLimitTotal: sumDecimalAmountStrings(monthlyValues),
+    annualLimitTotal: sumDecimalAmountStrings(annualValues),
+  }
 }
 
 function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedExpensesViewModel {
@@ -2140,15 +2192,15 @@ function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): Aggre
     actualTotal: '0.00',
     limitTotal: '0.00',
   }))
-  const recurringLimitCategoryAmounts = createZeroAmountMap(categories)
+  const limitCategoryAmounts = createZeroAmountMap(categories)
   const actualTotalsByCategory = createZeroAmountMap(categories)
   const limitTotalsByCategory = createZeroAmountMap(categories)
 
   activeSnapshots.forEach((snapshot) => {
     categories.forEach((category) => {
-      recurringLimitCategoryAmounts[category.code] = addDecimalAmounts(
-        recurringLimitCategoryAmounts[category.code],
-        snapshot.settings.recurringLimitCategoryAmounts[category.code],
+      limitCategoryAmounts[category.code] = addDecimalAmounts(
+        limitCategoryAmounts[category.code],
+        snapshot.settings.limitCategoryAmounts[category.code],
       )
       actualTotalsByCategory[category.code] = addDecimalAmounts(
         actualTotalsByCategory[category.code],
@@ -2178,13 +2230,15 @@ function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): Aggre
   })
 
   const annualActualTotal = sumDecimalAmountStrings(months.map((month) => month.actualTotal))
-  const annualLimitTotal = sumDecimalAmountStrings(months.map((month) => month.limitTotal))
+  const annualLimitTotal = sumDecimalAmountStrings(
+    activeSnapshots.map((snapshot) => snapshot.expenses.annualLimitTotal),
+  )
   const filledMonths = months.filter((month) => isPositiveAmount(month.actualTotal)).length
 
   return {
     categories,
     currency: firstSnapshot.currency,
-    recurringLimitCategoryAmounts,
+    limitCategoryAmounts,
     months,
     actualTotalsByCategory,
     limitTotalsByCategory,
