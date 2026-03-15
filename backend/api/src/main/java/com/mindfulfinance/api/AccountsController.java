@@ -88,18 +88,13 @@ public class AccountsController {
     @GetMapping("/accounts")
     public List<AccountDto> getAccounts() {
         return accountRepository.findAll().stream()
-            .filter(account -> personalFinanceCardRepository.findByLinkedAccountId(account.id())
-                .map(card -> card.isActive())
-                .orElse(true))
+            .filter(account -> personalFinanceCardRepository.findByLinkedAccountId(account.id()).isEmpty())
             .map(account -> new AccountDto(
                 account.id().value().toString(),
                 account.name(),
                 account.currency().getCurrencyCode(),
                 account.type().name(),
-                account.status().name(),
-                personalFinanceCardRepository.findByLinkedAccountId(account.id())
-                    .map(card -> card.id().value().toString())
-                    .orElse(null)
+                account.status().name()
             ))
             .toList();
     }
@@ -110,8 +105,7 @@ public class AccountsController {
         @RequestBody CreateTransactionRequest req
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        Account account = requireAccount(parsedAccountId);
-        rejectLinkedPersonalFinanceAccount(parsedAccountId);
+        Account account = requireInvestmentAccount(parsedAccountId);
 
         Transaction tx = new Transaction(
             TransactionId.random(),
@@ -132,7 +126,7 @@ public class AccountsController {
     @GetMapping("/accounts/{accountId}/transactions")
     public List<TransactionDto> getTransactions(@PathVariable("accountId") String accountId) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        requireAccount(parsedAccountId);
+        requireInvestmentAccount(parsedAccountId);
 
         return transactionRepository.findByAccountId(parsedAccountId).stream()
             .map(tx -> new TransactionDto(
@@ -153,8 +147,7 @@ public class AccountsController {
         @RequestBody UpdateTransactionRequest req
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        Account account = requireAccount(parsedAccountId);
-        rejectLinkedPersonalFinanceAccount(parsedAccountId);
+        Account account = requireInvestmentAccount(parsedAccountId);
         TransactionId parsedTransactionId = parseTransactionId(transactionId);
 
         boolean updated = updateTransaction.update(new UpdateTransaction.Command(
@@ -180,8 +173,7 @@ public class AccountsController {
         @RequestParam("file") MultipartFile file
     ) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        requireAccount(parsedAccountId);
-        rejectLinkedPersonalFinanceAccount(parsedAccountId);
+        requireInvestmentAccount(parsedAccountId);
 
         List<ImportTransactions.Row> rows = TransactionsCsvParser.parse(file);
         ImportTransactions.Result result = importTransactions.importRows(parsedAccountId, rows);
@@ -197,7 +189,7 @@ public class AccountsController {
     @GetMapping("/accounts/{accountId}/balance")
     public MoneyDto getBalance(@PathVariable("accountId") String accountId) {
         AccountId parsedAccountId = parseAccountId(accountId);
-        requireAccount(parsedAccountId);
+        requireInvestmentAccount(parsedAccountId);
         Money balance = computeAccountBalance.compute(parsedAccountId);
         return toMoneyDto(balance);
     }
@@ -253,10 +245,12 @@ public class AccountsController {
             .orElseThrow(() -> new AccountNotFoundException("Account not found"));
     }
 
-    private void rejectLinkedPersonalFinanceAccount(AccountId accountId) {
+    private Account requireInvestmentAccount(AccountId accountId) {
+        Account account = requireAccount(accountId);
         if (personalFinanceCardRepository.findByLinkedAccountId(accountId).isPresent()) {
-            throw new IllegalStateException("Linked personal finance accounts are read-only in Investments");
+            throw new AccountNotFoundException("Account not found");
         }
+        return account;
     }
 
     private static AccountId parseAccountId(String accountId) {
@@ -290,8 +284,7 @@ public class AccountsController {
         String name,
         String currency,
         String type,
-        String status,
-        String linkedPersonalFinanceCardId
+        String status
     ) {}
 
     public record CreateTransactionRequest(
