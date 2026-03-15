@@ -753,7 +753,7 @@ function SettingsDetails({
         <MetricTile
           label="Годовой лимит"
           value={formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
-          hint="Сумма категорий, которые сравниваются только в итогах года."
+          hint="Полный бюджет на год: месячные категории умножаются на 12, годовые добавляются сверху."
         />
       </section>
 
@@ -2178,8 +2178,15 @@ function calculateConfiguredLimitTotals(
 
   return {
     monthlyLimitTotal: sumDecimalAmountStrings(monthlyValues),
-    annualLimitTotal: sumDecimalAmountStrings(annualValues),
+    annualLimitTotal: sumDecimalAmountStrings([
+      ...annualValues,
+      ...monthlyValues.map((value) => multiplyDecimalAmount(value, 12)),
+    ]),
   }
+}
+
+function multiplyDecimalAmount(value: string, factor: number): string {
+  return (Number.parseFloat(value || '0') * factor).toFixed(2)
 }
 
 function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedExpensesViewModel {
