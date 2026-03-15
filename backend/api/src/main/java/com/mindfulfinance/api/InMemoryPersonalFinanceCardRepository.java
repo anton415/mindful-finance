@@ -37,4 +37,9 @@ public final class InMemoryPersonalFinanceCardRepository implements PersonalFina
     public void save(PersonalFinanceCard card) {
         store.put(card.id(), card);
     }
+
+    @Override
+    public void delete(PersonalFinanceCardId id) {
+        store.remove(id);
+    }
 }

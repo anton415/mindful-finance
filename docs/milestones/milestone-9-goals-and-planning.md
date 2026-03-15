@@ -65,3 +65,6 @@
 - Keep planning formulas explicit and explainable.
 - Annual `Personal Finance` manual review keeps one shared truth-ledger: each personal-finance card owns a linked `CASH` account, baseline amount is represented as a synthetic ledger transaction, and monthly actual income/expense upserts synthetic account transactions instead of introducing a second ledger.
 - Recurring limits and recurring income template are card-scoped non-versioned defaults in `v1`; they repeat across months and years for review purposes, while only actual income/expense changes the linked account balance and Peace metrics.
+- Decision (2026-03-14): renaming a personal-finance card also renames its linked `CASH` account so `Личные финансы` and `Инвестиции` stay consistent.
+- Decision (2026-03-14): personal-finance card archive and hard delete are separate actions. `Archive` preserves card-scoped data and synthetic linked-account transactions, archives the linked `CASH` account, hides that account from the standard Investments list, and makes the card read-only until restore.
+- Decision (2026-03-14): `Delete permanently` is a hard delete available for both active and archived cards; it removes the personal-finance card, its card-scoped review data, every transaction of the linked `CASH` account, and then the linked account itself.

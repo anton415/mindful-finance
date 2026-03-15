@@ -15,4 +15,6 @@ public interface PersonalFinanceCardRepository {
     List<PersonalFinanceCard> findAll();
 
     void save(PersonalFinanceCard card);
+
+    void delete(PersonalFinanceCardId id);
 }

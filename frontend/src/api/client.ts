@@ -16,6 +16,7 @@ import type {
   TransactionDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
 } from './types'
@@ -49,6 +50,11 @@ export interface ApiClient {
     request: CreatePersonalFinanceCardRequest,
     signal?: AbortSignal,
   ): Promise<CreatePersonalFinanceCardResponse>
+  updatePersonalFinanceCard(
+    cardId: string,
+    request: UpdatePersonalFinanceCardRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
   getPersonalFinanceSnapshot(
     cardId: string,
     year: number,
@@ -71,6 +77,9 @@ export interface ApiClient {
     request: UpdatePersonalFinanceSettingsRequest,
     signal?: AbortSignal,
   ): Promise<void>
+  archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
+  restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
+  deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
 }
 
 export function createApiClient(config: HttpClientConfig = {}): ApiClient {
@@ -169,6 +178,18 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       )
     },
 
+    updatePersonalFinanceCard(
+      cardId: string,
+      request: UpdatePersonalFinanceCardRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdatePersonalFinanceCardRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`,
+        request,
+        { signal },
+      )
+    },
+
     getPersonalFinanceSnapshot(
       cardId: string,
       year: number,
@@ -216,6 +237,18 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
         request,
         { signal },
       )
+    },
+
+    archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/archive`, { signal })
+    },
+
+    restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/restore`, { signal })
+    },
+
+    deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
+      return http.deleteVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`, { signal })
     },
   }
 }

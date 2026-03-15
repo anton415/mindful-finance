@@ -24,4 +24,6 @@ public interface AccountRepository {
      * Retrieves all accounts from the repository.
      */
     List<Account> findAll();
+
+    void delete(AccountId id);
 }

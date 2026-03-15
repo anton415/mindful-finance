@@ -13,6 +13,7 @@ import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
 import static com.mindfulfinance.domain.account.AccountType.CASH;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
+import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
 
 public final class CreatePersonalFinanceCard {
     private static final Currency RUB = Currency.getInstance("RUB");
@@ -48,7 +49,8 @@ public final class CreatePersonalFinanceCard {
             PersonalFinanceCardId.random(),
             command.name(),
             linkedAccount.id(),
-            createdAt
+            createdAt,
+            PersonalFinanceCardStatus.ACTIVE
         );
         repository.save(card);
         return card;

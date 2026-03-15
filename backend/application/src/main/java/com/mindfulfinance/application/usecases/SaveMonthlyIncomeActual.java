@@ -15,6 +15,7 @@ public final class SaveMonthlyIncomeActual {
     private static final Currency RUB = Currency.getInstance("RUB");
 
     private final MonthlyIncomeActualRepository repository;
+    private final PersonalFinanceCardRepository cardRepository;
     private final PersonalFinanceLinkedAccountLedger linkedAccountLedger;
 
     public SaveMonthlyIncomeActual(
@@ -23,11 +24,13 @@ public final class SaveMonthlyIncomeActual {
         TransactionRepository transactionRepository
     ) {
         this.repository = repository;
+        this.cardRepository = cardRepository;
         this.linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(cardRepository, transactionRepository);
     }
 
     public MonthlyIncomeActual save(Command command) {
         Objects.requireNonNull(command, "command");
+        PersonalFinanceCardStateGuard.requireMutableCard(cardRepository, command.cardId());
 
         MonthlyIncomeActual summary = new MonthlyIncomeActual(
             command.cardId(),

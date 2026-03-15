@@ -25,13 +25,17 @@ import com.mindfulfinance.application.ports.MonthlyIncomeActualRepository;
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.ArchivePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.DeletePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
+import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.RestorePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.SaveIncomeForecast;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
@@ -193,6 +197,43 @@ public class ApiWiringConfig {
         AccountRepository accountRepository
     ) {
         return new CreatePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
+    }
+
+    @Bean
+    public RenamePersonalFinanceCard renamePersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository
+    ) {
+        return new RenamePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
+    }
+
+    @Bean
+    public ArchivePersonalFinanceCard archivePersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository
+    ) {
+        return new ArchivePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
+    }
+
+    @Bean
+    public RestorePersonalFinanceCard restorePersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository
+    ) {
+        return new RestorePersonalFinanceCard(personalFinanceCardRepository, accountRepository);
+    }
+
+    @Bean
+    public DeletePersonalFinanceCard deletePersonalFinanceCard(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        AccountRepository accountRepository,
+        TransactionRepository transactionRepository
+    ) {
+        return new DeletePersonalFinanceCard(
+            personalFinanceCardRepository,
+            accountRepository,
+            transactionRepository
+        );
     }
 
     @Bean

@@ -18,6 +18,7 @@ public final class SaveMonthlyExpenseActual {
     private static final Currency RUB = Currency.getInstance("RUB");
 
     private final MonthlyExpenseActualRepository repository;
+    private final PersonalFinanceCardRepository cardRepository;
     private final PersonalFinanceLinkedAccountLedger linkedAccountLedger;
 
     public SaveMonthlyExpenseActual(
@@ -26,12 +27,14 @@ public final class SaveMonthlyExpenseActual {
         TransactionRepository transactionRepository
     ) {
         this.repository = repository;
+        this.cardRepository = cardRepository;
         this.linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(cardRepository, transactionRepository);
     }
 
     public MonthlyExpenseActual save(Command command) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(command.categoryAmounts(), "categoryAmounts");
+        PersonalFinanceCardStateGuard.requireMutableCard(cardRepository, command.cardId());
 
         Map<PersonalExpenseCategory, Money> amounts = new EnumMap<>(PersonalExpenseCategory.class);
         for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {

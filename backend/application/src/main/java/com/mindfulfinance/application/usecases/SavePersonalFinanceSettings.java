@@ -21,6 +21,7 @@ public final class SavePersonalFinanceSettings {
 
     private final MonthlyExpenseLimitRepository expenseLimitRepository;
     private final IncomeForecastRepository incomeForecastRepository;
+    private final PersonalFinanceCardRepository cardRepository;
     private final PersonalFinanceLinkedAccountLedger linkedAccountLedger;
 
     public SavePersonalFinanceSettings(
@@ -31,12 +32,14 @@ public final class SavePersonalFinanceSettings {
     ) {
         this.expenseLimitRepository = expenseLimitRepository;
         this.incomeForecastRepository = incomeForecastRepository;
+        this.cardRepository = cardRepository;
         this.linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(cardRepository, transactionRepository);
     }
 
     public void save(Command command) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(command.limitCategoryAmounts(), "limitCategoryAmounts");
+        PersonalFinanceCardStateGuard.requireMutableCard(cardRepository, command.cardId());
 
         Map<PersonalExpenseCategory, Money> limitAmounts = new EnumMap<>(PersonalExpenseCategory.class);
         for (PersonalExpenseCategory category : PersonalExpenseCategory.values()) {
