@@ -104,7 +104,11 @@ function App() {
   const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
   const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
   const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardListItem[]>([])
-  const [personalFinanceSnapshot, setPersonalFinanceSnapshot] = useState<PersonalFinanceSnapshotDto | null>(null)
+  const [activePersonalFinanceSnapshots, setActivePersonalFinanceSnapshots] = useState<
+    PersonalFinanceSnapshotDto[]
+  >([])
+  const [selectedPersonalFinanceSettingsSnapshot, setSelectedPersonalFinanceSettingsSnapshot] =
+    useState<PersonalFinanceSnapshotDto | null>(null)
   const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
   const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
 
@@ -293,54 +297,19 @@ function App() {
           setPersonalFinanceCards([])
           setActivePersonalFinanceTab('settings')
           setSelectedPersonalFinanceCardId(null)
-          setPersonalFinanceSnapshot(null)
+          setActivePersonalFinanceSnapshots([])
+          setSelectedPersonalFinanceSettingsSnapshot(null)
           setPersonalFinanceStatus('ready')
           return
         }
 
-        const resolvedCardId =
-          selectedPersonalFinanceCardId && cards.some((card) => card.id === selectedPersonalFinanceCardId)
-            ? selectedPersonalFinanceCardId
-            : (activeCards[0]?.id ?? null)
-
+        const resolvedCardId = resolvePersonalFinanceSelection(cards, selectedPersonalFinanceCardId)
         if (resolvedCardId !== selectedPersonalFinanceCardId) {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
-        if (!resolvedCardId) {
-          setPersonalFinanceCards(enrichPersonalFinanceCards(cards))
-          setPersonalFinanceSnapshot(null)
-          setPersonalFinanceStatus('ready')
-          return
-        }
-
-        const selectedSnapshot = await apiClient.getPersonalFinanceSnapshot(
-          resolvedCardId,
-          selectedPersonalFinanceYear,
-          controller.signal,
-        )
-
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setPersonalFinanceCards(
-          enrichPersonalFinanceCards(cards, new Map([
-            [
-              selectedSnapshot.card.id,
-              {
-                currentBalance: selectedSnapshot.settings.currentBalance,
-                currency: selectedSnapshot.currency,
-              },
-            ],
-          ])),
-        )
-        setPersonalFinanceSnapshot(selectedSnapshot)
-        setPersonalFinanceStatus('ready')
-
-        const otherCards = cards.filter((card) => card.id !== resolvedCardId)
-        const otherSnapshotResults = await Promise.allSettled(
-          otherCards.map((card) =>
+        const activeSnapshotResults = await Promise.allSettled(
+          activeCards.map((card) =>
             apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
           ),
         )
@@ -349,36 +318,53 @@ function App() {
           return
         }
 
-        const summaryByCardId = new Map<
-          string,
-          {
-            currentBalance: string | null
-            currency: string | null
-          }
-        >([
-          [
-            selectedSnapshot.card.id,
-            {
-              currentBalance: selectedSnapshot.settings.currentBalance,
-              currency: selectedSnapshot.currency,
-            },
-          ],
-        ])
-
-        otherSnapshotResults.forEach((result, index) => {
-          if (result.status !== 'fulfilled') {
-            return
-          }
-
-          summaryByCardId.set(otherCards[index].id, {
-            currentBalance: result.value.settings.currentBalance,
-            currency: result.value.currency,
-          })
-        })
-
-        setPersonalFinanceCards(
-          enrichPersonalFinanceCards(cards, summaryByCardId),
+        const activeSnapshots = activeSnapshotResults.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
         )
+        const settingsCardId = resolvePersonalFinanceSettingsSelection(
+          cards,
+          resolvedCardId,
+          activeSnapshots,
+        )
+
+        if (settingsCardId !== selectedPersonalFinanceCardId) {
+          setSelectedPersonalFinanceCardId(settingsCardId)
+        }
+
+        let settingsSnapshot =
+          activeSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
+
+        if (!settingsSnapshot && settingsCardId) {
+          const settingsSnapshotResult = await Promise.allSettled([
+            apiClient.getPersonalFinanceSnapshot(
+              settingsCardId,
+              selectedPersonalFinanceYear,
+              controller.signal,
+            ),
+          ])
+          const fulfilledSettingsSnapshot = settingsSnapshotResult[0]
+          if (fulfilledSettingsSnapshot?.status === 'fulfilled') {
+            settingsSnapshot = fulfilledSettingsSnapshot.value
+          }
+        }
+
+        if (controller.signal.aborted) {
+          return
+        }
+
+        const mergedActiveSnapshots =
+          settingsSnapshot &&
+          settingsSnapshot.card.status === 'ACTIVE' &&
+          !activeSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
+            ? [...activeSnapshots, settingsSnapshot]
+            : activeSnapshots
+
+        setActivePersonalFinanceSnapshots(mergedActiveSnapshots)
+        setSelectedPersonalFinanceSettingsSnapshot(settingsSnapshot)
+        setPersonalFinanceCards(
+          enrichPersonalFinanceCards(cards, buildPersonalFinanceCardSummary(mergedActiveSnapshots, settingsSnapshot)),
+        )
+        setPersonalFinanceStatus('ready')
       } catch (error) {
         if (controller.signal.aborted) {
           return
@@ -420,9 +406,11 @@ function App() {
   const localizedDescription = getViewDescription(activeView)
   const headerContextLabel =
     activeView === 'personal-finance'
-      ? personalFinanceSnapshot?.card
-        ? `${personalFinanceSnapshot.card.name} · ${selectedPersonalFinanceYear}`
-        : `Год ${selectedPersonalFinanceYear}`
+      ? activePersonalFinanceTab === 'settings'
+        ? selectedPersonalFinanceSettingsSnapshot?.card
+          ? `${selectedPersonalFinanceSettingsSnapshot.card.name} · ${selectedPersonalFinanceYear}`
+          : `Год ${selectedPersonalFinanceYear}`
+        : `Все активные карты · ${selectedPersonalFinanceYear}`
       : dashboard
         ? `На дату ${formatIsoDateRu(dashboard.asOf)}`
         : 'На сегодня'
@@ -542,15 +530,12 @@ function App() {
   }
 
   const handleSaveExpenseActual = async (
+    cardId: string,
     month: number,
     request: UpdateMonthlyExpenseRequest,
   ): Promise<boolean> => {
-    if (!selectedPersonalFinanceCardId) {
-      return false
-    }
-
     try {
-      await apiClient.updateMonthlyExpenseActual(selectedPersonalFinanceCardId, month, request)
+      await apiClient.updateMonthlyExpenseActual(cardId, month, request)
       refreshPersonalFinanceDerivedViews()
       return true
     } catch {
@@ -559,16 +544,17 @@ function App() {
   }
 
   const handleSaveIncomeActual = async (
+    cardId: string,
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
   ): Promise<boolean> => {
-    if (!selectedPersonalFinanceCardId) {
+    if (cardId.trim().length === 0) {
       return false
     }
 
     try {
       await apiClient.updateMonthlyIncomeActual(
-        selectedPersonalFinanceCardId,
+        cardId,
         month,
         request,
       )
@@ -648,11 +634,7 @@ function App() {
   }
 
   return (
-    <main
-      className={`mx-auto min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14 ${
-        activeView === 'personal-finance' ? 'max-w-screen-2xl' : 'max-w-5xl'
-      }`}
-    >
+    <main className="min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14">
       <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -700,7 +682,8 @@ function App() {
             <PersonalFinanceView
               status={personalFinanceStatus}
               cards={personalFinanceCards}
-              snapshot={personalFinanceSnapshot}
+              activeSnapshots={activePersonalFinanceSnapshots}
+              settingsSnapshot={selectedPersonalFinanceSettingsSnapshot}
               selectedCardId={selectedPersonalFinanceCardId}
               activeTab={activePersonalFinanceTab}
               year={selectedPersonalFinanceYear}
@@ -1708,6 +1691,73 @@ function enrichPersonalFinanceCards(
       currency: summary?.currency ?? null,
     }
   })
+}
+
+function resolvePersonalFinanceSelection(
+  cards: PersonalFinanceCardDto[],
+  selectedCardId: string | null,
+): string | null {
+  if (selectedCardId && cards.some((card) => card.id === selectedCardId)) {
+    return selectedCardId
+  }
+
+  return cards.find((card) => card.status === 'ACTIVE')?.id ?? cards[0]?.id ?? null
+}
+
+function buildPersonalFinanceCardSummary(
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+  settingsSnapshot: PersonalFinanceSnapshotDto | null,
+): Map<
+  string,
+  {
+    currentBalance: string | null
+    currency: string | null
+  }
+> {
+  const summaryByCardId = new Map<
+    string,
+    {
+      currentBalance: string | null
+      currency: string | null
+    }
+  >()
+
+  activeSnapshots.forEach((snapshot) => {
+    summaryByCardId.set(snapshot.card.id, {
+      currentBalance: snapshot.settings.currentBalance,
+      currency: snapshot.currency,
+    })
+  })
+
+  if (settingsSnapshot && !summaryByCardId.has(settingsSnapshot.card.id)) {
+    summaryByCardId.set(settingsSnapshot.card.id, {
+      currentBalance: settingsSnapshot.settings.currentBalance,
+      currency: settingsSnapshot.currency,
+    })
+  }
+
+  return summaryByCardId
+}
+
+function resolvePersonalFinanceSettingsSelection(
+  cards: PersonalFinanceCardDto[],
+  resolvedCardId: string | null,
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+): string | null {
+  const resolvedCard = cards.find((card) => card.id === resolvedCardId) ?? null
+  if (!resolvedCard) {
+    return activeSnapshots[0]?.card.id ?? cards[0]?.id ?? null
+  }
+
+  if (resolvedCard.status === 'ARCHIVED') {
+    return resolvedCard.id
+  }
+
+  if (activeSnapshots.some((snapshot) => snapshot.card.id === resolvedCard.id)) {
+    return resolvedCard.id
+  }
+
+  return activeSnapshots[0]?.card.id ?? resolvedCard.id
 }
 
 function getAccountCurrencyOptions(): string[] {

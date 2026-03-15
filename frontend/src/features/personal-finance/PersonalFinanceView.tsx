@@ -4,7 +4,6 @@ import type {
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
-  PersonalFinanceIncomeForecastDto,
   PersonalFinanceSnapshotDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
@@ -19,10 +18,53 @@ export interface PersonalFinanceCardListItem extends PersonalFinanceCardDto {
   currency: string | null
 }
 
+interface AggregatedExpenseMonthViewModel {
+  month: number
+  actualCategoryAmounts: Record<PersonalExpenseCategoryCode, string>
+  limitCategoryAmounts: Record<PersonalExpenseCategoryCode, string>
+  actualTotal: string
+  limitTotal: string
+}
+
+interface AggregatedExpensesViewModel {
+  categories: PersonalExpenseCategoryDto[]
+  currency: string
+  recurringLimitCategoryAmounts: Record<PersonalExpenseCategoryCode, string>
+  months: AggregatedExpenseMonthViewModel[]
+  actualTotalsByCategory: Record<PersonalExpenseCategoryCode, string>
+  limitTotalsByCategory: Record<PersonalExpenseCategoryCode, string>
+  annualActualTotal: string
+  annualLimitTotal: string
+  averageMonthlyActualTotal: string
+}
+
+export type AggregatedIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'MIXED' | null
+
+interface AggregatedIncomeMonthViewModel {
+  month: number
+  totalAmount: string
+  status: AggregatedIncomeMonthStatus
+}
+
+interface AggregatedIncomeSummaryViewModel {
+  totalAmount: string
+  activeCardCount: number
+  cardsWithForecast: number
+}
+
+interface AggregatedIncomeViewModel {
+  currency: string
+  months: AggregatedIncomeMonthViewModel[]
+  annualTotal: string
+  averageMonthlyTotal: string
+  recurringForecast: AggregatedIncomeSummaryViewModel
+}
+
 interface PersonalFinanceViewProps {
   status: LoadStatus
   cards: PersonalFinanceCardListItem[]
-  snapshot: PersonalFinanceSnapshotDto | null
+  activeSnapshots: PersonalFinanceSnapshotDto[]
+  settingsSnapshot: PersonalFinanceSnapshotDto | null
   selectedCardId: string | null
   activeTab: PersonalFinanceTab
   year: number
@@ -32,8 +74,16 @@ interface PersonalFinanceViewProps {
   onSelectCard: (cardId: string) => void
   onRetry: () => void
   onCreateCard: (request: CreatePersonalFinanceCardRequest) => Promise<boolean>
-  onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
-  onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onSaveExpenseActual: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ) => Promise<boolean>
+  onSaveIncomeActual: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+  ) => Promise<boolean>
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
   onArchiveCard: (cardId: string) => Promise<boolean>
@@ -67,17 +117,17 @@ interface PersonalFinanceTabCopy {
 const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCopy> = {
   expenses: {
     title: 'Фактические расходы',
-    description: 'Добавляйте расходы через панель справа, не теряя из виду годовую таблицу.',
+    description: 'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
     actionLabel: '+ Добавить расходы',
     panelTitle: 'Добавить фактические расходы',
-    panelDescription: 'Выберите месяц и сохраните факт по категориям для выбранной карты.',
+    panelDescription: 'Выберите карту и месяц, чтобы сохранить фактические расходы по категориям.',
   },
   income: {
     title: 'Фактические доходы',
-    description: 'Добавляйте доходы через панель справа, не теряя из виду годовую таблицу.',
+    description: 'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
     actionLabel: '+ Добавить доходы',
     panelTitle: 'Добавить фактический доход',
-    panelDescription: 'Сохраните итоговый доход за выбранный месяц, не скрывая годовой обзор.',
+    panelDescription: 'Выберите карту и месяц, чтобы сохранить итоговый доход без потери годового обзора.',
   },
   settings: {
     title: 'Настройки карты',
@@ -91,7 +141,8 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
 export function PersonalFinanceView({
   status,
   cards,
-  snapshot,
+  activeSnapshots,
+  settingsSnapshot,
   selectedCardId,
   activeTab,
   year,
@@ -130,10 +181,13 @@ export function PersonalFinanceView({
   const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
   const hasAnyCards = cards.length > 0
   const hasActiveCards = activeCards.length > 0
-  const selectedCard = snapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
+  const hasLoadedActiveSnapshots = activeSnapshots.length > 0
+  const selectedCard = settingsSnapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
   const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
   const yearOptions = selectableYearOptions(year)
-  const canOpenActionPanel = activeTab === 'settings' || Boolean(snapshot && snapshot.card.status === 'ACTIVE')
+  const canOpenActionPanel = activeTab === 'settings' || hasLoadedActiveSnapshots
+  const aggregatedExpenses = hasLoadedActiveSnapshots ? aggregateExpenses(activeSnapshots) : null
+  const aggregatedIncome = hasLoadedActiveSnapshots ? aggregateIncome(activeSnapshots) : null
 
   const handleTabSelect = (tab: PersonalFinanceTab): void => {
     setIsActionPanelOpen(false)
@@ -179,11 +233,13 @@ export function PersonalFinanceView({
           </label>
         </div>
 
-        <PersonalFinanceCardSelector
-          cards={cards}
-          selectedCardId={selectedCard?.id ?? null}
-          onSelectCard={handleCardSelect}
-        />
+        {activeTab === 'settings' ? (
+          <PersonalFinanceCardSelector
+            cards={cards}
+            selectedCardId={selectedCard?.id ?? null}
+            onSelectCard={handleCardSelect}
+          />
+        ) : null}
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 lg:p-5">
@@ -192,13 +248,11 @@ export function PersonalFinanceView({
             <NestedTabButton
               label="Расходы"
               isActive={activeTab === 'expenses'}
-              disabled={!snapshot}
               onClick={() => handleTabSelect('expenses')}
             />
             <NestedTabButton
               label="Доходы"
               isActive={activeTab === 'income'}
-              disabled={!snapshot}
               onClick={() => handleTabSelect('income')}
             />
             <NestedTabButton
@@ -224,22 +278,50 @@ export function PersonalFinanceView({
         </div>
       </section>
 
-      {snapshot?.card.status === 'ARCHIVED' ? (
-        <ArchivedCardBanner cardName={snapshot.card.name} />
+      {activeTab === 'settings' && settingsSnapshot?.card.status === 'ARCHIVED' ? (
+        <ArchivedCardBanner cardName={settingsSnapshot.card.name} />
       ) : null}
 
-      {!hasActiveCards && !snapshot ? (
-        <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
-      ) : !snapshot ? (
-        <InlineStatus tone="neutral" message="Выберите карту, чтобы загрузить данные." />
-      ) : activeTab === 'expenses' ? (
-        <ExpensesTab key={`expenses-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
+      {activeTab === 'expenses' ? (
+        aggregatedExpenses ? (
+          <ExpensesTab key={`expenses-${year}-${activeCards.length}`} aggregate={aggregatedExpenses} />
+        ) : hasActiveCards ? (
+          <InlineStatus
+            tone="warning"
+            message="Не удалось полностью загрузить данные активных карт. Откройте настройки нужной карты или повторите попытку."
+            actionLabel="Повторить"
+            onAction={onRetry}
+          />
+        ) : (
+          <PersonalFinanceAggregateEmptyState
+            tabLabel="расходов"
+            hasArchivedCards={archivedCards.length > 0}
+          />
+        )
       ) : activeTab === 'income' ? (
-        <IncomeTab key={`income-${snapshot.card.id}-${snapshot.year}`} snapshot={snapshot} />
+        aggregatedIncome ? (
+          <IncomeTab key={`income-${year}-${activeCards.length}`} aggregate={aggregatedIncome} />
+        ) : hasActiveCards ? (
+          <InlineStatus
+            tone="warning"
+            message="Не удалось полностью загрузить данные активных карт. Откройте настройки нужной карты или повторите попытку."
+            actionLabel="Повторить"
+            onAction={onRetry}
+          />
+        ) : (
+          <PersonalFinanceAggregateEmptyState
+            tabLabel="доходов"
+            hasArchivedCards={archivedCards.length > 0}
+          />
+        )
+      ) : !hasAnyCards ? (
+        <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
+      ) : !settingsSnapshot ? (
+        <InlineStatus tone="neutral" message="Выберите карту, чтобы открыть настройки." />
       ) : (
         <SettingsTab
-          key={`settings-${snapshot.card.id}-${snapshot.card.name}-${snapshot.year}-${snapshot.settings.currentBalance}`}
-          snapshot={snapshot}
+          key={`settings-${settingsSnapshot.card.id}-${settingsSnapshot.card.name}-${settingsSnapshot.year}-${settingsSnapshot.settings.currentBalance}`}
+          snapshot={settingsSnapshot}
           onRenameCard={onRenameCard}
           onSaveSettings={onSaveSettings}
           onArchiveCard={onArchiveCard}
@@ -254,16 +336,18 @@ export function PersonalFinanceView({
           description={activeTabCopy.panelDescription}
           onClose={() => setIsActionPanelOpen(false)}
         >
-          {activeTab === 'expenses' && snapshot && snapshot.card.status === 'ACTIVE' ? (
+          {activeTab === 'expenses' && hasLoadedActiveSnapshots ? (
             <ExpenseEntryDrawerPanel
-              snapshot={snapshot}
+              activeSnapshots={activeSnapshots}
+              preferredCardId={selectedCardId}
               onSaveExpenseActual={onSaveExpenseActual}
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
-          {activeTab === 'income' && snapshot && snapshot.card.status === 'ACTIVE' ? (
+          {activeTab === 'income' && hasLoadedActiveSnapshots ? (
             <IncomeEntryDrawerPanel
-              snapshot={snapshot}
+              activeSnapshots={activeSnapshots}
+              preferredCardId={selectedCardId}
               onSaveIncomeActual={onSaveIncomeActual}
               onClose={() => setIsActionPanelOpen(false)}
             />
@@ -281,39 +365,53 @@ export function PersonalFinanceView({
 }
 
 interface ExpensesTabProps {
-  snapshot: PersonalFinanceSnapshotDto
+  aggregate: AggregatedExpensesViewModel
 }
 
-function ExpensesTab({ snapshot }: ExpensesTabProps) {
-  return <ExpenseReviewTable snapshot={snapshot} />
+function ExpensesTab({ aggregate }: ExpensesTabProps) {
+  return <ExpenseReviewTable aggregate={aggregate} />
 }
 
 interface ExpenseEntryDrawerPanelProps {
-  snapshot: PersonalFinanceSnapshotDto
-  onSaveExpenseActual: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
+  activeSnapshots: PersonalFinanceSnapshotDto[]
+  preferredCardId: string | null
+  onSaveExpenseActual: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ) => Promise<boolean>
   onClose: () => void
 }
 
 function ExpenseEntryDrawerPanel({
-  snapshot,
+  activeSnapshots,
+  preferredCardId,
   onSaveExpenseActual,
   onClose,
 }: ExpenseEntryDrawerPanelProps) {
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
+  const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
+  const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
+  const selectedSnapshot =
+    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
   const selectedMonthData =
-    snapshot.expenses.months.find((month) => month.month === selectedMonth) ?? snapshot.expenses.months[0]
+    selectedSnapshot.expenses.months.find((month) => month.month === selectedMonth) ??
+    selectedSnapshot.expenses.months[0]
 
   return (
     <ExpenseEntryFormCard
-      key={`actual-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, snapshot.categories)}`}
+      key={`actual-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, selectedSnapshot.categories)}`}
       title="Расходы по категориям"
       description="Лимиты здесь не задаются. Они живут на вкладке настроек и повторяются одинаково каждый месяц."
       submitLabel="Сохранить факт"
+      cards={activeSnapshots.map((snapshot) => snapshot.card)}
+      selectedCardId={selectedSnapshot.card.id}
+      onSelectCard={setSelectedCardId}
       selectedMonth={selectedMonth}
       onSelectMonth={setSelectedMonth}
-      year={snapshot.year}
-      currency={snapshot.currency}
-      categories={snapshot.categories}
+      year={selectedSnapshot.year}
+      currency={selectedSnapshot.currency}
+      categories={selectedSnapshot.categories}
       initialValues={selectedMonthData.actualCategoryAmounts}
       onSave={onSaveExpenseActual}
       onSaved={onClose}
@@ -322,42 +420,53 @@ function ExpenseEntryDrawerPanel({
 }
 
 interface IncomeTabProps {
-  snapshot: PersonalFinanceSnapshotDto
+  aggregate: AggregatedIncomeViewModel
 }
 
-function IncomeTab({ snapshot }: IncomeTabProps) {
+function IncomeTab({ aggregate }: IncomeTabProps) {
   return (
     <div className="space-y-4">
-      <RecurringIncomeSummaryCard
-        currency={snapshot.currency}
-        forecast={snapshot.settings.incomeForecast}
-      />
+      <RecurringIncomeSummaryCard currency={aggregate.currency} summary={aggregate.recurringForecast} />
 
-      <IncomeReviewTable snapshot={snapshot} />
+      <IncomeReviewTable aggregate={aggregate} />
     </div>
   )
 }
 
 interface IncomeEntryDrawerPanelProps {
-  snapshot: PersonalFinanceSnapshotDto
-  onSaveIncomeActual: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  activeSnapshots: PersonalFinanceSnapshotDto[]
+  preferredCardId: string | null
+  onSaveIncomeActual: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+  ) => Promise<boolean>
   onClose: () => void
 }
 
 function IncomeEntryDrawerPanel({
-  snapshot,
+  activeSnapshots,
+  preferredCardId,
   onSaveIncomeActual,
   onClose,
 }: IncomeEntryDrawerPanelProps) {
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(snapshot.year))
+  const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
+  const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
+  const selectedSnapshot =
+    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
   const selectedMonthData =
-    snapshot.income.months.find((month) => month.month === selectedMonth) ?? snapshot.income.months[0]
+    selectedSnapshot.income.months.find((month) => month.month === selectedMonth) ??
+    selectedSnapshot.income.months[0]
 
   return (
     <IncomeActualFormCard
-      key={`actual-income-${snapshot.card.id}-${snapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
-      year={snapshot.year}
-      currency={snapshot.currency}
+      key={`actual-income-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
+      cards={activeSnapshots.map((snapshot) => snapshot.card)}
+      selectedCardId={selectedSnapshot.card.id}
+      onSelectCard={setSelectedCardId}
+      year={selectedSnapshot.year}
+      currency={selectedSnapshot.currency}
       selectedMonth={selectedMonth}
       onSelectMonth={setSelectedMonth}
       initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
@@ -393,6 +502,28 @@ function SettingsTab({
       onRestoreCard={onRestoreCard}
       onDeleteCard={onDeleteCard}
     />
+  )
+}
+
+function PersonalFinanceAggregateEmptyState({
+  tabLabel,
+  hasArchivedCards,
+}: {
+  tabLabel: string
+  hasArchivedCards: boolean
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-5">
+      <h3 className="text-base font-semibold text-slate-900">Нет активных карт для {tabLabel}</h3>
+      <p className="mt-2 text-sm text-slate-600">
+        Годовой обзор доходов и расходов строится только по активному personal finance контуру.
+      </p>
+      <p className="mt-3 text-sm text-slate-500">
+        {hasArchivedCards
+          ? 'Откройте вкладку настроек, чтобы вернуть карту из архива, или создайте новую карту.'
+          : 'Откройте вкладку настроек и добавьте первую карту, чтобы начать yearly review.'}
+      </p>
+    </section>
   )
 }
 
@@ -938,7 +1069,7 @@ function CreateCardDrawerPanel({
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-          <p className="text-sm text-slate-600">После создания карта сразу появится в селекторе слева.</p>
+          <p className="text-sm text-slate-600">После создания карта сразу появится в списке на вкладке настроек.</p>
           <button
             type="submit"
             disabled={newCardName.trim().length === 0 || status === 'submitting'}
@@ -956,33 +1087,30 @@ function CreateCardDrawerPanel({
 
 function RecurringIncomeSummaryCard({
   currency,
-  forecast,
+  summary,
 }: {
   currency: string
-  forecast: PersonalFinanceIncomeForecastDto | null
+  summary: AggregatedIncomeSummaryViewModel
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
       <h3 className="text-base font-semibold text-slate-900">Повторяющийся прогноз доходов</h3>
-      {forecast ? (
-        <div className="mt-3 grid gap-3 md:grid-cols-4">
-          <MetricTile
-            label="Оклад"
-            value={formatAmountWithCurrency(forecast.salaryAmount, currency)}
-          />
-          <MetricTile label="Премия" value={`${formatAmount(forecast.bonusPercent)}%`} />
-          <MetricTile
-            label="Премия в рублях"
-            value={formatAmountWithCurrency(forecast.bonusAmount, currency)}
-          />
+      {isPositiveAmount(summary.totalAmount) ? (
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <MetricTile
             label="Прогноз в месяц"
-            value={formatAmountWithCurrency(forecast.totalAmount, currency)}
+            value={formatAmountWithCurrency(summary.totalAmount, currency)}
+            hint="Сумма recurring forecast по всем активным картам."
+          />
+          <MetricTile
+            label="Карты с прогнозом"
+            value={`${summary.cardsWithForecast} из ${summary.activeCardCount}`}
+            hint="Карты без recurring forecast в сумме не участвуют."
           />
         </div>
       ) : (
         <p className="mt-2 text-sm text-slate-600">
-          Прогноз ещё не задан. Его можно настроить на вкладке настроек.
+          Повторяющийся прогноз ещё не задан ни для одной активной карты. Его можно настроить на вкладке настроек.
         </p>
       )}
     </section>
@@ -1007,7 +1135,7 @@ function PersonalFinanceCardSelector({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Карты личных финансов</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Выберите карту, чтобы открыть расходы, доходы и настройки.
+            Выберите карту, чтобы открыть её настройки, архив или linked balance.
           </p>
         </div>
       </div>
@@ -1145,17 +1273,51 @@ function MetricTile({
   )
 }
 
+function CardField({
+  cards,
+  selectedCardId,
+  onSelectCard,
+}: {
+  cards: PersonalFinanceCardDto[]
+  selectedCardId: string
+  onSelectCard: (cardId: string) => void
+}) {
+  return (
+    <label className="w-full text-sm text-slate-600 sm:max-w-72">
+      Карта
+      <select
+        value={selectedCardId}
+        onChange={(event) => onSelectCard(event.target.value)}
+        className={selectClassName()}
+      >
+        {cards.map((card) => (
+          <option key={card.id} value={card.id}>
+            {card.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 interface ExpenseEntryFormCardProps {
   title: string
   description: string
   submitLabel: string
+  cards: PersonalFinanceCardDto[]
+  selectedCardId: string
+  onSelectCard: (cardId: string) => void
   selectedMonth: number
   onSelectMonth: (month: number) => void
   year: number
   currency: string
   categories: PersonalExpenseCategoryDto[]
   initialValues: Record<PersonalExpenseCategoryCode, string>
-  onSave: (month: number, request: UpdateMonthlyExpenseRequest) => Promise<boolean>
+  onSave: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyExpenseRequest,
+  ) => Promise<boolean>
   onSaved?: () => void
 }
 
@@ -1163,6 +1325,9 @@ function ExpenseEntryFormCard({
   title,
   description,
   submitLabel,
+  cards,
+  selectedCardId,
+  onSelectCard,
   selectedMonth,
   onSelectMonth,
   year,
@@ -1194,7 +1359,7 @@ function ExpenseEntryFormCard({
     setStatus('submitting')
     setErrorMessage(null)
 
-    const saved = await onSave(selectedMonth, {
+    const saved = await onSave(selectedCardId, selectedMonth, {
       year,
       categoryAmounts: categories.reduce(
         (result, category) => ({
@@ -1222,20 +1387,23 @@ function ExpenseEntryFormCard({
           <h3 className="text-base font-semibold text-slate-900">{title}</h3>
           <p className="mt-1 text-sm text-slate-600">{description}</p>
         </div>
-        <label className="w-full text-sm text-slate-600 sm:max-w-64">
-          Месяц
-          <select
-            value={selectedMonth}
-            onChange={(event) => onSelectMonth(Number(event.target.value))}
-            className={selectClassName()}
-          >
-            {MONTH_LABELS.map((label, index) => (
-              <option key={label} value={index + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex w-full flex-col gap-3 lg:max-w-xl lg:flex-row">
+          <CardField cards={cards} selectedCardId={selectedCardId} onSelectCard={onSelectCard} />
+          <label className="w-full text-sm text-slate-600 sm:max-w-64">
+            Месяц
+            <select
+              value={selectedMonth}
+              onChange={(event) => onSelectMonth(Number(event.target.value))}
+              className={selectClassName()}
+            >
+              {MONTH_LABELS.map((label, index) => (
+                <option key={label} value={index + 1}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <form
@@ -1353,19 +1521,19 @@ function DrawerShell({
   )
 }
 
-function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
+function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewModel }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица расходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Факт вводится по месяцам, а лимит повторяется из настроек для каждой строки одинаково.
+          Факт и лимиты суммируются по всем активным картам для каждого месяца и каждой категории.
         </p>
       </div>
 
       <div className="lg:hidden">
         <div className="space-y-3 p-4">
-          {snapshot.expenses.months.map((month) => (
+          {aggregate.months.map((month) => (
             <article key={month.month} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1377,7 +1545,7 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
               </div>
 
               <div className="mt-4 space-y-2">
-                {snapshot.categories.map((category) => {
+                {aggregate.categories.map((category) => {
                   const actual = month.actualCategoryAmounts[category.code]
                   const limit = month.limitCategoryAmounts[category.code]
                   const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
@@ -1413,14 +1581,14 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
           <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-900">Итоги года</h4>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {snapshot.categories.map((category) => (
+              {aggregate.categories.map((category) => (
                 <div key={category.code} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <p className="text-sm font-medium text-slate-900">{category.label}</p>
                   <p className="mt-2 text-xs text-slate-500">
-                    Факт {formatAmount(snapshot.expenses.actualTotalsByCategory[category.code])}
+                    Факт {formatAmount(aggregate.actualTotalsByCategory[category.code])}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Лимит {formatAmount(snapshot.expenses.limitTotalsByCategory[category.code])}
+                    Лимит {formatAmount(aggregate.limitTotalsByCategory[category.code])}
                   </p>
                 </div>
               ))}
@@ -1428,15 +1596,15 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <MetricTile
                 label="Годовой факт"
-                value={formatAmountWithCurrency(snapshot.expenses.annualActualTotal, snapshot.currency)}
+                value={formatAmountWithCurrency(aggregate.annualActualTotal, aggregate.currency)}
               />
               <MetricTile
                 label="Годовой лимит"
-                value={formatAmountWithCurrency(snapshot.expenses.annualLimitTotal, snapshot.currency)}
+                value={formatAmountWithCurrency(aggregate.annualLimitTotal, aggregate.currency)}
               />
               <MetricTile
                 label="Средний факт"
-                value={formatAmountWithCurrency(snapshot.expenses.averageMonthlyActualTotal, snapshot.currency)}
+                value={formatAmountWithCurrency(aggregate.averageMonthlyActualTotal, aggregate.currency)}
               />
             </div>
           </section>
@@ -1450,14 +1618,14 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
               <th className="w-20 border-b border-r border-slate-200 px-2 py-3 text-left font-semibold text-slate-900 xl:w-24 xl:px-3">
                 Месяц
               </th>
-              {snapshot.categories.map((category) => (
+              {aggregate.categories.map((category) => (
                 <th
                   key={category.code}
                   className="border-b border-r border-slate-200 px-3 py-3 text-left text-slate-900"
                 >
                   <span className="block whitespace-nowrap font-semibold">{category.label}</span>
                   <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
-                    Лимит {formatAmountOrDash(snapshot.settings.recurringLimitCategoryAmounts[category.code])}
+                    Лимит {formatAmountOrDash(aggregate.recurringLimitCategoryAmounts[category.code])}
                   </span>
                 </th>
               ))}
@@ -1470,12 +1638,12 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
             </tr>
           </thead>
           <tbody>
-            {snapshot.expenses.months.map((month) => (
+            {aggregate.months.map((month) => (
               <tr key={month.month} className="align-top">
                 <td className="border-b border-r border-slate-200 px-2 py-3 font-semibold text-slate-900 xl:px-3">
                   {toMonthLabel(month.month)}
                 </td>
-                {snapshot.categories.map((category) => {
+                {aggregate.categories.map((category) => {
                   const actual = month.actualCategoryAmounts[category.code]
                   const limit = month.limitCategoryAmounts[category.code]
                   const isOverLimit = isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
@@ -1507,13 +1675,13 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
               <td className="border-t border-r border-slate-200 px-3 py-3 font-semibold text-slate-900">
                 Годовой факт
               </td>
-              {snapshot.categories.map((category) => (
+              {aggregate.categories.map((category) => (
                 <td key={category.code} className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
-                  {formatAmount(snapshot.expenses.actualTotalsByCategory[category.code])}
+                  {formatAmount(aggregate.actualTotalsByCategory[category.code])}
                 </td>
               ))}
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
-                {formatAmount(snapshot.expenses.annualActualTotal)}
+                {formatAmount(aggregate.annualActualTotal)}
               </td>
               <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Факт за год</td>
             </tr>
@@ -1521,25 +1689,25 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
               <td className="border-t border-r border-slate-200 px-3 py-3 font-semibold text-slate-900">
                 Годовой лимит
               </td>
-              {snapshot.categories.map((category) => (
+              {aggregate.categories.map((category) => (
                 <td key={category.code} className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
-                  {formatAmount(snapshot.expenses.limitTotalsByCategory[category.code])}
+                  {formatAmount(aggregate.limitTotalsByCategory[category.code])}
                 </td>
               ))}
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
-                {formatAmount(snapshot.expenses.annualLimitTotal)}
+                {formatAmount(aggregate.annualLimitTotal)}
               </td>
               <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Лимит за год</td>
             </tr>
             <tr>
               <td
-                colSpan={snapshot.categories.length + 1}
+                colSpan={aggregate.categories.length + 1}
                 className="border-t border-r border-slate-200 px-3 py-3 text-sm text-slate-600"
               >
                 Средний факт по заполненным месяцам
               </td>
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
-                {formatAmount(snapshot.expenses.averageMonthlyActualTotal)}
+                {formatAmount(aggregate.averageMonthlyActualTotal)}
               </td>
               <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Среднее</td>
             </tr>
@@ -1551,16 +1719,26 @@ function ExpenseReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto
 }
 
 interface IncomeActualFormCardProps {
+  cards: PersonalFinanceCardDto[]
+  selectedCardId: string
+  onSelectCard: (cardId: string) => void
   year: number
   currency: string
   selectedMonth: number
   onSelectMonth: (month: number) => void
   initialAmount: string
-  onSave: (month: number, request: UpdateMonthlyIncomeActualRequest) => Promise<boolean>
+  onSave: (
+    cardId: string,
+    month: number,
+    request: UpdateMonthlyIncomeActualRequest,
+  ) => Promise<boolean>
   onSaved?: () => void
 }
 
 function IncomeActualFormCard({
+  cards,
+  selectedCardId,
+  onSelectCard,
   year,
   currency,
   selectedMonth,
@@ -1584,7 +1762,7 @@ function IncomeActualFormCard({
 
     setStatus('submitting')
     setErrorMessage(null)
-    const saved = await onSave(selectedMonth, {
+    const saved = await onSave(selectedCardId, selectedMonth, {
       year,
       totalAmount: toDecimalAmountString(amount),
     })
@@ -1611,11 +1789,13 @@ function IncomeActualFormCard({
       </div>
 
       <form
-        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)_auto]"
+        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,240px)_minmax(0,1fr)_auto]"
         onSubmit={(event) => {
           void handleSubmit(event)
         }}
       >
+        <CardField cards={cards} selectedCardId={selectedCardId} onSelectCard={onSelectCard} />
+
         <label className="text-sm text-slate-600">
           Месяц
           <select
@@ -1669,13 +1849,13 @@ function IncomeActualFormCard({
   )
 }
 
-function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto }) {
+function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица доходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Если факт не задан, строка заполняется повторяющимся прогнозом из настроек.
+          Суммы и статусы считаются по всем активным картам: факт, прогноз или смешанный месяц.
         </p>
       </div>
 
@@ -1695,7 +1875,7 @@ function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto 
             </tr>
           </thead>
           <tbody>
-            {snapshot.income.months.map((month) => (
+            {aggregate.months.map((month) => (
               <tr key={month.month}>
                 <td className="border-b border-r border-slate-200 px-4 py-3 font-medium text-slate-900">
                   {toMonthLabel(month.month)}
@@ -1715,7 +1895,7 @@ function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto 
                 Годовой итог
               </td>
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
-                {formatAmount(snapshot.income.annualTotal)}
+                {formatAmount(aggregate.annualTotal)}
               </td>
               <td className="border-t border-slate-200 px-4 py-3 text-slate-500">Факт + прогноз</td>
             </tr>
@@ -1724,7 +1904,7 @@ function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto 
                 Среднее
               </td>
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
-                {formatAmount(snapshot.income.averageMonthlyTotal)}
+                {formatAmount(aggregate.averageMonthlyTotal)}
               </td>
               <td className="border-t border-slate-200 px-4 py-3 text-slate-500">По всем месяцам года</td>
             </tr>
@@ -1735,11 +1915,19 @@ function IncomeReviewTable({ snapshot }: { snapshot: PersonalFinanceSnapshotDto 
   )
 }
 
-function StatusBadge({ status }: { status: 'ACTUAL' | 'FORECAST' }) {
+function StatusBadge({ status }: { status: Exclude<AggregatedIncomeMonthStatus, null> }) {
   if (status === 'ACTUAL') {
     return (
       <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
         Факт
+      </span>
+    )
+  }
+
+  if (status === 'MIXED') {
+    return (
+      <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+        Смешано
       </span>
     )
   }
@@ -1944,4 +2132,163 @@ function isPositiveAmount(value: string): boolean {
 
 function compareDecimalStrings(left: string, right: string): number {
   return Number.parseFloat(left || '0') - Number.parseFloat(right || '0')
+}
+
+function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedExpensesViewModel {
+  const [firstSnapshot] = activeSnapshots
+  const categories = firstSnapshot.categories
+  const months = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    actualCategoryAmounts: createZeroAmountMap(categories),
+    limitCategoryAmounts: createZeroAmountMap(categories),
+    actualTotal: '0.00',
+    limitTotal: '0.00',
+  }))
+  const recurringLimitCategoryAmounts = createZeroAmountMap(categories)
+  const actualTotalsByCategory = createZeroAmountMap(categories)
+  const limitTotalsByCategory = createZeroAmountMap(categories)
+
+  activeSnapshots.forEach((snapshot) => {
+    categories.forEach((category) => {
+      recurringLimitCategoryAmounts[category.code] = addDecimalAmounts(
+        recurringLimitCategoryAmounts[category.code],
+        snapshot.settings.recurringLimitCategoryAmounts[category.code],
+      )
+      actualTotalsByCategory[category.code] = addDecimalAmounts(
+        actualTotalsByCategory[category.code],
+        snapshot.expenses.actualTotalsByCategory[category.code],
+      )
+      limitTotalsByCategory[category.code] = addDecimalAmounts(
+        limitTotalsByCategory[category.code],
+        snapshot.expenses.limitTotalsByCategory[category.code],
+      )
+    })
+
+    snapshot.expenses.months.forEach((month) => {
+      const aggregateMonth = months[month.month - 1]
+      categories.forEach((category) => {
+        aggregateMonth.actualCategoryAmounts[category.code] = addDecimalAmounts(
+          aggregateMonth.actualCategoryAmounts[category.code],
+          month.actualCategoryAmounts[category.code],
+        )
+        aggregateMonth.limitCategoryAmounts[category.code] = addDecimalAmounts(
+          aggregateMonth.limitCategoryAmounts[category.code],
+          month.limitCategoryAmounts[category.code],
+        )
+      })
+      aggregateMonth.actualTotal = addDecimalAmounts(aggregateMonth.actualTotal, month.actualTotal)
+      aggregateMonth.limitTotal = addDecimalAmounts(aggregateMonth.limitTotal, month.limitTotal)
+    })
+  })
+
+  const annualActualTotal = sumDecimalAmountStrings(months.map((month) => month.actualTotal))
+  const annualLimitTotal = sumDecimalAmountStrings(months.map((month) => month.limitTotal))
+  const filledMonths = months.filter((month) => isPositiveAmount(month.actualTotal)).length
+
+  return {
+    categories,
+    currency: firstSnapshot.currency,
+    recurringLimitCategoryAmounts,
+    months,
+    actualTotalsByCategory,
+    limitTotalsByCategory,
+    annualActualTotal,
+    annualLimitTotal,
+    averageMonthlyActualTotal: averageDecimalAmounts(annualActualTotal, filledMonths),
+  }
+}
+
+function aggregateIncome(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedIncomeViewModel {
+  const [firstSnapshot] = activeSnapshots
+  const months: AggregatedIncomeMonthViewModel[] = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    totalAmount: '0.00',
+    status: null,
+  }))
+
+  let cardsWithForecast = 0
+
+  activeSnapshots.forEach((snapshot) => {
+    const forecastAmount = snapshot.settings.incomeForecast?.totalAmount ?? '0.00'
+    if (isPositiveAmount(forecastAmount)) {
+      cardsWithForecast += 1
+    }
+
+    snapshot.income.months.forEach((month) => {
+      const aggregateMonth = months[month.month - 1]
+      aggregateMonth.totalAmount = addDecimalAmounts(aggregateMonth.totalAmount, month.totalAmount)
+      aggregateMonth.status = mergeIncomeStatuses(aggregateMonth.status, month.status)
+    })
+  })
+
+  const annualTotal = sumDecimalAmountStrings(months.map((month) => month.totalAmount))
+  const filledMonths = months.filter((month) => isPositiveAmount(month.totalAmount)).length
+
+  return {
+    currency: firstSnapshot.currency,
+    months,
+    annualTotal,
+    averageMonthlyTotal: averageDecimalAmounts(annualTotal, filledMonths),
+    recurringForecast: {
+      totalAmount: sumDecimalAmountStrings(
+        activeSnapshots.map((snapshot) => snapshot.settings.incomeForecast?.totalAmount ?? '0.00'),
+      ),
+      activeCardCount: activeSnapshots.length,
+      cardsWithForecast,
+    },
+  }
+}
+
+function resolveDefaultActiveCardId(
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+  preferredCardId: string | null,
+): string {
+  if (preferredCardId && activeSnapshots.some((snapshot) => snapshot.card.id === preferredCardId)) {
+    return preferredCardId
+  }
+
+  return activeSnapshots[0]?.card.id ?? ''
+}
+
+function createZeroAmountMap(
+  categories: PersonalExpenseCategoryDto[],
+): Record<PersonalExpenseCategoryCode, string> {
+  return categories.reduce(
+    (result, category) => ({
+      ...result,
+      [category.code]: '0.00',
+    }),
+    {} as Record<PersonalExpenseCategoryCode, string>,
+  )
+}
+
+function addDecimalAmounts(left: string, right: string): string {
+  return sumDecimalAmountStrings([left, right])
+}
+
+function averageDecimalAmounts(total: string, count: number): string {
+  if (count === 0) {
+    return '0.00'
+  }
+
+  return (Number.parseFloat(total) / count).toFixed(2)
+}
+
+function mergeIncomeStatuses(
+  current: AggregatedIncomeMonthStatus,
+  next: PersonalFinanceSnapshotDto['income']['months'][number]['status'],
+): AggregatedIncomeMonthStatus {
+  if (!next) {
+    return current
+  }
+
+  if (!current) {
+    return next
+  }
+
+  if (current === 'MIXED' || current !== next) {
+    return 'MIXED'
+  }
+
+  return current
 }
