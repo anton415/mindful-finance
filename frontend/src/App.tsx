@@ -308,7 +308,7 @@ function App() {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
-        const activeSnapshots = await Promise.all(
+        const activeSnapshotResults = await Promise.allSettled(
           activeCards.map((card) =>
             apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
           ),
@@ -318,25 +318,51 @@ function App() {
           return
         }
 
-        let settingsSnapshot =
-          activeSnapshots.find((snapshot) => snapshot.card.id === resolvedCardId) ?? null
+        const activeSnapshots = activeSnapshotResults.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        )
+        const settingsCardId = resolvePersonalFinanceSettingsSelection(
+          cards,
+          resolvedCardId,
+          activeSnapshots,
+        )
 
-        if (!settingsSnapshot && resolvedCardId) {
-          settingsSnapshot = await apiClient.getPersonalFinanceSnapshot(
-            resolvedCardId,
-            selectedPersonalFinanceYear,
-            controller.signal,
-          )
+        if (settingsCardId !== selectedPersonalFinanceCardId) {
+          setSelectedPersonalFinanceCardId(settingsCardId)
+        }
+
+        let settingsSnapshot =
+          activeSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
+
+        if (!settingsSnapshot && settingsCardId) {
+          const settingsSnapshotResult = await Promise.allSettled([
+            apiClient.getPersonalFinanceSnapshot(
+              settingsCardId,
+              selectedPersonalFinanceYear,
+              controller.signal,
+            ),
+          ])
+          const fulfilledSettingsSnapshot = settingsSnapshotResult[0]
+          if (fulfilledSettingsSnapshot?.status === 'fulfilled') {
+            settingsSnapshot = fulfilledSettingsSnapshot.value
+          }
         }
 
         if (controller.signal.aborted) {
           return
         }
 
-        setActivePersonalFinanceSnapshots(activeSnapshots)
+        const mergedActiveSnapshots =
+          settingsSnapshot &&
+          settingsSnapshot.card.status === 'ACTIVE' &&
+          !activeSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
+            ? [...activeSnapshots, settingsSnapshot]
+            : activeSnapshots
+
+        setActivePersonalFinanceSnapshots(mergedActiveSnapshots)
         setSelectedPersonalFinanceSettingsSnapshot(settingsSnapshot)
         setPersonalFinanceCards(
-          enrichPersonalFinanceCards(cards, buildPersonalFinanceCardSummary(activeSnapshots, settingsSnapshot)),
+          enrichPersonalFinanceCards(cards, buildPersonalFinanceCardSummary(mergedActiveSnapshots, settingsSnapshot)),
         )
         setPersonalFinanceStatus('ready')
       } catch (error) {
@@ -1711,6 +1737,27 @@ function buildPersonalFinanceCardSummary(
   }
 
   return summaryByCardId
+}
+
+function resolvePersonalFinanceSettingsSelection(
+  cards: PersonalFinanceCardDto[],
+  resolvedCardId: string | null,
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+): string | null {
+  const resolvedCard = cards.find((card) => card.id === resolvedCardId) ?? null
+  if (!resolvedCard) {
+    return activeSnapshots[0]?.card.id ?? cards[0]?.id ?? null
+  }
+
+  if (resolvedCard.status === 'ARCHIVED') {
+    return resolvedCard.id
+  }
+
+  if (activeSnapshots.some((snapshot) => snapshot.card.id === resolvedCard.id)) {
+    return resolvedCard.id
+  }
+
+  return activeSnapshots[0]?.card.id ?? resolvedCard.id
 }
 
 function getAccountCurrencyOptions(): string[] {

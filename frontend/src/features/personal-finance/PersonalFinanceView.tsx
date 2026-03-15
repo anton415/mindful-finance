@@ -181,12 +181,13 @@ export function PersonalFinanceView({
   const archivedCards = cards.filter((card) => card.status === 'ARCHIVED')
   const hasAnyCards = cards.length > 0
   const hasActiveCards = activeCards.length > 0
+  const hasLoadedActiveSnapshots = activeSnapshots.length > 0
   const selectedCard = settingsSnapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
   const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
   const yearOptions = selectableYearOptions(year)
-  const canOpenActionPanel = activeTab === 'settings' || hasActiveCards
-  const aggregatedExpenses = hasActiveCards ? aggregateExpenses(activeSnapshots) : null
-  const aggregatedIncome = hasActiveCards ? aggregateIncome(activeSnapshots) : null
+  const canOpenActionPanel = activeTab === 'settings' || hasLoadedActiveSnapshots
+  const aggregatedExpenses = hasLoadedActiveSnapshots ? aggregateExpenses(activeSnapshots) : null
+  const aggregatedIncome = hasLoadedActiveSnapshots ? aggregateIncome(activeSnapshots) : null
 
   const handleTabSelect = (tab: PersonalFinanceTab): void => {
     setIsActionPanelOpen(false)
@@ -284,6 +285,13 @@ export function PersonalFinanceView({
       {activeTab === 'expenses' ? (
         aggregatedExpenses ? (
           <ExpensesTab key={`expenses-${year}-${activeCards.length}`} aggregate={aggregatedExpenses} />
+        ) : hasActiveCards ? (
+          <InlineStatus
+            tone="warning"
+            message="Не удалось полностью загрузить данные активных карт. Откройте настройки нужной карты или повторите попытку."
+            actionLabel="Повторить"
+            onAction={onRetry}
+          />
         ) : (
           <PersonalFinanceAggregateEmptyState
             tabLabel="расходов"
@@ -293,6 +301,13 @@ export function PersonalFinanceView({
       ) : activeTab === 'income' ? (
         aggregatedIncome ? (
           <IncomeTab key={`income-${year}-${activeCards.length}`} aggregate={aggregatedIncome} />
+        ) : hasActiveCards ? (
+          <InlineStatus
+            tone="warning"
+            message="Не удалось полностью загрузить данные активных карт. Откройте настройки нужной карты или повторите попытку."
+            actionLabel="Повторить"
+            onAction={onRetry}
+          />
         ) : (
           <PersonalFinanceAggregateEmptyState
             tabLabel="доходов"
@@ -321,7 +336,7 @@ export function PersonalFinanceView({
           description={activeTabCopy.panelDescription}
           onClose={() => setIsActionPanelOpen(false)}
         >
-          {activeTab === 'expenses' && hasActiveCards ? (
+          {activeTab === 'expenses' && hasLoadedActiveSnapshots ? (
             <ExpenseEntryDrawerPanel
               activeSnapshots={activeSnapshots}
               preferredCardId={selectedCardId}
@@ -329,7 +344,7 @@ export function PersonalFinanceView({
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
-          {activeTab === 'income' && hasActiveCards ? (
+          {activeTab === 'income' && hasLoadedActiveSnapshots ? (
             <IncomeEntryDrawerPanel
               activeSnapshots={activeSnapshots}
               preferredCardId={selectedCardId}
