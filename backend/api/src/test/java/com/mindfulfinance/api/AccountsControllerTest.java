@@ -23,12 +23,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.mindfulfinance.api.config.ApiWiringConfig;
+import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
+import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 
 @WebMvcTest(AccountsController.class)
 @Import(ApiWiringConfig.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class AccountsControllerTest {
     @Autowired MockMvc mockMvc;
+    @Autowired CreatePersonalFinanceCard createPersonalFinanceCard;
+    @Autowired SavePersonalFinanceSettings savePersonalFinanceSettings;
 
     @Test
     public void createAccount_returns201AndAccountId() throws Exception {
@@ -291,6 +296,69 @@ public class AccountsControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.USD").value("80.00"))
             .andExpect(jsonPath("$.EUR").value("50.00"));
+    }
+
+    @Test
+    public void personalFinanceLinkedAccount_isHiddenFromAccountsList_butStillContributesToMetrics() throws Exception {
+        PersonalFinanceCard card = createPersonalFinanceCard.create(new CreatePersonalFinanceCard.Command("Основная карта"));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").value("0.00"));
+
+        savePersonalFinanceSettings.save(new SavePersonalFinanceSettings.Command(
+            card.id(),
+            new java.math.BigDecimal("1000.00"),
+            java.util.Map.of(),
+            new java.math.BigDecimal("0.00"),
+            new java.math.BigDecimal("0.00")
+        ));
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").value("1000.00"));
+
+        String linkedAccountId = card.linkedAccountId().value().toString();
+
+        mockMvc.perform(get("/accounts/{accountId}/balance", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(get("/accounts/{accountId}/transactions", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", linkedAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Lunch\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(put("/accounts/{accountId}/transactions/{transactionId}", linkedAccountId, UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Lunch\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "transactions.csv",
+            "text/csv",
+            """
+            occurred_on,direction,amount,currency,memo
+            2026-03-01,INFLOW,100.00,RUB,Salary
+            """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/imports/transactions/csv")
+            .file(file)
+            .param("accountId", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     @Test

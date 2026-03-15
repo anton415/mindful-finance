@@ -134,7 +134,7 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
     description: 'Настройки остаются в основном контенте, а новую карту можно добавить через панель справа.',
     actionLabel: '+ Добавить карту',
     panelTitle: 'Добавить новую карту',
-    panelDescription: 'Создайте personal finance card со своим связанным cash ledger.',
+    panelDescription: 'Создайте карту с внутренним cash-ledger для доходов, расходов и текущего баланса.',
   },
 }
 
@@ -211,8 +211,8 @@ export function PersonalFinanceView({
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              Один связанный cash ledger на карту: факт расходов и доходов меняет баланс,
-              лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
+              У каждой карты есть внутренний cash-ledger: факт расходов и доходов меняет баланс,
+              а лимиты и прогноз живут в настройках и повторяются каждый месяц одинаково.
             </p>
           </div>
 
@@ -702,7 +702,7 @@ function SettingsDetails({
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-semibold text-slate-900">Название карты</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Это же имя будет у связанного cash account в Инвестициях.
+              Это имя используется и для внутреннего cash-ledger карты.
             </p>
             <label className="mt-4 block text-sm text-slate-600">
               Как карта называется в обзоре
@@ -746,13 +746,9 @@ function SettingsDetails({
           hint="Считается из baseline и фактических доходов/расходов."
         />
         <MetricTile
-          label="Связанный счёт"
-          value={snapshot.settings.linkedAccountId}
-          hint={
-            isArchived
-              ? 'Этот linked cash account архивирован и скрыт из активного списка Инвестиций.'
-              : 'Этот cash account виден в Инвестициях, но редактируется только отсюда.'
-          }
+          label="Учётный контур"
+          value="Внутренний cash-ledger"
+          hint="Баланс карты участвует в общих метриках, но управляется только в разделе личных финансов."
         />
         <MetricTile
           label="Повторяющийся лимит"
@@ -1047,7 +1043,7 @@ function CreateCardDrawerPanel({
       <div>
         <h3 className="text-base font-semibold text-slate-900">Новая карта</h3>
         <p className="mt-1 text-sm text-slate-600">
-          У каждой карты будет свой linked cash ledger для расходов, доходов и текущего баланса.
+          У каждой карты будет свой внутренний cash-ledger для расходов, доходов и текущего баланса.
         </p>
       </div>
 

@@ -10,7 +10,6 @@ export interface AccountDto {
   currency: CurrencyCode
   type: AccountType
   status: string
-  linkedPersonalFinanceCardId: string | null
 }
 
 export interface CreateAccountRequest {
@@ -86,7 +85,6 @@ export interface PersonalExpenseCategoryDto {
 export interface PersonalFinanceCardDto {
   id: string
   name: string
-  linkedAccountId: string
   createdAt: string
   status: PersonalFinanceCardStatus
 }
@@ -142,7 +140,6 @@ export interface PersonalFinanceIncomeDto {
 }
 
 export interface PersonalFinanceSettingsDto {
-  linkedAccountId: string
   currentBalance: DecimalAmount
   baselineAmount: DecimalAmount
   recurringLimitCategoryAmounts: Record<PersonalExpenseCategoryCode, DecimalAmount>

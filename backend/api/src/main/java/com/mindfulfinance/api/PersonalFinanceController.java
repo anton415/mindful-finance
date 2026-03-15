@@ -298,7 +298,6 @@ public class PersonalFinanceController {
                 snapshot.income().averageMonthlyTotal().amount().toPlainString()
             ),
             new SettingsSectionDto(
-                snapshot.settings().linkedAccountId().value().toString(),
                 snapshot.settings().currentBalance().amount().toPlainString(),
                 snapshot.settings().baselineAmount().amount().toPlainString(),
                 toStringAmountMap(snapshot.settings().recurringLimitCategoryAmounts()),
@@ -312,7 +311,6 @@ public class PersonalFinanceController {
         return new PersonalFinanceCardDto(
             card.id().value().toString(),
             card.name(),
-            card.linkedAccountId().value().toString(),
             card.createdAt().toString(),
             card.status().name()
         );
@@ -383,7 +381,7 @@ public class PersonalFinanceController {
         SettingsSectionDto settings
     ) {}
 
-    public record PersonalFinanceCardDto(String id, String name, String linkedAccountId, String createdAt, String status) {}
+    public record PersonalFinanceCardDto(String id, String name, String createdAt, String status) {}
 
     public record ExpenseCategoryDto(String code, String label) {}
 
@@ -417,7 +415,6 @@ public class PersonalFinanceController {
     ) {}
 
     public record SettingsSectionDto(
-        String linkedAccountId,
         String currentBalance,
         String baselineAmount,
         Map<String, String> recurringLimitCategoryAmounts,

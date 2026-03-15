@@ -51,6 +51,11 @@ public class AccountsControllerPostgresIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM personal_finance_income_forecasts");
+        jdbcTemplate.update("DELETE FROM personal_finance_monthly_income_actuals");
+        jdbcTemplate.update("DELETE FROM personal_finance_monthly_expense_limits");
+        jdbcTemplate.update("DELETE FROM personal_finance_monthly_expense_actuals");
+        jdbcTemplate.update("DELETE FROM personal_finance_cards");
         jdbcTemplate.update("DELETE FROM transactions");
         jdbcTemplate.update("DELETE FROM accounts");
     }
@@ -326,5 +331,56 @@ public class AccountsControllerPostgresIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.message").value("Invalid asOf date. Expected format: YYYY-MM-DD"));
+    }
+
+    @Test
+    public void linked_personal_finance_account_is_hidden_from_accounts_api_but_kept_in_global_metrics() throws Exception {
+        String cardId = JsonPath.read(mockMvc.perform(post("/personal-finance/cards")
+            .contentType("application/json")
+            .content("""
+                {
+                  "name": "Основная карта"
+                }
+                """))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString(), "$.cardId");
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isEmpty());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "1000.00",
+                  "limitCategoryAmounts": {},
+                  "salaryAmount": "0.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isEmpty());
+
+        String linkedAccountId = jdbcTemplate.queryForObject(
+            "SELECT linked_account_id::text FROM personal_finance_cards WHERE id = ?::uuid",
+            String.class,
+            cardId
+        );
+
+        mockMvc.perform(get("/accounts/{accountId}/balance", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(get("/accounts/{accountId}/transactions", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(get("/net-worth"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.RUB").value("1000.00"));
     }
 }

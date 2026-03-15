@@ -225,8 +225,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
 
         mockMvc.perform(get("/accounts"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].name").value("Семейный кэш"))
-            .andExpect(jsonPath("$[0].linkedPersonalFinanceCardId").value(cardId));
+            .andExpect(jsonPath("$", hasSize(0)));
     }
 
     @Test
@@ -278,7 +277,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
 
         mockMvc.perform(get("/accounts"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].linkedPersonalFinanceCardId").value(cardId));
+            .andExpect(jsonPath("$", hasSize(0)));
 
         mockMvc.perform(get("/net-worth"))
             .andExpect(status().isOk())
