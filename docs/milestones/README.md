@@ -16,7 +16,7 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
 - **Milestone 9:** Goals + planning flows.
 - **Milestone 10:** Richer imports + preview/rules.
 - **Milestone 11:** Russian FIRE engine + backend refactor.
-- **Milestone 12:** Closed beta launch on Yandex Cloud.
+- **Milestone 12:** Single-owner remote access via home server + Cloudflare.
 - **Milestone 13:** Engineering automation + bots.
 - **Milestone 14:** Domain model alignment + schema v1 hardening.
 
@@ -43,8 +43,8 @@ This folder holds the project roadmap as milestone specs. Each milestone file in
   Spec: `milestone-10-import-rules-and-preview.md` • Tracking: https://github.com/anton415/mindful-finance/issues/27
 - **Milestone 11 — Russian FIRE Engine & Backend Refactor (v1)**  
   Spec: `milestone-11-russian-fire-engine-and-backend-refactor.md` • Tracking: https://github.com/anton415/mindful-finance/issues/31
-- **Milestone 12 — Closed Beta Launch on Yandex Cloud (v1)**  
-  Spec: `milestone-12-closed-beta-yandex-cloud.md` • Tracking: https://github.com/anton415/mindful-finance/issues/41
+- **Milestone 12 — Single-Owner Remote Access via Home Server + Cloudflare (v1)**  
+  Spec: `milestone-12-single-owner-home-server-cloudflare.md` • Tracking: https://github.com/anton415/mindful-finance/milestone/10
 - **Milestone 13 — Engineering Automation & Bots (v1)**  
   Spec: `milestone-13-engineering-automation-and-bots.md` • Tracking: https://github.com/anton415/mindful-finance/issues/48
 - **Milestone 14 — Domain Model Alignment & Schema v1 (v1)**  
