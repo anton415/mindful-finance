@@ -47,5 +47,5 @@ Process thinking rules for Mindful Finance
 	•	Prefer domain truth and boundaries over speed: keep money logic BigDecimal-based and keep domain modules framework-free.
 	•	After each slice, run the checkpoint and capture what changed, what passed, and what remains.
 	•	When making design choices, present 2-3 options with tradeoffs and ask for preference if impactful.
-	•	Record important decisions in docs/milestones or task notes so future work follows the same process.
+	•	Record important decisions in GitHub milestones/issues or task notes so future work follows the same process.
 	•	End every task with a short retrospective: what was learned, what risk remains, and next best step.

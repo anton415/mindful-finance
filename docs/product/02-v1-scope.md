@@ -29,12 +29,13 @@
 - CSV import с идемпотентным поведением;
 - calm dashboard;
 - базовые Peace metrics: net worth, monthly burn и monthly savings;
-- roadmap milestones `7-12`, формирующие путь к closed beta.
+- roadmap truth ведется в GitHub milestones и issues, а не в локальных milestone-спеках;
+- текущий путь к `v1 / closed beta` проходит через milestones `Учет личных финансов и спокойный review`, `Личный доступ к приложению через домашний сервер + Cloudflare Tunnel`, `Учет инвестиций и portfolio truth`, `Планирование FIRE и explainable сценарии` и `Закрытая beta для приглашённых пользователей`.
 
 ## 4. Принятые допущения
 
 - `v1` не является public launch и трактуется как invited closed beta;
-- релизная граница проходит по milestone `7-12`;
+- релизная граница проходит по business milestones от `Учет личных финансов и спокойный review` до `Закрытая beta для приглашённых пользователей`;
 - Russian FIRE в `v1` поставляется как explainable scenario engine, а не как юридическая или налоговая консультация;
 - для richer imports достаточно одного нового формата сверх CSV при наличии preview и rules flow;
 - для аутентификации достаточно email/password и server-side sessions при условии надежной изоляции данных.

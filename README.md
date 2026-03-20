@@ -71,9 +71,8 @@ make build
 4. **Логика важнее импульса:** подход как в шахматах — оценивать позицию, а не реагировать на последний ход.
 
 ## 🗺 Планирование
-Актуальные milestones и задачи ведутся в GitHub:
+Актуальные milestones и задачи ведутся только в GitHub:
 
 - Milestones: https://github.com/anton415/mindful-finance/milestones
 - Issues: https://github.com/anton415/mindful-finance/issues
-
-Спеки этапов проекта лежат в `docs/milestones/`.
+GitHub milestones и tracking issues являются единственным источником roadmap truth.
