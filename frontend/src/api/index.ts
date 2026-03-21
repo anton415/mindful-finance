@@ -18,6 +18,7 @@ export type {
   CreatePersonalFinanceCardResponse,
   CreateAccountRequest,
   CreateAccountResponse,
+  UpdateAccountRequest,
   CreateTransactionRequest,
   CreateTransactionResponse,
   DecimalAmount,

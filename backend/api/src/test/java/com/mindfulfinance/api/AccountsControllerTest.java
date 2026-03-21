@@ -62,6 +62,69 @@ public class AccountsControllerTest {
     }
 
     @Test
+    public void updateAccount_updatesNameAndType_andKeepsCurrencyImmutable() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(put("/accounts/{accountId}", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Main Brokerage\",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(accountId))
+            .andExpect(jsonPath("$[0].name").value("Main Brokerage"))
+            .andExpect(jsonPath("$[0].type").value("BROKERAGE"))
+            .andExpect(jsonPath("$[0].currency").value("USD"));
+    }
+
+    @Test
+    public void updateAccount_forMissingAccount_returns404() throws Exception {
+        String missingAccountId = UUID.randomUUID().toString();
+
+        mockMvc.perform(put("/accounts/{accountId}", missingAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Main Brokerage\",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    public void updateAccount_withBlankName_returns400() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(put("/accounts/{accountId}", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"   \",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+    }
+
+    @Test
+    public void updateAccount_withInvalidType_returns400() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(put("/accounts/{accountId}", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Main\",\"type\":\"CRYPTO\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Unsupported account type: CRYPTO"));
+    }
+
+    @Test
     public void createAndListTransactions_forExistingAccount() throws Exception {
         MvcResult accountResult = mockMvc.perform(post("/accounts")
             .contentType(MediaType.APPLICATION_JSON)
@@ -396,6 +459,12 @@ public class AccountsControllerTest {
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
 
         mockMvc.perform(get("/accounts/{accountId}/transactions", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(put("/accounts/{accountId}", linkedAccountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Новое имя\",\"type\":\"BROKERAGE\"}"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
 

@@ -33,6 +33,7 @@ import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.ImportTransactions;
+import com.mindfulfinance.application.usecases.UpdateAccount;
 import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.domain.account.Account;
 import com.mindfulfinance.domain.account.AccountId;
@@ -55,6 +56,7 @@ public class AccountsController {
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
     private final DeleteTransaction deleteTransactionUseCase;
+    private final UpdateAccount updateAccount;
     private final UpdateTransaction updateTransaction;
 
     public AccountsController(
@@ -67,6 +69,7 @@ public class AccountsController {
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
         ImportTransactions importTransactions,
         DeleteTransaction deleteTransactionUseCase,
+        UpdateAccount updateAccount,
         UpdateTransaction updateTransaction
     ) {
         this.accountRepository = accountRepository;
@@ -78,6 +81,7 @@ public class AccountsController {
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
         this.deleteTransactionUseCase = deleteTransactionUseCase;
+        this.updateAccount = updateAccount;
         this.updateTransaction = updateTransaction;
     }
 
@@ -102,6 +106,30 @@ public class AccountsController {
                 account.status().name()
             ))
             .toList();
+    }
+
+    @PutMapping("/accounts/{accountId}")
+    public ResponseEntity<Void> updateAccount(
+        @PathVariable("accountId") String accountId,
+        @RequestBody UpdateAccountRequest req
+    ) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        requireInvestmentAccount(parsedAccountId);
+        if (req == null) {
+            throw new IllegalArgumentException("Request body must not be null");
+        }
+
+        boolean updated = updateAccount.update(new UpdateAccount.Command(
+            parsedAccountId,
+            req.name(),
+            parseAccountType(req.type())
+        )).isPresent();
+
+        if (!updated) {
+            throw new AccountNotFoundException("Account not found");
+        }
+
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/accounts/{accountId}/transactions")
@@ -287,6 +315,19 @@ public class AccountsController {
         return new TransactionId(UUID.fromString(transactionId));
     }
 
+    private static AccountType parseAccountType(String rawType) {
+        String trimmed = rawType == null ? "" : rawType.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("type must not be blank");
+        }
+
+        try {
+            return AccountType.valueOf(trimmed.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unsupported account type: " + rawType);
+        }
+    }
+
     private static LocalDate parseAsOfDate(String asOf) {
         if (asOf == null || asOf.isBlank()) return LocalDate.now();
         try {
@@ -304,6 +345,8 @@ public class AccountsController {
     }
 
     public record CreateAccountResponse(String accountId) {}
+
+    public record UpdateAccountRequest(String name, String type) {}
 
     public record AccountDto(
         String id,

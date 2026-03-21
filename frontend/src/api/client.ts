@@ -16,6 +16,7 @@ import type {
   TransactionDto,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
+  UpdateAccountRequest,
   UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
   UpdateTransactionRequest,
@@ -23,6 +24,7 @@ import type {
 
 export interface ApiClient {
   createAccount(request: CreateAccountRequest, signal?: AbortSignal): Promise<CreateAccountResponse>
+  updateAccount(accountId: string, request: UpdateAccountRequest, signal?: AbortSignal): Promise<void>
   createTransaction(
     accountId: string,
     request: CreateTransactionRequest,
@@ -89,6 +91,16 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
   return {
     createAccount(request: CreateAccountRequest, signal?: AbortSignal): Promise<CreateAccountResponse> {
       return http.postJson<CreateAccountResponse, CreateAccountRequest>('/accounts', request, { signal })
+    },
+
+    updateAccount(
+      accountId: string,
+      request: UpdateAccountRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateAccountRequest>(`/accounts/${toEncodedAccountId(accountId)}`, request, {
+        signal,
+      })
     },
 
     createTransaction(
