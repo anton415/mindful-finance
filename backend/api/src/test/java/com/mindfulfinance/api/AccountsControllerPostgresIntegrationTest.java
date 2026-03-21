@@ -93,6 +93,29 @@ public class AccountsControllerPostgresIntegrationTest {
     }
 
     @Test
+    public void update_account_endpoint_updates_name_and_type_and_keeps_currency_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(put("/accounts/{accountId}", accountId)
+            .contentType("application/json")
+            .content("{\"name\":\"Main Brokerage\",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(accountId))
+            .andExpect(jsonPath("$[0].name").value("Main Brokerage"))
+            .andExpect(jsonPath("$[0].type").value("BROKERAGE"))
+            .andExpect(jsonPath("$[0].currency").value("USD"));
+    }
+
+    @Test
     public void update_transaction_endpoint_updates_list_balance_and_metrics_with_postgres_profile() throws Exception {
         MvcResult accountResult = mockMvc.perform(post("/accounts")
             .contentType("application/json")

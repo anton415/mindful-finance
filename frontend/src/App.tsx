@@ -14,6 +14,7 @@ import {
   type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
+  type UpdateAccountRequest,
   type UpdateMonthlyExpenseRequest,
   type UpdateMonthlyIncomeActualRequest,
   type UpdatePersonalFinanceCardRequest,
@@ -455,6 +456,14 @@ function App() {
     }
   }
 
+  const handleUpdateAccount = async (
+    accountId: string,
+    request: UpdateAccountRequest,
+  ): Promise<void> => {
+    await apiClient.updateAccount(accountId, request)
+    setAccountsReloadTick((tick) => tick + 1)
+  }
+
   const refreshTransactionDerivedViews = (): void => {
     setTransactionsReloadTick((tick) => tick + 1)
     setAccountsReloadTick((tick) => tick + 1)
@@ -737,6 +746,7 @@ function App() {
               createAccountStatus={createAccountStatus}
               createAccountErrorMessage={createAccountErrorMessage}
               onCreateAccount={handleCreateAccount}
+              onUpdateAccount={handleUpdateAccount}
               createTransactionStatus={createTransactionStatus}
               createTransactionErrorMessage={createTransactionErrorMessage}
               onCreateTransaction={handleCreateTransaction}
@@ -829,6 +839,7 @@ interface AccountsViewProps {
   createAccountStatus: CreateAccountStatus
   createAccountErrorMessage: string | null
   onCreateAccount: (request: CreateAccountRequest) => Promise<boolean>
+  onUpdateAccount: (accountId: string, request: UpdateAccountRequest) => Promise<void>
   createTransactionStatus: CreateTransactionStatus
   createTransactionErrorMessage: string | null
   onCreateTransaction: (accountId: string, request: CreateTransactionRequest) => Promise<boolean>
@@ -864,6 +875,7 @@ function AccountsView({
   createAccountStatus,
   createAccountErrorMessage,
   onCreateAccount,
+  onUpdateAccount,
   createTransactionStatus,
   createTransactionErrorMessage,
   onCreateTransaction,
@@ -880,6 +892,11 @@ function AccountsView({
   const [newAccountName, setNewAccountName] = useState<string>('')
   const [newAccountCurrency, setNewAccountCurrency] = useState<string>(DEFAULT_ACCOUNT_CURRENCY)
   const [newAccountType, setNewAccountType] = useState<AccountType>('CASH')
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [editingAccountName, setEditingAccountName] = useState<string>('')
+  const [editingAccountType, setEditingAccountType] = useState<AccountType>('CASH')
+  const [updateAccountStatus, setUpdateAccountStatus] = useState<CreateAccountStatus>('idle')
+  const [updateAccountErrorMessage, setUpdateAccountErrorMessage] = useState<string | null>(null)
   const [newTransactionDate, setNewTransactionDate] = useState<string>(todayIsoDate())
   const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
   const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
@@ -897,6 +914,14 @@ function AccountsView({
   const [deleteTransactionErrorMessage, setDeleteTransactionErrorMessage] = useState<string | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const csvFileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const resetEditingAccount = (): void => {
+    setEditingAccountId(null)
+    setEditingAccountName('')
+    setEditingAccountType('CASH')
+    setUpdateAccountStatus('idle')
+    setUpdateAccountErrorMessage(null)
+  }
 
   const resetEditingTransaction = (): void => {
     setEditingTransactionAccountId(null)
@@ -932,6 +957,12 @@ function AccountsView({
   const isCurrencyValid = ACCOUNT_CURRENCY_OPTIONS.includes(newAccountCurrency)
   const canCreate =
     newAccountName.trim().length > 0 && isCurrencyValid && createAccountStatus !== 'submitting'
+  const isEditingSelectedAccount =
+    selectedAccount !== null && editingAccountId === selectedAccount.id
+  const canUpdateAccount =
+    isEditingSelectedAccount &&
+    editingAccountName.trim().length > 0 &&
+    updateAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
   const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
@@ -978,6 +1009,40 @@ function AccountsView({
 
     if (created) {
       setNewAccountName('')
+    }
+  }
+
+  const handleStartEditingAccount = (): void => {
+    if (!selectedAccount) {
+      return
+    }
+
+    setEditingAccountId(selectedAccount.id)
+    setEditingAccountName(selectedAccount.name)
+    setEditingAccountType(selectedAccount.type)
+    setUpdateAccountStatus('idle')
+    setUpdateAccountErrorMessage(null)
+  }
+
+  const handleUpdateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!selectedAccount || !isEditingSelectedAccount || !canUpdateAccount) {
+      return
+    }
+
+    setUpdateAccountStatus('submitting')
+    setUpdateAccountErrorMessage(null)
+
+    try {
+      await onUpdateAccount(selectedAccount.id, {
+        name: editingAccountName.trim(),
+        type: editingAccountType,
+      })
+      resetEditingAccount()
+    } catch (error) {
+      setUpdateAccountStatus('error')
+      setUpdateAccountErrorMessage(toErrorMessage(error))
     }
   }
 
@@ -1077,6 +1142,7 @@ function AccountsView({
 
   const handleSelectAccountClick = (accountId: string): void => {
     onSelectAccount(accountId)
+    resetEditingAccount()
     resetEditingTransaction()
     resetDeleteTransactionState()
     setNewTransactionDate(todayIsoDate())
@@ -1208,7 +1274,85 @@ function AccountsView({
                   Транзакции · {selectedAccount.balance.currency}
                 </p>
               </div>
+              {!isEditingSelectedAccount ? (
+                <button
+                  type="button"
+                  onClick={handleStartEditingAccount}
+                  className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800"
+                >
+                  Редактировать счет
+                </button>
+              ) : null}
             </div>
+
+            {isEditingSelectedAccount ? (
+              <form
+                className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
+                onSubmit={(event) => {
+                  void handleUpdateAccountSubmit(event)
+                }}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Редактировать счет
+                </p>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-600">
+                    Название
+                    <input
+                      type="text"
+                      value={editingAccountName}
+                      onChange={(event) => setEditingAccountName(event.target.value)}
+                      className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                    />
+                  </label>
+
+                  <label className="text-xs text-slate-600">
+                    Тип
+                    <select
+                      value={editingAccountType}
+                      onChange={(event) => setEditingAccountType(event.target.value as AccountType)}
+                      className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                    >
+                      {ACCOUNT_TYPE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>
+                          {toAccountTypeLabel(type)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Валюта счета фиксируется при создании и не редактируется: {selectedAccount.currency}.
+                </p>
+
+                {updateAccountStatus === 'error' && updateAccountErrorMessage ? (
+                  <p className="mt-2 text-xs text-amber-700">{updateAccountErrorMessage}</p>
+                ) : null}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    disabled={!canUpdateAccount}
+                    className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {updateAccountStatus === 'submitting' ? 'Сохраняем...' : 'Сохранить'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetEditingAccount}
+                    className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Валюта счета фиксируется при создании и не редактируется.
+              </p>
+            )}
 
             <form
               className="mt-4 rounded-lg border border-slate-200 bg-white p-3"

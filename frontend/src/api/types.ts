@@ -22,6 +22,11 @@ export interface CreateAccountResponse {
   accountId: string
 }
 
+export interface UpdateAccountRequest {
+  name: string
+  type: AccountType
+}
+
 export type TransactionDirection = 'INFLOW' | 'OUTFLOW'
 
 export interface CreateTransactionRequest {
