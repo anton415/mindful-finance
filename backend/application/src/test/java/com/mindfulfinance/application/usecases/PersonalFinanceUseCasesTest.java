@@ -589,8 +589,8 @@ public class PersonalFinanceUseCasesTest {
         }
 
         @Override
-        public void delete(AccountId accountId, TransactionId transactionId) {
-            byAccount.computeIfAbsent(accountId, ignored -> new java.util.ArrayList<>())
+        public boolean delete(AccountId accountId, TransactionId transactionId) {
+            return byAccount.computeIfAbsent(accountId, ignored -> new java.util.ArrayList<>())
                 .removeIf(transaction -> transaction.id().equals(transactionId));
         }
     }

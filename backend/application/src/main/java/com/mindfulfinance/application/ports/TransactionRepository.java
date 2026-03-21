@@ -28,5 +28,5 @@ public interface TransactionRepository {
     /**
      * Deletes an existing transaction from the repository.
      */
-    void delete(AccountId accountId, TransactionId transactionId);
+    boolean delete(AccountId accountId, TransactionId transactionId);
 }

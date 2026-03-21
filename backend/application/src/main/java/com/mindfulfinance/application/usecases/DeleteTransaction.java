@@ -15,16 +15,7 @@ public final class DeleteTransaction {
 
     public boolean delete(Command command) {
         Objects.requireNonNull(command, "command");
-
-        boolean exists = transactions.findByAccountId(command.accountId()).stream()
-            .anyMatch(transaction -> transaction.id().equals(command.transactionId()));
-
-        if (!exists) {
-            return false;
-        }
-
-        transactions.delete(command.accountId(), command.transactionId());
-        return true;
+        return transactions.delete(command.accountId(), command.transactionId());
     }
 
     public record Command(AccountId accountId, TransactionId transactionId) {}

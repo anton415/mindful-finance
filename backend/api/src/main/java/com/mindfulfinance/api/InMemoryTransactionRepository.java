@@ -45,12 +45,12 @@ public final class InMemoryTransactionRepository implements TransactionRepositor
     }
 
     @Override
-    public void delete(AccountId accountId, TransactionId transactionId) {
+    public boolean delete(AccountId accountId, TransactionId transactionId) {
         List<Transaction> transactions = byAccount.get(accountId);
         if (transactions == null) {
-            return;
+            return false;
         }
 
-        transactions.removeIf(transaction -> transaction.id().equals(transactionId));
+        return transactions.removeIf(transaction -> transaction.id().equals(transactionId));
     }
 }

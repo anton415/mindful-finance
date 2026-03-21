@@ -251,12 +251,28 @@ public class PostgresTransactionRepositoryTest {
         transactionRepository.save(remainingTransaction);
         transactionRepository.save(otherAccountTransaction);
 
-        transactionRepository.delete(firstAccount.id(), deletedTransaction.id());
+        assertThat(transactionRepository.delete(firstAccount.id(), deletedTransaction.id())).isTrue();
 
         assertThat(transactionRepository.findByAccountId(firstAccount.id()))
             .containsExactly(remainingTransaction);
         assertThat(transactionRepository.findByAccountId(secondAccount.id()))
             .containsExactly(otherAccountTransaction);
+    }
+
+    @Test
+    public void delete_returns_false_when_transaction_does_not_exist_for_account() {
+        var account = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        accountRepository.save(account);
+
+        assertThat(transactionRepository.delete(
+            account.id(),
+            new TransactionId(UUID.fromString("33333333-3333-3333-3333-333333333333"))
+        )).isFalse();
     }
 
     private static Account account(
