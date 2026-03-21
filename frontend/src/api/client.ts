@@ -34,6 +34,7 @@ export interface ApiClient {
     request: UpdateTransactionRequest,
     signal?: AbortSignal,
   ): Promise<void>
+  deleteTransaction(accountId: string, transactionId: string, signal?: AbortSignal): Promise<void>
   importTransactionsCsv(
     accountId: string,
     file: File,
@@ -111,6 +112,13 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       return http.putJson<void, UpdateTransactionRequest>(
         `/accounts/${toEncodedAccountId(accountId)}/transactions/${toEncodedTransactionId(transactionId)}`,
         request,
+        { signal },
+      )
+    },
+
+    deleteTransaction(accountId: string, transactionId: string, signal?: AbortSignal): Promise<void> {
+      return http.deleteVoid(
+        `/accounts/${toEncodedAccountId(accountId)}/transactions/${toEncodedTransactionId(transactionId)}`,
         { signal },
       )
     },

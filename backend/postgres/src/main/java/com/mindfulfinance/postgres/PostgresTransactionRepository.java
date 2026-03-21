@@ -98,14 +98,14 @@ public final class PostgresTransactionRepository implements TransactionRepositor
     }
 
     @Override
-    public void delete(AccountId accountId, TransactionId transactionId) {
-        jdbcTemplate.update(
+    public boolean delete(AccountId accountId, TransactionId transactionId) {
+        return jdbcTemplate.update(
             """
                 DELETE FROM transactions
                 WHERE id = ? AND account_id = ?
                 """,
             transactionId.value(),
             accountId.value()
-        );
+        ) == 1;
     }
 }

@@ -2,6 +2,7 @@ package com.mindfulfinance.api;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -118,6 +119,50 @@ public class AccountsControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$[0].direction").value("OUTFLOW"))
             .andExpect(jsonPath("$[0].amount").value("25.00"))
             .andExpect(jsonPath("$[0].memo").value(nullValue()));
+
+        mockMvc.perform(get("/accounts/{accountId}/balance", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.amount").value("-25.00"))
+            .andExpect(jsonPath("$.currency").value("USD"));
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("25.00"));
+
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("-25.00"));
+    }
+
+    @Test
+    public void delete_transaction_endpoint_updates_list_balance_and_metrics_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+        String inflowTransactionId = JsonPath.read(mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.transactionId");
+        String outflowTransactionId = JsonPath.read(mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.transactionId");
+
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", accountId, inflowTransactionId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts/{accountId}/transactions", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].id").value(outflowTransactionId))
+            .andExpect(jsonPath("$[0].direction").value("OUTFLOW"))
+            .andExpect(jsonPath("$[0].amount").value("25.00"));
 
         mockMvc.perform(get("/accounts/{accountId}/balance", accountId))
             .andExpect(status().isOk())
@@ -376,6 +421,10 @@ public class AccountsControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
 
         mockMvc.perform(get("/accounts/{accountId}/transactions", linkedAccountId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", linkedAccountId, java.util.UUID.randomUUID()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
 
