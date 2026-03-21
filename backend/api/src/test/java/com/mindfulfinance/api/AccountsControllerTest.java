@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -148,6 +149,72 @@ public class AccountsControllerTest {
         mockMvc.perform(put("/accounts/{accountId}/transactions/{transactionId}", accountId, UUID.randomUUID())
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Rent\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    public void deleteTransaction_updatesTransactionListBalanceAndPeaceMetrics() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+        String inflowTransactionId = JsonPath.read(mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.transactionId");
+        String outflowTransactionId = JsonPath.read(mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-11\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.transactionId");
+
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", accountId, inflowTransactionId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts/{accountId}/transactions", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].id").value(outflowTransactionId))
+            .andExpect(jsonPath("$[0].direction").value("OUTFLOW"))
+            .andExpect(jsonPath("$[0].amount").value("25.00"));
+
+        mockMvc.perform(get("/accounts/{accountId}/balance", accountId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.amount").value("-25.00"))
+            .andExpect(jsonPath("$.currency").value("USD"));
+
+        mockMvc.perform(get("/peace/monthly-burn").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("25.00"));
+
+        mockMvc.perform(get("/peace/monthly-savings").param("asOf", "2026-03-31"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.USD").value("-25.00"));
+    }
+
+    @Test
+    public void deleteTransaction_forMissingAccount_returns404() throws Exception {
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", UUID.randomUUID(), UUID.randomUUID()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    public void deleteTransaction_forMissingTransaction_returns404() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", accountId, UUID.randomUUID()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
@@ -341,6 +408,10 @@ public class AccountsControllerTest {
         mockMvc.perform(put("/accounts/{accountId}/transactions/{transactionId}", linkedAccountId, UUID.randomUUID())
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Lunch\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+
+        mockMvc.perform(delete("/accounts/{accountId}/transactions/{transactionId}", linkedAccountId, UUID.randomUUID()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"));
 

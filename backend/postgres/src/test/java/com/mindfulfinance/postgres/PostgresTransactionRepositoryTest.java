@@ -198,6 +198,67 @@ public class PostgresTransactionRepositoryTest {
             .containsExactly(updatedSecond, first);
     }
 
+    @Test
+    public void delete_removes_only_requested_transaction() {
+        var firstAccount = account(
+            "11111111-1111-1111-1111-111111111111",
+            "Cash",
+            "USD",
+            "2026-03-02T00:00:00Z"
+        );
+        var secondAccount = account(
+            "22222222-2222-2222-2222-222222222222",
+            "Travel",
+            "EUR",
+            "2026-03-02T00:30:00Z"
+        );
+
+        accountRepository.save(firstAccount);
+        accountRepository.save(secondAccount);
+
+        var deletedTransaction = transaction(
+            "33333333-3333-3333-3333-333333333333",
+            firstAccount.id(),
+            "2026-03-02",
+            INFLOW,
+            "100.00",
+            "USD",
+            "Salary",
+            "2026-03-02T10:00:00Z"
+        );
+        var remainingTransaction = transaction(
+            "44444444-4444-4444-4444-444444444444",
+            firstAccount.id(),
+            "2026-03-03",
+            OUTFLOW,
+            "15.00",
+            "USD",
+            "Coffee",
+            "2026-03-03T10:00:00Z"
+        );
+        var otherAccountTransaction = transaction(
+            "55555555-5555-5555-5555-555555555555",
+            secondAccount.id(),
+            "2026-03-04",
+            OUTFLOW,
+            "20.00",
+            "EUR",
+            "Taxi",
+            "2026-03-04T10:00:00Z"
+        );
+
+        transactionRepository.save(deletedTransaction);
+        transactionRepository.save(remainingTransaction);
+        transactionRepository.save(otherAccountTransaction);
+
+        transactionRepository.delete(firstAccount.id(), deletedTransaction.id());
+
+        assertThat(transactionRepository.findByAccountId(firstAccount.id()))
+            .containsExactly(remainingTransaction);
+        assertThat(transactionRepository.findByAccountId(secondAccount.id()))
+            .containsExactly(otherAccountTransaction);
+    }
+
     private static Account account(
         String id,
         String name,

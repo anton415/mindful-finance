@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ApiClientError,
   apiClient,
@@ -517,6 +517,17 @@ function App() {
     refreshTransactionDerivedViews()
   }
 
+  const handleDeleteTransaction = async (
+    accountId: string,
+    transactionId: string,
+  ): Promise<void> => {
+    await apiClient.deleteTransaction(accountId, transactionId)
+    setTransactions((current) => current.filter((transaction) => transaction.id !== transactionId))
+    startTransition(() => {
+      refreshTransactionDerivedViews()
+    })
+  }
+
   const handleCreatePersonalFinanceCard = async (
     request: CreatePersonalFinanceCardRequest,
   ): Promise<boolean> => {
@@ -730,6 +741,7 @@ function App() {
               createTransactionErrorMessage={createTransactionErrorMessage}
               onCreateTransaction={handleCreateTransaction}
               onUpdateTransaction={handleUpdateTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
               csvImportStatus={csvImportStatus}
               csvImportErrorMessage={csvImportErrorMessage}
               csvImportResult={csvImportResult}
@@ -825,6 +837,7 @@ interface AccountsViewProps {
     transactionId: string,
     request: UpdateTransactionRequest,
   ) => Promise<void>
+  onDeleteTransaction: (accountId: string, transactionId: string) => Promise<void>
   csvImportStatus: CsvImportStatus
   csvImportErrorMessage: string | null
   csvImportResult: ImportTransactionsCsvResponse | null
@@ -855,6 +868,7 @@ function AccountsView({
   createTransactionErrorMessage,
   onCreateTransaction,
   onUpdateTransaction,
+  onDeleteTransaction,
   csvImportStatus,
   csvImportErrorMessage,
   csvImportResult,
@@ -879,6 +893,8 @@ function AccountsView({
   const [editingTransactionMemo, setEditingTransactionMemo] = useState<string>('')
   const [updateTransactionStatus, setUpdateTransactionStatus] = useState<CreateTransactionStatus>('idle')
   const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] = useState<string | null>(null)
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null)
+  const [deleteTransactionErrorMessage, setDeleteTransactionErrorMessage] = useState<string | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const csvFileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -891,6 +907,11 @@ function AccountsView({
     setEditingTransactionMemo('')
     setUpdateTransactionStatus('idle')
     setUpdateTransactionErrorMessage(null)
+  }
+
+  const resetDeleteTransactionState = (): void => {
+    setDeletingTransactionId(null)
+    setDeleteTransactionErrorMessage(null)
   }
 
   if (status === 'loading' || status === 'idle') {
@@ -939,6 +960,8 @@ function AccountsView({
     selectedAccount !== null &&
     csvFile !== null &&
     csvImportStatus !== 'submitting'
+  const isDeleteTransactionSubmitting =
+    deletingTransactionId !== null && deleteTransactionErrorMessage === null
 
   const handleCreateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -997,6 +1020,7 @@ function AccountsView({
   }
 
   const handleStartEditingTransaction = (transaction: TransactionDto): void => {
+    resetDeleteTransactionState()
     setEditingTransactionAccountId(selectedAccountId)
     setEditingTransactionId(transaction.id)
     setEditingTransactionDate(transaction.occurredOn)
@@ -1031,9 +1055,30 @@ function AccountsView({
     }
   }
 
+  const handleDeleteTransactionClick = async (transaction: TransactionDto): Promise<void> => {
+    if (!selectedAccount || isDeleteTransactionSubmitting) {
+      return
+    }
+
+    setDeletingTransactionId(transaction.id)
+    setDeleteTransactionErrorMessage(null)
+
+    try {
+      await onDeleteTransaction(selectedAccount.id, transaction.id)
+      if (activeEditingTransactionId === transaction.id) {
+        resetEditingTransaction()
+      }
+      resetDeleteTransactionState()
+    } catch (error) {
+      setDeletingTransactionId(transaction.id)
+      setDeleteTransactionErrorMessage(toErrorMessage(error))
+    }
+  }
+
   const handleSelectAccountClick = (accountId: string): void => {
     onSelectAccount(accountId)
     resetEditingTransaction()
+    resetDeleteTransactionState()
     setNewTransactionDate(todayIsoDate())
     setNewTransactionDirection('OUTFLOW')
     setNewTransactionAmount('')
@@ -1348,6 +1393,10 @@ function AccountsView({
                 <ul className="space-y-2">
                   {filteredTransactions.map((transaction) => {
                     const isEditing = activeEditingTransactionId === transaction.id
+                    const hasDeleteError =
+                      deletingTransactionId === transaction.id && deleteTransactionErrorMessage !== null
+                    const isDeletingThisTransaction =
+                      deletingTransactionId === transaction.id && deleteTransactionErrorMessage === null
 
                     return (
                       <li
@@ -1474,13 +1523,29 @@ function AccountsView({
                               >
                                 {formatSignedAmount(transaction.amount, transaction.direction)}
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditingTransaction(transaction)}
-                                className="mt-2 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600"
-                              >
-                                Редактировать
-                              </button>
+                              <div className="mt-2 flex flex-wrap justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditingTransaction(transaction)}
+                                  disabled={isDeleteTransactionSubmitting}
+                                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Редактировать
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleDeleteTransactionClick(transaction)
+                                  }}
+                                  disabled={isDeleteTransactionSubmitting}
+                                  className="rounded-md border border-rose-200 px-2.5 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isDeletingThisTransaction ? 'Удаляем...' : 'Удалить'}
+                                </button>
+                              </div>
+                              {hasDeleteError ? (
+                                <p className="mt-2 text-xs text-amber-700">{deleteTransactionErrorMessage}</p>
+                              ) : null}
                             </div>
                           </div>
                         )}

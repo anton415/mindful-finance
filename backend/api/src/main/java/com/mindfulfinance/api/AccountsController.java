@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,6 +31,7 @@ import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.domain.account.Account;
@@ -52,6 +54,7 @@ public class AccountsController {
     private final ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
     private final ImportTransactions importTransactions;
+    private final DeleteTransaction deleteTransactionUseCase;
     private final UpdateTransaction updateTransaction;
 
     public AccountsController(
@@ -63,6 +66,7 @@ public class AccountsController {
         ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
         ImportTransactions importTransactions,
+        DeleteTransaction deleteTransactionUseCase,
         UpdateTransaction updateTransaction
     ) {
         this.accountRepository = accountRepository;
@@ -73,6 +77,7 @@ public class AccountsController {
         this.computeMonthlySavingsByCurrency = computeMonthlySavingsByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
         this.importTransactions = importTransactions;
+        this.deleteTransactionUseCase = deleteTransactionUseCase;
         this.updateTransaction = updateTransaction;
     }
 
@@ -161,6 +166,27 @@ public class AccountsController {
         )).isPresent();
 
         if (!updated) {
+            throw new TransactionNotFoundException("Transaction not found");
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/accounts/{accountId}/transactions/{transactionId}")
+    public ResponseEntity<Void> deleteTransaction(
+        @PathVariable("accountId") String accountId,
+        @PathVariable("transactionId") String transactionId
+    ) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        requireInvestmentAccount(parsedAccountId);
+        TransactionId parsedTransactionId = parseTransactionId(transactionId);
+
+        boolean deleted = deleteTransactionUseCase.delete(new DeleteTransaction.Command(
+            parsedAccountId,
+            parsedTransactionId
+        ));
+
+        if (!deleted) {
             throw new TransactionNotFoundException("Transaction not found");
         }
 

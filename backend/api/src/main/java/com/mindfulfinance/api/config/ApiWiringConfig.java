@@ -31,6 +31,7 @@ import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
 import com.mindfulfinance.application.usecases.DeletePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
@@ -189,6 +190,11 @@ public class ApiWiringConfig {
     @Bean
     public UpdateTransaction updateTransaction(TransactionRepository transactionRepository) {
         return new UpdateTransaction(transactionRepository);
+    }
+
+    @Bean
+    public DeleteTransaction deleteTransaction(TransactionRepository transactionRepository) {
+        return new DeleteTransaction(transactionRepository);
     }
 
     @Bean
