@@ -480,10 +480,6 @@ function IncomeEntryDrawerPanel({
     activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
 
-  useEffect(() => {
-    setSelectedMonth(defaultActualMonth(selectedSnapshot.year))
-  }, [selectedSnapshot.card.id, selectedSnapshot.year])
-
   const selectedMonthData =
     selectedSnapshot.income.months.find((month) => month.month === selectedMonth) ??
     selectedSnapshot.income.months[0]
