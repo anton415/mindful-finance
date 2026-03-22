@@ -2214,49 +2214,49 @@ function IncomePlanFormCard({
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
             <YearVacationCalendar
               year={year}
               vacations={vacations}
               pendingStartDate={pendingStartDate}
               onSelectDate={handleDayClick}
             />
-          </div>
 
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
-              <span className="text-xs text-slate-500">{vacations.length}</span>
-            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
+                <span className="text-xs text-slate-500">{vacations.length}</span>
+              </div>
 
-            {vacations.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
-                Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {vacations.map((vacation) => (
-                  <li
-                    key={`${vacation.startDate}-${vacation.endDate}`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {getVacationLengthInDays(vacation)} календарных дней включительно
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveVacation(vacation)}
-                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+              {vacations.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {vacations.map((vacation) => (
+                    <li
+                      key={`${vacation.startDate}-${vacation.endDate}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
                     >
-                      Удалить
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {getVacationLengthInDays(vacation)} календарных дней включительно
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVacation(vacation)}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </section>
 
@@ -2408,7 +2408,7 @@ function YearVacationCalendar({
   onSelectDate: (date: string) => void
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1">
+    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1 lg:mx-0">
       {MONTH_LABELS.map((label, index) => (
         <VacationMonthGrid
           key={`${year}-${index + 1}`}
