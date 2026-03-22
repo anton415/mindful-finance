@@ -2133,6 +2133,8 @@ function readNavigationFromUrl(): NavigationState {
   const financeTab: PersonalFinanceTab =
     financeTabParam === 'settings'
       ? 'settings'
+      : financeTabParam === 'income-entry'
+        ? 'income-entry'
       : financeTabParam === 'income'
         ? 'income'
         : 'expenses'
