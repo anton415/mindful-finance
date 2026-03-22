@@ -3,6 +3,7 @@ package com.mindfulfinance.postgres;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
@@ -19,6 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
+import com.mindfulfinance.domain.personalfinance.IncomePlan;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseActual;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseLimit;
 import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
@@ -26,6 +28,7 @@ import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
+import com.mindfulfinance.domain.personalfinance.VacationPeriod;
 
 @Testcontainers
 public class PostgresPersonalFinanceRepositoriesTest {
@@ -39,6 +42,7 @@ public class PostgresPersonalFinanceRepositoriesTest {
     private PostgresMonthlyExpenseLimitRepository expenseLimitRepository;
     private PostgresMonthlyIncomeActualRepository incomeActualRepository;
     private PostgresIncomeForecastRepository incomeForecastRepository;
+    private PostgresIncomePlanRepository incomePlanRepository;
 
     @BeforeEach
     void setUp() {
@@ -62,6 +66,7 @@ public class PostgresPersonalFinanceRepositoriesTest {
         expenseLimitRepository = new PostgresMonthlyExpenseLimitRepository(jdbcTemplate);
         incomeActualRepository = new PostgresMonthlyIncomeActualRepository(jdbcTemplate);
         incomeForecastRepository = new PostgresIncomeForecastRepository(jdbcTemplate);
+        incomePlanRepository = new PostgresIncomePlanRepository(jdbcTemplate);
     }
 
     @Test
@@ -143,6 +148,15 @@ public class PostgresPersonalFinanceRepositoriesTest {
             new Money(new BigDecimal("1000.00"), RUB),
             new BigDecimal("20.00")
         ));
+        incomePlanRepository.upsert(new IncomePlan(
+            firstCardId,
+            2026,
+            java.util.List.of(
+                new VacationPeriod(LocalDate.of(2026, 6, 16), LocalDate.of(2026, 6, 29))
+            ),
+            true,
+            1
+        ));
 
         assertThat(cardRepository.findAll()).hasSize(2);
         assertThat(cardRepository.find(secondCardId)).get().extracting(PersonalFinanceCard::status)
@@ -160,16 +174,22 @@ public class PostgresPersonalFinanceRepositoriesTest {
         assertThat(incomeForecastRepository.findByCardId(firstCardId)).isPresent();
         assertThat(incomeForecastRepository.findByCardId(firstCardId).orElseThrow().bonusPercent())
             .isEqualByComparingTo("20.00");
+        assertThat(incomePlanRepository.findByCardAndYear(firstCardId, 2026)).isPresent();
+        assertThat(incomePlanRepository.findByCardAndYear(firstCardId, 2026).orElseThrow().thirteenthSalaryMonth())
+            .isEqualTo(1);
+        assertThat(incomePlanRepository.findByCardAndYear(firstCardId, 2026).orElseThrow().vacations()).hasSize(1);
 
         expenseActualRepository.delete(firstCardId, 2026, 1);
         expenseLimitRepository.delete(firstCardId);
         incomeActualRepository.delete(firstCardId, 2026, 3);
         incomeForecastRepository.delete(firstCardId);
+        incomePlanRepository.delete(firstCardId, 2026);
 
         assertThat(expenseActualRepository.findByCardAndYear(firstCardId, 2026)).hasSize(1);
         assertThat(expenseLimitRepository.findByCardId(firstCardId)).isEmpty();
         assertThat(incomeActualRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
         assertThat(incomeForecastRepository.findByCardId(firstCardId)).isEmpty();
+        assertThat(incomePlanRepository.findByCardAndYear(firstCardId, 2026)).isEmpty();
 
         cardRepository.delete(secondCardId);
         assertThat(cardRepository.find(secondCardId)).isEmpty();

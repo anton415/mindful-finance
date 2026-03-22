@@ -52,6 +52,8 @@ public class AccountsControllerPostgresIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM personal_finance_income_plan_vacations");
+        jdbcTemplate.update("DELETE FROM personal_finance_income_plans");
         jdbcTemplate.update("DELETE FROM personal_finance_income_forecasts");
         jdbcTemplate.update("DELETE FROM personal_finance_monthly_income_actuals");
         jdbcTemplate.update("DELETE FROM personal_finance_monthly_expense_limits");

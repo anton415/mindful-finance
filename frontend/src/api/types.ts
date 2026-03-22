@@ -128,12 +128,13 @@ export interface PersonalFinanceExpensesDto {
   averageMonthlyActualTotal: DecimalAmount
 }
 
-export type PersonalFinanceIncomeMonthStatus = 'ACTUAL' | 'FORECAST'
+export type PersonalFinanceIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'OVERRIDE'
 
 export interface PersonalFinanceIncomeMonthDto {
   month: number
   totalAmount: DecimalAmount
   status: PersonalFinanceIncomeMonthStatus | null
+  overrideDeltaAmount: DecimalAmount | null
 }
 
 export interface PersonalFinanceIncomeForecastDto {
@@ -147,6 +148,17 @@ export interface PersonalFinanceIncomeDto {
   months: PersonalFinanceIncomeMonthDto[]
   annualTotal: DecimalAmount
   averageMonthlyTotal: DecimalAmount
+}
+
+export interface PersonalFinanceVacationPeriodDto {
+  startDate: IsoDate
+  endDate: IsoDate
+}
+
+export interface PersonalFinanceIncomePlanDto {
+  vacations: PersonalFinanceVacationPeriodDto[]
+  thirteenthSalaryEnabled: boolean
+  thirteenthSalaryMonth: number | null
 }
 
 export interface PersonalFinanceSettingsDto {
@@ -167,6 +179,7 @@ export interface PersonalFinanceSnapshotDto {
   categories: PersonalExpenseCategoryDto[]
   expenses: PersonalFinanceExpensesDto
   income: PersonalFinanceIncomeDto
+  incomePlan: PersonalFinanceIncomePlanDto | null
   settings: PersonalFinanceSettingsDto
 }
 
@@ -178,6 +191,12 @@ export interface UpdateMonthlyExpenseRequest {
 export interface UpdateMonthlyIncomeActualRequest {
   year: number
   totalAmount: DecimalAmount
+}
+
+export interface UpdateIncomePlanRequest {
+  vacations: PersonalFinanceVacationPeriodDto[]
+  thirteenthSalaryEnabled: boolean
+  thirteenthSalaryMonth: number | null
 }
 
 export interface UpdatePersonalFinanceSettingsRequest {

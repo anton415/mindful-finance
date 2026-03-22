@@ -2,6 +2,7 @@ package com.mindfulfinance.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,6 +51,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbcTemplate.update("DELETE FROM personal_finance_income_plan_vacations");
+        jdbcTemplate.update("DELETE FROM personal_finance_income_plans");
         jdbcTemplate.update("DELETE FROM personal_finance_income_forecasts");
         jdbcTemplate.update("DELETE FROM personal_finance_monthly_income_actuals");
         jdbcTemplate.update("DELETE FROM personal_finance_monthly_expense_limits");
@@ -81,6 +84,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"))
             .andExpect(jsonPath("$.expenses.annualLimitTotal").value("0.00"))
             .andExpect(jsonPath("$.income.annualTotal").value("0.00"))
+            .andExpect(jsonPath("$.incomePlan").value(nullValue()))
             .andExpect(jsonPath("$.settings.currentBalance").value("0.00"))
             .andExpect(jsonPath("$.settings.baselineAmount").value("0.00"))
             .andExpect(jsonPath("$.settings.limitCategoryPercents.RESTAURANTS").value("0.00"))
@@ -245,6 +249,107 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.income.annualTotal").value("3198000.00"))
             .andExpect(jsonPath("$.income.averageMonthlyTotal").value("266500.00"))
             .andExpect(jsonPath("$.settings.currentBalance").value("266500.00"));
+    }
+
+    @Test
+    void income_plan_derives_monthly_overrides_and_actual_keeps_priority() throws Exception {
+        String cardId = createCard("Основная карта");
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "0.00",
+                  "limitCategoryPercents": {},
+                  "salaryAmount": "205000.00",
+                  "bonusPercent": "30.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [
+                    {
+                      "startDate": "2026-04-21",
+                      "endDate": "2026-04-27"
+                    },
+                    {
+                      "startDate": "2026-06-16",
+                      "endDate": "2026-06-29"
+                    },
+                    {
+                      "startDate": "2026-10-27",
+                      "endDate": "2026-11-04"
+                    }
+                  ],
+                  "thirteenthSalaryEnabled": true,
+                  "thirteenthSalaryMonth": 1
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/actual/6", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "year": 2026,
+                  "totalAmount": "310000.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.income.months[0].status").value("OVERRIDE"))
+            .andExpect(jsonPath("$.income.months[0].totalAmount").value("471500.00"))
+            .andExpect(jsonPath("$.income.months[0].overrideDeltaAmount").value("205000.00"))
+            .andExpect(jsonPath("$.income.months[5].status").value("ACTUAL"))
+            .andExpect(jsonPath("$.income.months[5].totalAmount").value("310000.00"))
+            .andExpect(jsonPath("$.income.months[5].overrideDeltaAmount").value("205000.00"))
+            .andExpect(jsonPath("$.incomePlan.vacations", hasSize(3)))
+            .andExpect(jsonPath("$.incomePlan.thirteenthSalaryEnabled").value(true))
+            .andExpect(jsonPath("$.incomePlan.thirteenthSalaryMonth").value(1))
+            .andExpect(jsonPath("$.income.annualTotal").value("3446500.00"))
+            .andExpect(jsonPath("$.settings.currentBalance").value("310000.00"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/actual/6", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "year": 2026,
+                  "totalAmount": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [
+                    {
+                      "startDate": "2026-04-21",
+                      "endDate": "2026-04-27"
+                    }
+                  ],
+                  "thirteenthSalaryEnabled": false,
+                  "thirteenthSalaryMonth": null
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.income.months[0].status").value("FORECAST"))
+            .andExpect(jsonPath("$.income.months[0].totalAmount").value("266500.00"))
+            .andExpect(jsonPath("$.income.months[0].overrideDeltaAmount").value(nullValue()))
+            .andExpect(jsonPath("$.income.months[5].status").value("FORECAST"))
+            .andExpect(jsonPath("$.income.months[5].totalAmount").value("266500.00"))
+            .andExpect(jsonPath("$.income.months[5].overrideDeltaAmount").value(nullValue()))
+            .andExpect(jsonPath("$.settings.currentBalance").value("0.00"));
     }
 
     @Test
@@ -418,6 +523,18 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [],
+                  "thirteenthSalaryEnabled": true,
+                  "thirteenthSalaryMonth": 1
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
     }
 
     @Test
@@ -451,6 +568,18 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Income actual amount must be non-negative RUB"));
 
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [],
+                  "thirteenthSalaryEnabled": true,
+                  "thirteenthSalaryMonth": 1
+                }
+                """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Recurring income forecast must be configured before saving income planner"));
+
         mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
             .contentType("application/json")
             .content("""
@@ -463,6 +592,52 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Income forecast bonus percent must be non-negative with up to 2 decimals"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/settings", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "baselineAmount": "0.00",
+                  "limitCategoryPercents": {},
+                  "salaryAmount": "1000.00",
+                  "bonusPercent": "0.00"
+                }
+                """))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [
+                    {
+                      "startDate": "2026-12-28",
+                      "endDate": "2027-01-05"
+                    }
+                  ],
+                  "thirteenthSalaryEnabled": false,
+                  "thirteenthSalaryMonth": null
+                }
+                """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Income plan vacations must stay inside the selected year"));
+
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [
+                    {
+                      "startDate": "2026-13-40",
+                      "endDate": "2026-01-05"
+                    }
+                  ],
+                  "thirteenthSalaryEnabled": false,
+                  "thirteenthSalaryMonth": null
+                }
+                """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Income plan vacations must contain valid startDate and endDate values"));
 
         mockMvc.perform(put("/personal-finance/cards/{cardId}", cardId)
             .contentType("application/json")

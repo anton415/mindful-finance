@@ -14,6 +14,7 @@ import {
   type PersonalFinanceSnapshotDto,
   type TransactionDirection,
   type TransactionDto,
+  type UpdateIncomePlanRequest,
   type UpdateAccountRequest,
   type UpdateMonthlyExpenseRequest,
   type UpdateMonthlyIncomeActualRequest,
@@ -611,6 +612,24 @@ function App() {
     }
   }
 
+  const handleSaveIncomePlan = async (
+    cardId: string,
+    year: number,
+    request: UpdateIncomePlanRequest,
+  ): Promise<boolean> => {
+    if (cardId.trim().length === 0) {
+      return false
+    }
+
+    try {
+      await apiClient.updateIncomePlan(cardId, year, request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const handleSavePersonalFinanceSettings = async (
     request: UpdatePersonalFinanceSettingsRequest,
   ): Promise<boolean> => {
@@ -744,6 +763,7 @@ function App() {
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
               onSaveIncomeActual={handleSaveIncomeActual}
+              onSaveIncomePlan={handleSaveIncomePlan}
               onRenameCard={handleRenamePersonalFinanceCard}
               onSaveSettings={handleSavePersonalFinanceSettings}
               onArchiveCard={handleArchivePersonalFinanceCard}

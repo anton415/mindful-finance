@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.mindfulfinance.application.ports.IncomeForecastRepository;
+import com.mindfulfinance.application.ports.IncomePlanRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseActualRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
 import com.mindfulfinance.application.ports.MonthlyIncomeActualRepository;
@@ -18,6 +19,7 @@ import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
+import com.mindfulfinance.domain.personalfinance.IncomePlan;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseActual;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseLimit;
 import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
@@ -34,6 +36,7 @@ public final class GetCardPersonalFinanceSnapshot {
     private final MonthlyExpenseLimitRepository expenseLimitRepository;
     private final MonthlyIncomeActualRepository incomeActualRepository;
     private final IncomeForecastRepository incomeForecastRepository;
+    private final IncomePlanRepository incomePlanRepository;
     private final TransactionRepository transactionRepository;
 
     public GetCardPersonalFinanceSnapshot(
@@ -42,6 +45,7 @@ public final class GetCardPersonalFinanceSnapshot {
         MonthlyExpenseLimitRepository expenseLimitRepository,
         MonthlyIncomeActualRepository incomeActualRepository,
         IncomeForecastRepository incomeForecastRepository,
+        IncomePlanRepository incomePlanRepository,
         TransactionRepository transactionRepository
     ) {
         this.cardRepository = cardRepository;
@@ -49,6 +53,7 @@ public final class GetCardPersonalFinanceSnapshot {
         this.expenseLimitRepository = expenseLimitRepository;
         this.incomeActualRepository = incomeActualRepository;
         this.incomeForecastRepository = incomeForecastRepository;
+        this.incomePlanRepository = incomePlanRepository;
         this.transactionRepository = transactionRepository;
     }
 
@@ -70,6 +75,10 @@ public final class GetCardPersonalFinanceSnapshot {
         MonthlyExpenseLimit expenseLimit = expenseLimitRepository.findByCardId(cardId)
             .orElse(MonthlyExpenseLimit.empty(cardId));
         IncomeForecast forecast = incomeForecastRepository.findByCardId(cardId).orElse(null);
+        IncomePlan incomePlan = incomePlanRepository.findByCardAndYear(cardId, year).orElse(null);
+        Map<Integer, Money> incomeForecastOverrideAmountsByMonth = incomePlan == null || forecast == null || forecast.isEmpty()
+            ? Map.of()
+            : incomePlan.derivedOverrideDeltaAmounts(forecast.salaryAmount());
         PersonalFinanceLinkedAccountLedger linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(
             cardRepository,
             transactionRepository
@@ -124,10 +133,14 @@ public final class GetCardPersonalFinanceSnapshot {
             MonthlyIncomeActual incomeActual = incomeActualsByMonth.get(month);
             Money incomeTotal = Money.zero(RUB);
             IncomeMonthStatus status = null;
+            Money overrideDeltaAmount = incomeForecastOverrideAmountsByMonth.get(month);
 
             if (incomeActual != null && !incomeActual.isEmpty()) {
                 incomeTotal = incomeActual.totalAmount();
                 status = IncomeMonthStatus.ACTUAL;
+            } else if (overrideDeltaAmount != null && forecast != null && !forecast.totalAmount().isZero()) {
+                incomeTotal = forecast.resolvedTotalAmount(overrideDeltaAmount);
+                status = IncomeMonthStatus.OVERRIDE;
             } else if (forecast != null && !forecast.totalAmount().isZero()) {
                 incomeTotal = forecast.totalAmount();
                 status = IncomeMonthStatus.FORECAST;
@@ -137,7 +150,7 @@ public final class GetCardPersonalFinanceSnapshot {
                 filledIncomeMonths++;
             }
             annualIncomeTotal = annualIncomeTotal.add(incomeTotal);
-            incomeMonths.add(new IncomeMonth(month, incomeTotal, status));
+            incomeMonths.add(new IncomeMonth(month, incomeTotal, status, overrideDeltaAmount));
         }
 
         return new Result(
@@ -159,6 +172,7 @@ public final class GetCardPersonalFinanceSnapshot {
                 annualIncomeTotal,
                 average(annualIncomeTotal, filledIncomeMonths)
             ),
+            incomePlan,
             new Settings(
                 selectedCard.linkedAccountId(),
                 currentBalance,
@@ -246,6 +260,7 @@ public final class GetCardPersonalFinanceSnapshot {
         List<PersonalExpenseCategory> categories,
         Expenses expenses,
         Income income,
+        IncomePlan incomePlan,
         Settings settings
     ) {}
 
@@ -275,7 +290,8 @@ public final class GetCardPersonalFinanceSnapshot {
     public record IncomeMonth(
         int month,
         Money totalAmount,
-        IncomeMonthStatus status
+        IncomeMonthStatus status,
+        Money overrideDeltaAmount
     ) {}
 
     public record Settings(
@@ -291,6 +307,7 @@ public final class GetCardPersonalFinanceSnapshot {
 
     public enum IncomeMonthStatus {
         ACTUAL,
+        OVERRIDE,
         FORECAST
     }
 }
