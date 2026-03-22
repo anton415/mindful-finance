@@ -57,6 +57,11 @@ public enum DomainErrorCode {
     ACCOUNT_CREATED_AT_NULL,
 
     /**
+     * Indicates that an Account cannot be deleted because it still has transactions.
+     */
+    ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS,
+
+    /**
      * Indicates that a Transaction was created with a null id.
      */
     TRANSACTION_ID_NULL,

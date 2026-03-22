@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Currency;
 
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_CREATED_AT_NULL;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_CURRENCY_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_ID_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_NAME_NULL_OR_BLANK;
@@ -74,5 +75,15 @@ public record Account(
 
     public Account activate() {
         return new Account(id, name, currency, type, AccountStatus.ACTIVE, createdAt);
+    }
+
+    public void ensureCanBeDeleted(boolean hasTransactions) {
+        if (hasTransactions) {
+            throw new DomainException(
+                ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS,
+                "Account cannot be deleted while it has transactions",
+                null
+            );
+        }
     }
 }

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Currency;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import static com.mindfulfinance.domain.account.AccountStatus.ACTIVE;
 import static com.mindfulfinance.domain.account.AccountStatus.ARCHIVED;
 import static com.mindfulfinance.domain.account.AccountType.CASH;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_NAME_NULL_OR_BLANK;
 import com.mindfulfinance.domain.shared.DomainException;
 
@@ -58,5 +60,23 @@ public class AccountTest {
         Account account = new Account(AccountId.random(), "Test Account", Currency.getInstance("USD"), CASH, ARCHIVED, Instant.now());
         account = account.activate();
         assertEquals(ACTIVE, account.status());
+    }
+
+    @Test
+    @DisplayName("Should allow deleting account without transactions")
+    void shouldAllowDeletingAccountWithoutTransactions() {
+        Account account = new Account(AccountId.random(), "Test Account", Currency.getInstance("USD"), CASH, ACTIVE, Instant.now());
+
+        assertDoesNotThrow(() -> account.ensureCanBeDeleted(false));
+    }
+
+    @Test
+    @DisplayName("Should reject deleting account with transactions")
+    void shouldRejectDeletingAccountWithTransactions() {
+        Account account = new Account(AccountId.random(), "Test Account", Currency.getInstance("USD"), CASH, ACTIVE, Instant.now());
+
+        DomainException exception = assertThrows(DomainException.class, () -> account.ensureCanBeDeleted(true));
+
+        assertEquals(ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS, exception.code());
     }
 }

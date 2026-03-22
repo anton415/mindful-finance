@@ -30,6 +30,7 @@ import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.DeleteAccount;
 import com.mindfulfinance.application.usecases.DeletePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
@@ -201,6 +202,14 @@ public class ApiWiringConfig {
     @Bean
     public DeleteTransaction deleteTransaction(TransactionRepository transactionRepository) {
         return new DeleteTransaction(transactionRepository);
+    }
+
+    @Bean
+    public DeleteAccount deleteAccount(
+        AccountRepository accountRepository,
+        TransactionRepository transactionRepository
+    ) {
+        return new DeleteAccount(accountRepository, transactionRepository);
     }
 
     @Bean

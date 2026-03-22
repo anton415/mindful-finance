@@ -94,6 +94,52 @@ public class AccountsControllerTest {
     }
 
     @Test
+    public void deleteAccount_removesEmptyAccount() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(delete("/accounts/{accountId}", accountId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    public void deleteAccount_forMissingAccount_returns404() throws Exception {
+        mockMvc.perform(delete("/accounts/{accountId}", UUID.randomUUID()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    public void deleteAccount_withTransactions_returns409AndKeepsAccount() throws Exception {
+        String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"occurredOn\":\"2026-03-10\",\"direction\":\"OUTFLOW\",\"amount\":\"25.00\",\"memo\":\"Groceries\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/accounts/{accountId}", accountId))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message").value("Нельзя удалить счет, пока у него есть транзакции."));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[*].id").value(hasItem(accountId)));
+    }
+
+    @Test
     public void updateAccount_withBlankName_returns400() throws Exception {
         String accountId = JsonPath.read(mockMvc.perform(post("/accounts")
             .contentType(MediaType.APPLICATION_JSON)

@@ -464,6 +464,28 @@ function App() {
     setAccountsReloadTick((tick) => tick + 1)
   }
 
+  const handleDeleteAccount = async (accountId: string): Promise<void> => {
+    await apiClient.deleteAccount(accountId)
+
+    if (selectedAccountId === accountId) {
+      setSelectedAccountId(null)
+      setTransactions([])
+      setTransactionsStatus('idle')
+      setTransactionsErrorMessage(null)
+      setCreateTransactionStatus('idle')
+      setCreateTransactionErrorMessage(null)
+      setCsvImportStatus('idle')
+      setCsvImportErrorMessage(null)
+      setCsvImportResult(null)
+      setDirectionFilter('ALL')
+      setMemoFilter('')
+    }
+
+    setAccounts((current) => current.filter((account) => account.id !== accountId))
+    setAccountsReloadTick((tick) => tick + 1)
+    setDashboardReloadTick((tick) => tick + 1)
+  }
+
   const refreshTransactionDerivedViews = (): void => {
     setTransactionsReloadTick((tick) => tick + 1)
     setAccountsReloadTick((tick) => tick + 1)
@@ -747,6 +769,7 @@ function App() {
               createAccountErrorMessage={createAccountErrorMessage}
               onCreateAccount={handleCreateAccount}
               onUpdateAccount={handleUpdateAccount}
+              onDeleteAccount={handleDeleteAccount}
               createTransactionStatus={createTransactionStatus}
               createTransactionErrorMessage={createTransactionErrorMessage}
               onCreateTransaction={handleCreateTransaction}
@@ -840,6 +863,7 @@ interface AccountsViewProps {
   createAccountErrorMessage: string | null
   onCreateAccount: (request: CreateAccountRequest) => Promise<boolean>
   onUpdateAccount: (accountId: string, request: UpdateAccountRequest) => Promise<void>
+  onDeleteAccount: (accountId: string) => Promise<void>
   createTransactionStatus: CreateTransactionStatus
   createTransactionErrorMessage: string | null
   onCreateTransaction: (accountId: string, request: CreateTransactionRequest) => Promise<boolean>
@@ -876,6 +900,7 @@ function AccountsView({
   createAccountErrorMessage,
   onCreateAccount,
   onUpdateAccount,
+  onDeleteAccount,
   createTransactionStatus,
   createTransactionErrorMessage,
   onCreateTransaction,
@@ -897,6 +922,9 @@ function AccountsView({
   const [editingAccountType, setEditingAccountType] = useState<AccountType>('CASH')
   const [updateAccountStatus, setUpdateAccountStatus] = useState<CreateAccountStatus>('idle')
   const [updateAccountErrorMessage, setUpdateAccountErrorMessage] = useState<string | null>(null)
+  const [deleteAccountStatus, setDeleteAccountStatus] = useState<CreateAccountStatus>('idle')
+  const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState<string | null>(null)
+  const [deleteAccountErrorAccountId, setDeleteAccountErrorAccountId] = useState<string | null>(null)
   const [newTransactionDate, setNewTransactionDate] = useState<string>(todayIsoDate())
   const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
   const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
@@ -921,6 +949,12 @@ function AccountsView({
     setEditingAccountType('CASH')
     setUpdateAccountStatus('idle')
     setUpdateAccountErrorMessage(null)
+  }
+
+  const resetDeleteAccountState = (): void => {
+    setDeleteAccountStatus('idle')
+    setDeleteAccountErrorMessage(null)
+    setDeleteAccountErrorAccountId(null)
   }
 
   const resetEditingTransaction = (): void => {
@@ -963,6 +997,12 @@ function AccountsView({
     isEditingSelectedAccount &&
     editingAccountName.trim().length > 0 &&
     updateAccountStatus !== 'submitting'
+  const hasLoadedTransactions = transactionsStatus === 'ready' && totalTransactionsCount > 0
+  const canDeleteAccount =
+    selectedAccount !== null &&
+    !isEditingSelectedAccount &&
+    !hasLoadedTransactions &&
+    deleteAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
   const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
@@ -1017,6 +1057,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     setEditingAccountId(selectedAccount.id)
     setEditingAccountName(selectedAccount.name)
     setEditingAccountType(selectedAccount.type)
@@ -1031,6 +1072,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     setUpdateAccountStatus('submitting')
     setUpdateAccountErrorMessage(null)
 
@@ -1046,6 +1088,31 @@ function AccountsView({
     }
   }
 
+  const handleDeleteAccountClick = async (): Promise<void> => {
+    if (!selectedAccount || !canDeleteAccount) {
+      return
+    }
+
+    if (!window.confirm(`Удалить счет «${selectedAccount.name}»? Это действие необратимо.`)) {
+      return
+    }
+
+    setDeleteAccountStatus('submitting')
+    setDeleteAccountErrorMessage(null)
+
+    try {
+      await onDeleteAccount(selectedAccount.id)
+      resetEditingAccount()
+      resetEditingTransaction()
+      resetDeleteTransactionState()
+      resetDeleteAccountState()
+    } catch (error) {
+      setDeleteAccountStatus('error')
+      setDeleteAccountErrorMessage(toErrorMessage(error))
+      setDeleteAccountErrorAccountId(selectedAccount.id)
+    }
+  }
+
   const handleCreateTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
 
@@ -1053,6 +1120,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     const created = await onCreateTransaction(selectedAccount.id, {
       occurredOn: transactionDateCandidate,
       direction: newTransactionDirection,
@@ -1073,6 +1141,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     const imported = await onImportTransactionsCsv(selectedAccount.id, csvFile)
     if (!imported) {
       return
@@ -1103,6 +1172,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     setUpdateTransactionStatus('submitting')
     setUpdateTransactionErrorMessage(null)
 
@@ -1125,6 +1195,7 @@ function AccountsView({
       return
     }
 
+    resetDeleteAccountState()
     setDeletingTransactionId(transaction.id)
     setDeleteTransactionErrorMessage(null)
 
@@ -1143,6 +1214,7 @@ function AccountsView({
   const handleSelectAccountClick = (accountId: string): void => {
     onSelectAccount(accountId)
     resetEditingAccount()
+    resetDeleteAccountState()
     resetEditingTransaction()
     resetDeleteTransactionState()
     setNewTransactionDate(todayIsoDate())
@@ -1275,13 +1347,26 @@ function AccountsView({
                 </p>
               </div>
               {!isEditingSelectedAccount ? (
-                <button
-                  type="button"
-                  onClick={handleStartEditingAccount}
-                  className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800"
-                >
-                  Редактировать счет
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStartEditingAccount}
+                    disabled={deleteAccountStatus === 'submitting'}
+                    className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Редактировать счет
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDeleteAccountClick()
+                    }}
+                    disabled={!canDeleteAccount}
+                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {deleteAccountStatus === 'submitting' ? 'Удаляем счет...' : 'Удалить счет'}
+                  </button>
+                </div>
               ) : null}
             </div>
 
@@ -1353,6 +1438,19 @@ function AccountsView({
                 Валюта счета фиксируется при создании и не редактируется.
               </p>
             )}
+
+            {!isEditingSelectedAccount && hasLoadedTransactions ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Удаление доступно только для пустого счета без транзакций.
+              </p>
+            ) : null}
+
+            {!isEditingSelectedAccount &&
+            deleteAccountStatus === 'error' &&
+            deleteAccountErrorMessage &&
+            deleteAccountErrorAccountId === selectedAccount.id ? (
+              <p className="mt-2 text-xs text-amber-700">{deleteAccountErrorMessage}</p>
+            ) : null}
 
             <form
               className="mt-4 rounded-lg border border-slate-200 bg-white p-3"

@@ -31,6 +31,7 @@ import com.mindfulfinance.application.usecases.ComputeAccountBalance;
 import com.mindfulfinance.application.usecases.ComputeMonthlyBurnByCurrency;
 import com.mindfulfinance.application.usecases.ComputeMonthlySavingsByCurrency;
 import com.mindfulfinance.application.usecases.ComputeNetWorthByCurrency;
+import com.mindfulfinance.application.usecases.DeleteAccount;
 import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.UpdateAccount;
@@ -54,6 +55,7 @@ public class AccountsController {
     private final ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency;
     private final ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency;
     private final ComputeNetWorthByCurrency computeNetWorthByCurrency;
+    private final DeleteAccount deleteAccount;
     private final ImportTransactions importTransactions;
     private final DeleteTransaction deleteTransactionUseCase;
     private final UpdateAccount updateAccount;
@@ -67,6 +69,7 @@ public class AccountsController {
         ComputeMonthlyBurnByCurrency computeMonthlyBurnByCurrency,
         ComputeMonthlySavingsByCurrency computeMonthlySavingsByCurrency,
         ComputeNetWorthByCurrency computeNetWorthByCurrency,
+        DeleteAccount deleteAccount,
         ImportTransactions importTransactions,
         DeleteTransaction deleteTransactionUseCase,
         UpdateAccount updateAccount,
@@ -79,6 +82,7 @@ public class AccountsController {
         this.computeMonthlyBurnByCurrency = computeMonthlyBurnByCurrency;
         this.computeMonthlySavingsByCurrency = computeMonthlySavingsByCurrency;
         this.computeNetWorthByCurrency = computeNetWorthByCurrency;
+        this.deleteAccount = deleteAccount;
         this.importTransactions = importTransactions;
         this.deleteTransactionUseCase = deleteTransactionUseCase;
         this.updateAccount = updateAccount;
@@ -129,6 +133,14 @@ public class AccountsController {
             throw new AccountNotFoundException("Account not found");
         }
 
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/accounts/{accountId}")
+    public ResponseEntity<Void> deleteAccount(@PathVariable("accountId") String accountId) {
+        AccountId parsedAccountId = parseAccountId(accountId);
+        Account account = requireInvestmentAccount(parsedAccountId);
+        deleteAccount.delete(new DeleteAccount.Command(account));
         return ResponseEntity.noContent().build();
     }
 
