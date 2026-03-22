@@ -8,6 +8,7 @@ import java.util.Map;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_AMOUNT_INVALID;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_BONUS_PERCENT_INVALID;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_CARD_ID_INVALID;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.INCOME_FORECAST_RESOLVED_AMOUNT_INVALID;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.shared.DomainException;
 
@@ -47,6 +48,30 @@ public record IncomeForecast(
 
     public Money totalAmount() {
         return salaryAmount.add(bonusAmount());
+    }
+
+    public Money resolvedTotalAmount(Money deltaAmount) {
+        if (deltaAmount == null) {
+            return totalAmount();
+        }
+        if (!RUB.equals(deltaAmount.currency())) {
+            throw new DomainException(
+                INCOME_FORECAST_RESOLVED_AMOUNT_INVALID,
+                "Resolved income forecast amount must be non-negative RUB",
+                null
+            );
+        }
+
+        Money resolvedAmount = totalAmount().add(deltaAmount);
+        if (resolvedAmount.isNegative()) {
+            throw new DomainException(
+                INCOME_FORECAST_RESOLVED_AMOUNT_INVALID,
+                "Resolved income forecast amount must be non-negative RUB",
+                Map.of("resolvedAmount", resolvedAmount.amount())
+            );
+        }
+
+        return resolvedAmount;
     }
 
     public boolean isEmpty() {

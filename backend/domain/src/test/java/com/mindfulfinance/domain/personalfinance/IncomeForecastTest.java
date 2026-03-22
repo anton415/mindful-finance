@@ -33,6 +33,26 @@ public class IncomeForecastTest {
     }
 
     @Test
+    void resolved_total_applies_signed_override_delta() {
+        IncomeForecast forecast = new IncomeForecast(
+            CARD_ID,
+            new Money(new BigDecimal("205000.00"), RUB),
+            new BigDecimal("30.00")
+        );
+
+        assertEquals(
+            0,
+            forecast.resolvedTotalAmount(new Money(new BigDecimal("-16500.00"), RUB)).amount()
+                .compareTo(new BigDecimal("250000.00"))
+        );
+        assertEquals(
+            0,
+            forecast.resolvedTotalAmount(new Money(new BigDecimal("33500.00"), RUB)).amount()
+                .compareTo(new BigDecimal("300000.00"))
+        );
+    }
+
+    @Test
     void constructor_rejects_invalid_amounts_and_bonus_percent() {
         DomainException negativeException = assertThrows(DomainException.class, () -> new IncomeForecast(
             CARD_ID,
@@ -57,5 +77,21 @@ public class IncomeForecastTest {
             "Income forecast bonus percent must be non-negative with up to 2 decimals",
             invalidBonusPercentException.getMessage()
         );
+    }
+
+    @Test
+    void resolved_total_rejects_negative_result() {
+        IncomeForecast forecast = new IncomeForecast(
+            CARD_ID,
+            new Money(new BigDecimal("1000.00"), RUB),
+            BigDecimal.ZERO
+        );
+
+        DomainException exception = assertThrows(
+            DomainException.class,
+            () -> forecast.resolvedTotalAmount(new Money(new BigDecimal("-1000.01"), RUB))
+        );
+
+        assertEquals("Resolved income forecast amount must be non-negative RUB", exception.getMessage());
     }
 }

@@ -2,6 +2,7 @@ package com.mindfulfinance.application.usecases;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.IncomeForecastRepository;
+import com.mindfulfinance.application.ports.IncomePlanRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseActualRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
 import com.mindfulfinance.application.ports.MonthlyIncomeActualRepository;
@@ -30,6 +32,7 @@ import static com.mindfulfinance.domain.account.AccountStatus.ARCHIVED;
 import static com.mindfulfinance.domain.account.AccountType.CASH;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
+import com.mindfulfinance.domain.personalfinance.IncomePlan;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseActual;
 import com.mindfulfinance.domain.personalfinance.MonthlyExpenseLimit;
 import com.mindfulfinance.domain.personalfinance.MonthlyIncomeActual;
@@ -37,6 +40,7 @@ import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardStatus;
+import com.mindfulfinance.domain.personalfinance.VacationPeriod;
 import com.mindfulfinance.domain.transaction.Transaction;
 import com.mindfulfinance.domain.transaction.TransactionDirection;
 import com.mindfulfinance.domain.transaction.TransactionId;
@@ -60,6 +64,7 @@ public class PersonalFinanceUseCasesTest {
             new InMemoryExpenseLimitRepository(),
             new InMemoryIncomeActualRepository(),
             new InMemoryIncomeForecastRepository(),
+            new InMemoryIncomePlanRepository(),
             new InMemoryTransactionRepository()
         ).get(CARD_ID, 2026);
 
@@ -83,12 +88,14 @@ public class PersonalFinanceUseCasesTest {
         InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
         InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
         InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
         InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
         cards.save(card("Основная карта"));
 
         SavePersonalFinanceSettings saveSettings = new SavePersonalFinanceSettings(
             expenseLimits,
             incomeForecasts,
+            incomePlans,
             cards,
             transactions
         );
@@ -132,6 +139,7 @@ public class PersonalFinanceUseCasesTest {
             expenseLimits,
             incomeActuals,
             incomeForecasts,
+            incomePlans,
             transactions
         ).get(CARD_ID, 2026);
 
@@ -172,12 +180,14 @@ public class PersonalFinanceUseCasesTest {
         InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
         InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
         InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
         InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
         cards.save(card("Основная карта"));
 
         SavePersonalFinanceSettings saveSettings = new SavePersonalFinanceSettings(
             expenseLimits,
             incomeForecasts,
+            incomePlans,
             cards,
             transactions
         );
@@ -206,6 +216,7 @@ public class PersonalFinanceUseCasesTest {
             expenseLimits,
             incomeActuals,
             incomeForecasts,
+            incomePlans,
             transactions
         ).get(CARD_ID, 2026);
 
@@ -235,12 +246,14 @@ public class PersonalFinanceUseCasesTest {
         InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
         InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
         InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
         InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
         cards.save(card("Основная карта"));
 
         SavePersonalFinanceSettings saveSettings = new SavePersonalFinanceSettings(
             expenseLimits,
             incomeForecasts,
+            incomePlans,
             cards,
             transactions
         );
@@ -261,6 +274,15 @@ public class PersonalFinanceUseCasesTest {
             Map.of(PersonalExpenseCategory.RESTAURANTS, new BigDecimal("150.00"))
         ));
         saveIncomeActual.save(new SaveMonthlyIncomeActual.Command(CARD_ID, 2026, 2, new BigDecimal("1000.00")));
+        new SaveIncomePlan(incomePlans, incomeForecasts, cards).save(
+            new SaveIncomePlan.Command(
+                CARD_ID,
+                2026,
+                List.of(new VacationPeriod(LocalDate.of(2026, 6, 16), LocalDate.of(2026, 6, 29))),
+                true,
+                1
+            )
+        );
 
         saveSettings.save(new SavePersonalFinanceSettings.Command(CARD_ID, BigDecimal.ZERO, Map.of(), BigDecimal.ZERO, BigDecimal.ZERO));
         saveExpenseActual.save(new SaveMonthlyExpenseActual.Command(CARD_ID, 2026, 2, Map.of()));
@@ -272,6 +294,7 @@ public class PersonalFinanceUseCasesTest {
             expenseLimits,
             incomeActuals,
             incomeForecasts,
+            incomePlans,
             transactions
         ).get(CARD_ID, 2026);
 
@@ -284,7 +307,97 @@ public class PersonalFinanceUseCasesTest {
         assertTrue(expenseLimits.findByCardId(CARD_ID).isEmpty());
         assertTrue(incomeActuals.findByCardAndYear(CARD_ID, 2026).isEmpty());
         assertTrue(incomeForecasts.findByCardId(CARD_ID).isEmpty());
+        assertTrue(incomePlans.findByCardAndYear(CARD_ID, 2026).isEmpty());
         assertTrue(transactions.findByAccountId(LINKED_ACCOUNT_ID).isEmpty());
+    }
+
+    @Test
+    void income_plan_is_used_without_touching_linked_balance_and_actual_keeps_priority() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
+        InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
+        InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
+        InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card("Основная карта"));
+
+        new SavePersonalFinanceSettings(
+            expenseLimits,
+            incomeForecasts,
+            incomePlans,
+            cards,
+            transactions
+        ).save(new SavePersonalFinanceSettings.Command(
+            CARD_ID,
+            BigDecimal.ZERO,
+            Map.of(),
+            new BigDecimal("200.00"),
+            new BigDecimal("25.00")
+        ));
+        new SaveIncomePlan(incomePlans, incomeForecasts, cards).save(
+            new SaveIncomePlan.Command(
+                CARD_ID,
+                2026,
+                List.of(
+                    new VacationPeriod(LocalDate.of(2026, 1, 3), LocalDate.of(2026, 1, 8)),
+                    new VacationPeriod(LocalDate.of(2026, 2, 10), LocalDate.of(2026, 2, 23))
+                ),
+                true,
+                1
+            )
+        );
+        new SaveMonthlyIncomeActual(incomeActuals, cards, transactions).save(
+            new SaveMonthlyIncomeActual.Command(CARD_ID, 2026, 2, new BigDecimal("1000.00"))
+        );
+
+        GetCardPersonalFinanceSnapshot.Result snapshot = new GetCardPersonalFinanceSnapshot(
+            cards,
+            expenseActuals,
+            expenseLimits,
+            incomeActuals,
+            incomeForecasts,
+            incomePlans,
+            transactions
+        ).get(CARD_ID, 2026);
+
+        assertEquals(GetCardPersonalFinanceSnapshot.IncomeMonthStatus.OVERRIDE, snapshot.income().months().get(0).status());
+        assertEquals(0, snapshot.income().months().get(0).totalAmount().amount().compareTo(new BigDecimal("450.00")));
+        assertEquals(
+            0,
+            snapshot.income().months().get(0).overrideDeltaAmount().amount().compareTo(new BigDecimal("200.00"))
+        );
+        assertEquals(GetCardPersonalFinanceSnapshot.IncomeMonthStatus.ACTUAL, snapshot.income().months().get(1).status());
+        assertEquals(0, snapshot.income().months().get(1).totalAmount().amount().compareTo(new BigDecimal("1000.00")));
+        assertEquals(
+            0,
+            snapshot.income().months().get(1).overrideDeltaAmount().amount().compareTo(new BigDecimal("200.00"))
+        );
+        assertEquals(0, snapshot.income().annualTotal().amount().compareTo(new BigDecimal("3950.00")));
+        assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("1000.00")));
+    }
+
+    @Test
+    void income_plan_requires_existing_base_forecast() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
+        cards.save(card("Основная карта"));
+
+        IllegalStateException error = assertThrows(
+            IllegalStateException.class,
+            () -> new SaveIncomePlan(incomePlans, incomeForecasts, cards).save(
+                new SaveIncomePlan.Command(
+                    CARD_ID,
+                    2026,
+                    List.of(new VacationPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14))),
+                    false,
+                    null
+                )
+            )
+        );
+
+        assertEquals(SaveIncomePlan.BASE_FORECAST_REQUIRED_MESSAGE, error.getMessage());
     }
 
     @Test
@@ -406,6 +519,7 @@ public class PersonalFinanceUseCasesTest {
         InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
         InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
         InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
         InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
         cards.save(archivedCard("Архив"));
         accounts.save(new Account(
@@ -425,7 +539,7 @@ public class PersonalFinanceUseCasesTest {
         );
         IllegalStateException settingsError = assertThrows(
             IllegalStateException.class,
-            () -> new SavePersonalFinanceSettings(expenseLimits, incomeForecasts, cards, transactions).save(
+            () -> new SavePersonalFinanceSettings(expenseLimits, incomeForecasts, incomePlans, cards, transactions).save(
                 new SavePersonalFinanceSettings.Command(
                     CARD_ID,
                     BigDecimal.ZERO,
@@ -447,11 +561,24 @@ public class PersonalFinanceUseCasesTest {
                 new SaveMonthlyIncomeActual.Command(CARD_ID, 2026, 1, BigDecimal.ZERO)
             )
         );
+        IllegalStateException overrideError = assertThrows(
+            IllegalStateException.class,
+            () -> new SaveIncomePlan(incomePlans, incomeForecasts, cards).save(
+                new SaveIncomePlan.Command(
+                    CARD_ID,
+                    2026,
+                    List.of(),
+                    true,
+                    1
+                )
+            )
+        );
 
         assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, renameError.getMessage());
         assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, settingsError.getMessage());
         assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, expenseError.getMessage());
         assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, incomeError.getMessage());
+        assertEquals(PersonalFinanceCardStateGuard.ARCHIVED_CARD_READ_ONLY_MESSAGE, overrideError.getMessage());
     }
 
     @Test
@@ -682,7 +809,35 @@ public class PersonalFinanceUseCasesTest {
         }
     }
 
+    private static final class InMemoryIncomePlanRepository implements IncomePlanRepository {
+        private final Map<String, IncomePlan> store = new LinkedHashMap<>();
+
+        @Override
+        public Optional<IncomePlan> findByCardAndYear(PersonalFinanceCardId cardId, int year) {
+            return Optional.ofNullable(store.get(key(cardId, year)));
+        }
+
+        @Override
+        public void upsert(IncomePlan incomePlan) {
+            store.put(key(incomePlan.cardId(), incomePlan.year()), incomePlan);
+        }
+
+        @Override
+        public void delete(PersonalFinanceCardId cardId, int year) {
+            store.remove(key(cardId, year));
+        }
+
+        @Override
+        public void deleteByCardId(PersonalFinanceCardId cardId) {
+            store.entrySet().removeIf(entry -> entry.getValue().cardId().equals(cardId));
+        }
+    }
+
     private static String key(PersonalFinanceCardId cardId, int year, int month) {
         return cardId.value() + ":" + year + ":" + month;
+    }
+
+    private static String key(PersonalFinanceCardId cardId, int year) {
+        return cardId.value() + ":" + year;
     }
 }

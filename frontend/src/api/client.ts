@@ -14,6 +14,7 @@ import type {
   PersonalFinanceCardDto,
   PersonalFinanceSnapshotDto,
   TransactionDto,
+  UpdateIncomePlanRequest,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
   UpdateAccountRequest,
@@ -74,6 +75,12 @@ export interface ApiClient {
     cardId: string,
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
+  updateIncomePlan(
+    cardId: string,
+    year: number,
+    request: UpdateIncomePlanRequest,
     signal?: AbortSignal,
   ): Promise<void>
   updatePersonalFinanceSettings(
@@ -247,6 +254,19 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
     ): Promise<void> {
       return http.putJson<void, UpdateMonthlyIncomeActualRequest>(
         `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/income/actual/${toRequiredMonth(month)}`,
+        request,
+        { signal },
+      )
+    },
+
+    updateIncomePlan(
+      cardId: string,
+      year: number,
+      request: UpdateIncomePlanRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putJson<void, UpdateIncomePlanRequest>(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/income/plan/${toRequiredYear(year)}`,
         request,
         { signal },
       )

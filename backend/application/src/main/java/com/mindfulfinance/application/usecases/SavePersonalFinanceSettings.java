@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.mindfulfinance.application.ports.IncomeForecastRepository;
+import com.mindfulfinance.application.ports.IncomePlanRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseLimitRepository;
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
 import com.mindfulfinance.application.ports.TransactionRepository;
@@ -19,17 +20,20 @@ public final class SavePersonalFinanceSettings {
 
     private final MonthlyExpenseLimitRepository expenseLimitRepository;
     private final IncomeForecastRepository incomeForecastRepository;
+    private final IncomePlanRepository incomePlanRepository;
     private final PersonalFinanceCardRepository cardRepository;
     private final PersonalFinanceLinkedAccountLedger linkedAccountLedger;
 
     public SavePersonalFinanceSettings(
         MonthlyExpenseLimitRepository expenseLimitRepository,
         IncomeForecastRepository incomeForecastRepository,
+        IncomePlanRepository incomePlanRepository,
         PersonalFinanceCardRepository cardRepository,
         TransactionRepository transactionRepository
     ) {
         this.expenseLimitRepository = expenseLimitRepository;
         this.incomeForecastRepository = incomeForecastRepository;
+        this.incomePlanRepository = incomePlanRepository;
         this.cardRepository = cardRepository;
         this.linkedAccountLedger = new PersonalFinanceLinkedAccountLedger(cardRepository, transactionRepository);
     }
@@ -59,6 +63,7 @@ public final class SavePersonalFinanceSettings {
         );
         if (incomeForecast.isEmpty()) {
             incomeForecastRepository.delete(command.cardId());
+            incomePlanRepository.deleteByCardId(command.cardId());
         } else {
             incomeForecastRepository.upsert(incomeForecast);
         }

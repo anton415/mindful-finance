@@ -4,7 +4,10 @@ import type {
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
   PersonalFinanceCardDto,
+  PersonalFinanceIncomePlanDto,
   PersonalFinanceSnapshotDto,
+  PersonalFinanceVacationPeriodDto,
+  UpdateIncomePlanRequest,
   UpdateMonthlyExpenseRequest,
   UpdateMonthlyIncomeActualRequest,
   UpdatePersonalFinanceCardRequest,
@@ -38,7 +41,7 @@ interface AggregatedExpensesViewModel {
   averageMonthlyActualTotal: string
 }
 
-export type AggregatedIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'MIXED' | null
+export type AggregatedIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'OVERRIDE' | 'MIXED' | null
 
 interface AggregatedIncomeMonthViewModel {
   month: number
@@ -59,6 +62,8 @@ interface AggregatedIncomeViewModel {
   averageMonthlyTotal: string
   recurringForecast: AggregatedIncomeSummaryViewModel
 }
+
+type IncomeDrawerTab = 'actual' | 'plan'
 
 interface PersonalFinanceViewProps {
   status: LoadStatus
@@ -84,6 +89,11 @@ interface PersonalFinanceViewProps {
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
   ) => Promise<boolean>
+  onSaveIncomePlan: (
+    cardId: string,
+    year: number,
+    request: UpdateIncomePlanRequest,
+  ) => Promise<boolean>
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
   onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
   onArchiveCard: (cardId: string) => Promise<boolean>
@@ -106,6 +116,8 @@ const MONTH_LABELS = [
   'Декабрь',
 ] as const
 
+const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
+
 interface PersonalFinanceTabCopy {
   title: string
   description: string
@@ -123,11 +135,13 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
     panelDescription: 'Выберите карту и месяц, чтобы сохранить фактические расходы по категориям.',
   },
   income: {
-    title: 'Фактические доходы',
-    description: 'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
-    actionLabel: '+ Добавить доходы',
-    panelTitle: 'Добавить фактический доход',
-    panelDescription: 'Выберите карту и месяц, чтобы сохранить итоговый доход без потери годового обзора.',
+    title: 'Доходы по месяцам',
+    description:
+      'Годовой обзор суммируется по всем активным картам: факт имеет приоритет, а planner отпусков и 13-й зарплаты производит derived overrides поверх recurring forecast.',
+    actionLabel: '+ Факт и план',
+    panelTitle: 'Факт и план доходов',
+    panelDescription:
+      'Сохраняйте фактический доход по месяцу или настраивайте годовой planner отпусков и 13-й зарплаты для derived income overrides.',
   },
   settings: {
     title: 'Настройки карты',
@@ -154,6 +168,7 @@ export function PersonalFinanceView({
   onCreateCard,
   onSaveExpenseActual,
   onSaveIncomeActual,
+  onSaveIncomePlan,
   onRenameCard,
   onSaveSettings,
   onArchiveCard,
@@ -350,6 +365,7 @@ export function PersonalFinanceView({
               activeSnapshots={activeSnapshots}
               preferredCardId={selectedCardId}
               onSaveIncomeActual={onSaveIncomeActual}
+              onSaveIncomePlan={onSaveIncomePlan}
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
@@ -442,6 +458,11 @@ interface IncomeEntryDrawerPanelProps {
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
   ) => Promise<boolean>
+  onSaveIncomePlan: (
+    cardId: string,
+    year: number,
+    request: UpdateIncomePlanRequest,
+  ) => Promise<boolean>
   onClose: () => void
 }
 
@@ -449,31 +470,164 @@ function IncomeEntryDrawerPanel({
   activeSnapshots,
   preferredCardId,
   onSaveIncomeActual,
+  onSaveIncomePlan,
   onClose,
 }: IncomeEntryDrawerPanelProps) {
   const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
   const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
+  const [selectedDrawerTab, setSelectedDrawerTab] = useState<IncomeDrawerTab>('actual')
   const selectedSnapshot =
     activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
+
+  useEffect(() => {
+    setSelectedMonth(defaultActualMonth(selectedSnapshot.year))
+  }, [selectedSnapshot.card.id, selectedSnapshot.year])
+
   const selectedMonthData =
     selectedSnapshot.income.months.find((month) => month.month === selectedMonth) ??
     selectedSnapshot.income.months[0]
+  const derivedPlanPreview = deriveIncomePlanPreview(
+    selectedSnapshot.incomePlan,
+    selectedSnapshot.settings.incomeForecast?.salaryAmount ?? '0.00',
+  )
 
   return (
-    <IncomeActualFormCard
-      key={`actual-income-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
-      cards={activeSnapshots.map((snapshot) => snapshot.card)}
-      selectedCardId={selectedSnapshot.card.id}
-      onSelectCard={setSelectedCardId}
-      year={selectedSnapshot.year}
-      currency={selectedSnapshot.currency}
-      selectedMonth={selectedMonth}
-      onSelectMonth={setSelectedMonth}
-      initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
-      onSave={onSaveIncomeActual}
-      onSaved={onClose}
-    />
+    <div className="space-y-4">
+      <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Карта и режим ввода</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Факт двигает monthly review и linked balance. Planner отпусков и 13-й зарплаты меняет только planning-слой года.
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-3 lg:max-w-4xl lg:flex-row lg:items-end">
+            <div className="w-full lg:max-w-sm">
+              <p className="mb-1 text-sm text-slate-600">Режим</p>
+              <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1">
+                <NestedTabButton
+                  label="Факт"
+                  isActive={selectedDrawerTab === 'actual'}
+                  onClick={() => setSelectedDrawerTab('actual')}
+                />
+                <NestedTabButton
+                  label="План доходов"
+                  isActive={selectedDrawerTab === 'plan'}
+                  onClick={() => setSelectedDrawerTab('plan')}
+                />
+              </div>
+            </div>
+
+            <CardField
+              cards={activeSnapshots.map((snapshot) => snapshot.card)}
+              selectedCardId={selectedSnapshot.card.id}
+              onSelectCard={setSelectedCardId}
+            />
+
+            {selectedDrawerTab === 'actual' ? (
+              <label className="w-full text-sm text-slate-600 sm:max-w-64">
+                Месяц
+                <select
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(Number(event.target.value))}
+                  className={selectClassName()}
+                >
+                  {MONTH_LABELS.map((label, index) => (
+                    <option key={label} value={index + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:max-w-64">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Год planner</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{selectedSnapshot.year}</p>
+                <p className="mt-1 text-xs text-slate-500">План сохраняется целиком на выбранный год.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <MetricTile
+            label="Recurring forecast"
+            value={formatAmountWithCurrency(
+              selectedSnapshot.settings.incomeForecast?.totalAmount ?? '0.00',
+              selectedSnapshot.currency,
+            )}
+            hint="Это базовый monthly forecast без учёта planner-derived adjustments."
+          />
+          {selectedDrawerTab === 'actual' ? (
+            <>
+              <MetricTile
+                label="Статус в review"
+                value={selectedMonthData.status ? incomeStatusLabel(selectedMonthData.status) : 'Нет данных'}
+                hint="Факт имеет приоритет. Override подмешивается только при отсутствии факта."
+              />
+              <MetricTile
+                label="Сумма в review"
+                value={
+                  selectedMonthData.status
+                    ? formatAmountWithCurrency(selectedMonthData.totalAmount, selectedSnapshot.currency)
+                    : '—'
+                }
+                hint={`Сейчас выбран ${toMonthLabel(selectedMonth)}.`}
+              />
+            </>
+          ) : (
+            <>
+              <MetricTile
+                label="13-я зарплата"
+                value={
+                  derivedPlanPreview.thirteenthSalaryMonth
+                    ? toMonthLabel(derivedPlanPreview.thirteenthSalaryMonth)
+                    : 'Не запланирована'
+                }
+                hint="Если включена, planner добавляет +оклад в выбранный месяц."
+              />
+              <MetricTile
+                label="Основные отпускные"
+                value={
+                  derivedPlanPreview.vacationPayoutMonth
+                    ? toMonthLabel(derivedPlanPreview.vacationPayoutMonth)
+                    : 'Нет отпуска >= 14 дней'
+                }
+                hint="Берётся первый merged-период отпуска длиной от 14 дней включительно."
+              />
+            </>
+          )}
+        </div>
+      </section>
+
+      {selectedDrawerTab === 'actual' ? (
+        <IncomeActualFormCard
+          key={`actual-income-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
+          cardId={selectedSnapshot.card.id}
+          year={selectedSnapshot.year}
+          currency={selectedSnapshot.currency}
+          selectedMonth={selectedMonth}
+          initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
+          onSave={onSaveIncomeActual}
+          onSaved={onClose}
+        />
+      ) : (
+        <IncomePlanFormCard
+          key={`plan-income-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${serializeIncomePlan(selectedSnapshot.incomePlan)}`}
+          cardId={selectedSnapshot.card.id}
+          year={selectedSnapshot.year}
+          currency={selectedSnapshot.currency}
+          salaryAmount={selectedSnapshot.settings.incomeForecast?.salaryAmount ?? '0.00'}
+          baseForecastAmount={selectedSnapshot.settings.incomeForecast?.totalAmount ?? '0.00'}
+          initialIncomePlan={selectedSnapshot.incomePlan}
+          incomeMonths={selectedSnapshot.income.months}
+          onSave={onSaveIncomePlan}
+          onSaved={onClose}
+        />
+      )}
+    </div>
   )
 }
 
@@ -1118,17 +1272,20 @@ function RecurringIncomeSummaryCard({
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
       <h3 className="text-base font-semibold text-slate-900">Повторяющийся прогноз доходов</h3>
+      <p className="mt-1 text-sm text-slate-600">
+        Здесь показан только базовый recurring forecast по активным картам. Planner-derived overrides видны в таблице по месяцам ниже.
+      </p>
       {isPositiveAmount(summary.totalAmount) ? (
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <MetricTile
             label="Прогноз в месяц"
             value={formatAmountWithCurrency(summary.totalAmount, currency)}
-            hint="Сумма recurring forecast по всем активным картам."
+            hint="Сумма base recurring forecast по всем активным картам."
           />
           <MetricTile
             label="Карты с прогнозом"
             value={`${summary.cardsWithForecast} из ${summary.activeCardCount}`}
-            hint="Карты без recurring forecast в сумме не участвуют."
+            hint="Карты без base recurring forecast в сумме не участвуют."
           />
         </div>
       ) : (
@@ -1786,13 +1943,10 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
 }
 
 interface IncomeActualFormCardProps {
-  cards: PersonalFinanceCardDto[]
-  selectedCardId: string
-  onSelectCard: (cardId: string) => void
+  cardId: string
   year: number
   currency: string
   selectedMonth: number
-  onSelectMonth: (month: number) => void
   initialAmount: string
   onSave: (
     cardId: string,
@@ -1803,13 +1957,10 @@ interface IncomeActualFormCardProps {
 }
 
 function IncomeActualFormCard({
-  cards,
-  selectedCardId,
-  onSelectCard,
+  cardId,
   year,
   currency,
   selectedMonth,
-  onSelectMonth,
   initialAmount,
   onSave,
   onSaved,
@@ -1829,7 +1980,7 @@ function IncomeActualFormCard({
 
     setStatus('submitting')
     setErrorMessage(null)
-    const saved = await onSave(selectedCardId, selectedMonth, {
+    const saved = await onSave(cardId, selectedMonth, {
       year,
       totalAmount: toDecimalAmountString(amount),
     })
@@ -1850,34 +2001,17 @@ function IncomeActualFormCard({
         <div>
           <h3 className="text-base font-semibold text-slate-900">Фактический доход</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Сохраняется только итоговая сумма за выбранный месяц.
+            Сохраняется только итоговая сумма за {toMonthLabel(selectedMonth)}. Именно факт двигает review и linked balance.
           </p>
         </div>
       </div>
 
       <form
-        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,240px)_minmax(0,1fr)_auto]"
+        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]"
         onSubmit={(event) => {
           void handleSubmit(event)
         }}
       >
-        <CardField cards={cards} selectedCardId={selectedCardId} onSelectCard={onSelectCard} />
-
-        <label className="text-sm text-slate-600">
-          Месяц
-          <select
-            value={selectedMonth}
-            onChange={(event) => onSelectMonth(Number(event.target.value))}
-            className={selectClassName()}
-          >
-            {MONTH_LABELS.map((label, index) => (
-              <option key={label} value={index + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <label className="text-sm text-slate-600">
           Итоговый доход
           <input
@@ -1916,13 +2050,442 @@ function IncomeActualFormCard({
   )
 }
 
+interface IncomePlanFormCardProps {
+  cardId: string
+  year: number
+  currency: string
+  salaryAmount: string
+  baseForecastAmount: string
+  initialIncomePlan: PersonalFinanceIncomePlanDto | null
+  incomeMonths: PersonalFinanceSnapshotDto['income']['months']
+  onSave: (
+    cardId: string,
+    year: number,
+    request: UpdateIncomePlanRequest,
+  ) => Promise<boolean>
+  onSaved?: () => void
+}
+
+function IncomePlanFormCard({
+  cardId,
+  year,
+  currency,
+  salaryAmount,
+  baseForecastAmount,
+  initialIncomePlan,
+  incomeMonths,
+  onSave,
+  onSaved,
+}: IncomePlanFormCardProps) {
+  const [vacations, setVacations] = useState<PersonalFinanceVacationPeriodDto[]>(() =>
+    cloneVacationPeriods(initialIncomePlan?.vacations ?? []),
+  )
+  const [pendingStartDate, setPendingStartDate] = useState<string | null>(null)
+  const [thirteenthSalaryEnabled, setThirteenthSalaryEnabled] = useState<boolean>(
+    initialIncomePlan?.thirteenthSalaryEnabled ?? false,
+  )
+  const [thirteenthSalaryMonth, setThirteenthSalaryMonth] = useState<number>(
+    initialIncomePlan?.thirteenthSalaryMonth ?? 1,
+  )
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const hasBaseForecast = isPositiveAmount(baseForecastAmount)
+  const plannedIncome = buildIncomePlanDraft(vacations, thirteenthSalaryEnabled, thirteenthSalaryMonth)
+  const derivedPreview = deriveIncomePlanPreview(plannedIncome, salaryAmount)
+  const actualMonthsWithDerivedOverrides = derivedPreview.extraMonths.filter((entry) =>
+    incomeMonths.some((month) => month.month === entry.month && month.status === 'ACTUAL'),
+  )
+  const canSave = hasBaseForecast && pendingStartDate === null && status !== 'submitting'
+
+  const handleDayClick = (date: string): void => {
+    if (!pendingStartDate) {
+      setPendingStartDate(date)
+      return
+    }
+
+    const nextVacation = createOrderedVacationPeriod(pendingStartDate, date)
+    setVacations((current) => sortVacationPeriods([...current, nextVacation]))
+    setPendingStartDate(null)
+  }
+
+  const handleRemoveVacation = (vacationToRemove: PersonalFinanceVacationPeriodDto): void => {
+    setVacations((current) =>
+      current.filter(
+        (vacation) =>
+          vacation.startDate !== vacationToRemove.startDate || vacation.endDate !== vacationToRemove.endDate,
+      ),
+    )
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!canSave) {
+      return
+    }
+
+    setStatus('submitting')
+    setErrorMessage(null)
+    const saved = await onSave(cardId, year, plannedIncome)
+
+    if (saved) {
+      setStatus('idle')
+      onSaved?.()
+      return
+    }
+
+    setStatus('error')
+    setErrorMessage('Не удалось сохранить planner доходов.')
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4">
+      <div>
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Годовой planner доходов</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Отметьте отпускные периоды на календаре и укажите, будет ли 13-я зарплата. Planner сам производит derived overrides по месяцам.
+          </p>
+        </div>
+      </div>
+
+      {!hasBaseForecast ? (
+        <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Сначала задайте recurring forecast на вкладке настроек. Только после этого можно сохранить planner доходов.
+        </p>
+      ) : null}
+
+      {pendingStartDate ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>
+            Выбрана первая дата отпуска: {formatIsoDateToRu(pendingStartDate)}. Нажмите на дату окончания,
+            чтобы сохранить диапазон целиком.
+          </p>
+          <button
+            type="button"
+            onClick={() => setPendingStartDate(null)}
+            className="rounded-xl border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900"
+          >
+            Сбросить выбор
+          </button>
+        </div>
+      ) : null}
+
+      {actualMonthsWithDerivedOverrides.length > 0 ? (
+        <p className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          В месяцах {actualMonthsWithDerivedOverrides.map((entry) => toMonthLabel(entry.month)).join(', ')} уже есть факт.
+          Review использует фактический доход, но planner сохранится и станет fallback после очистки факта.
+        </p>
+      ) : null}
+
+      <form
+        className="mt-4 space-y-4"
+        onSubmit={(event) => {
+          void handleSubmit(event)
+        }}
+      >
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Календарь отпусков</h4>
+              <p className="mt-1 text-sm text-slate-600">
+                Первый клик выбирает начало отпуска, второй клик выбирает конец. Touching и overlapping периоды будут объединены при расчёте payout.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Год</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{year}</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <YearVacationCalendar
+              year={year}
+              vacations={vacations}
+              pendingStartDate={pendingStartDate}
+              onSelectDate={handleDayClick}
+            />
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
+              <span className="text-xs text-slate-500">{vacations.length}</span>
+            </div>
+
+            {vacations.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">
+                Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {vacations.map((vacation) => (
+                  <li
+                    key={`${vacation.startDate}-${vacation.endDate}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {getVacationLengthInDays(vacation)} календарных дней включительно
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveVacation(vacation)}
+                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      Удалить
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">13-я зарплата</h4>
+              <p className="mt-1 text-sm text-slate-600">
+                Если включена, planner добавляет ещё один оклад в выбранный месяц.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Доплата</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {formatAmountWithCurrency(salaryAmount, currency)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={thirteenthSalaryEnabled}
+                onChange={(event) => setThirteenthSalaryEnabled(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+              />
+              <span>
+                <span className="font-semibold text-slate-900">Будет в этом году</span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  Выключите, если 13-я зарплата не планируется.
+                </span>
+              </span>
+            </label>
+
+            <label className="text-sm text-slate-600">
+              Месяц выплаты
+              <select
+                value={thirteenthSalaryMonth}
+                disabled={!thirteenthSalaryEnabled}
+                onChange={(event) => setThirteenthSalaryMonth(Number(event.target.value))}
+                className={selectClassName()}
+              >
+                {MONTH_LABELS.map((label, index) => (
+                  <option key={label} value={index + 1}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-slate-50 p-4">
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900">Derived preview</h4>
+            <p className="mt-1 text-sm text-slate-600">
+              Preview зеркалит backend-правила: первый merged-отпуск длиной от 14 дней даёт основные отпускные в месяц его старта.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <MetricTile
+              label="13-я зарплата"
+              value={
+                plannedIncome.thirteenthSalaryEnabled && plannedIncome.thirteenthSalaryMonth
+                  ? toMonthLabel(plannedIncome.thirteenthSalaryMonth)
+                  : 'Нет'
+              }
+              hint="Planner добавляет +оклад в выбранный месяц."
+            />
+            <MetricTile
+              label="Первый отпуск >= 14 дней"
+              value={derivedPreview.mainVacation ? formatVacationPeriod(derivedPreview.mainVacation) : 'Нет'}
+              hint="Короткие отпуска сохраняются, но payout не создают."
+            />
+            <MetricTile
+              label="Месяц отпускных"
+              value={derivedPreview.vacationPayoutMonth ? toMonthLabel(derivedPreview.vacationPayoutMonth) : 'Нет'}
+              hint="Используется месяц старта первого длинного отпуска."
+            />
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <h5 className="text-sm font-semibold text-slate-900">Месяцы с дополнительным доходом</h5>
+            {derivedPreview.extraMonths.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                Дополнительных начислений пока нет. При включённой 13-й зарплате или первом отпуске от 14 дней здесь появятся месяцы с `+ оклад`.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {derivedPreview.extraMonths.map((entry) => (
+                  <li
+                    key={entry.month}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{toMonthLabel(entry.month)}</p>
+                      <p className="mt-1 text-xs text-slate-500">{entry.reasons.join(' + ')}</p>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {formatAmountWithCurrency(entry.amount, currency)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-sm text-slate-600">
+            Planner не создаёт транзакции и не меняет linked balance. Он только подмешивает derived overrides в месячный review.
+          </p>
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {status === 'submitting' ? 'Сохраняем...' : 'Сохранить planner'}
+          </button>
+        </div>
+      </form>
+
+      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {!hasBaseForecast ? (
+        <p className="mt-3 text-xs text-rose-600">
+          Planner доступен только после настройки recurring forecast в настройках карты.
+        </p>
+      ) : null}
+      {pendingStartDate ? (
+        <p className="mt-3 text-xs text-rose-600">
+          Завершите выбор текущего отпускного диапазона второй датой или сбросьте незавершённый выбор.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
+function YearVacationCalendar({
+  year,
+  vacations,
+  pendingStartDate,
+  onSelectDate,
+}: {
+  year: number
+  vacations: PersonalFinanceVacationPeriodDto[]
+  pendingStartDate: string | null
+  onSelectDate: (date: string) => void
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {MONTH_LABELS.map((label, index) => (
+        <VacationMonthGrid
+          key={`${year}-${index + 1}`}
+          year={year}
+          month={index + 1}
+          label={label}
+          vacations={vacations}
+          pendingStartDate={pendingStartDate}
+          onSelectDate={onSelectDate}
+        />
+      ))}
+    </div>
+  )
+}
+
+function VacationMonthGrid({
+  year,
+  month,
+  label,
+  vacations,
+  pendingStartDate,
+  onSelectDate,
+}: {
+  year: number
+  month: number
+  label: string
+  vacations: PersonalFinanceVacationPeriodDto[]
+  pendingStartDate: string | null
+  onSelectDate: (date: string) => void
+}) {
+  const days = daysInMonth(year, month)
+  const offset = monthStartOffset(year, month)
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h5 className="text-sm font-semibold text-slate-900">{label}</h5>
+        <span className="text-xs text-slate-400">{year}</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-[0.12em] text-slate-400">
+        {DAY_LABELS.map((dayLabel) => (
+          <div key={`${label}-${dayLabel}`} className="py-1">
+            {dayLabel}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {Array.from({ length: offset }, (_, index) => (
+          <div key={`empty-${label}-${index}`} className="aspect-square rounded-lg bg-slate-50/60" />
+        ))}
+
+        {Array.from({ length: days }, (_, index) => {
+          const day = index + 1
+          const date = formatIsoDate(year, month, day)
+          const isSelected = isDateInsideVacationSelection(date, vacations)
+          const isBoundary = isVacationBoundary(date, vacations)
+          const isPendingStart = pendingStartDate === date
+          const isWeekend = isWeekendDate(date)
+
+          return (
+            <button
+              key={date}
+              type="button"
+              onClick={() => onSelectDate(date)}
+              className={`aspect-square rounded-lg border text-xs font-medium transition ${
+                isSelected
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : isPendingStart
+                    ? 'border-amber-300 bg-amber-100 text-amber-900'
+                    : isWeekend
+                      ? 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+              } ${isBoundary ? 'ring-2 ring-inset ring-cyan-300' : ''}`}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Годовая таблица доходов</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Суммы и статусы считаются по всем активным картам: факт, прогноз или смешанный месяц.
+          Суммы и статусы считаются по всем активным картам: факт, recurring forecast, planner-derived override или смешанный месяц.
         </p>
       </div>
 
@@ -1964,7 +2527,7 @@ function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.annualTotal)}
               </td>
-              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">Факт + прогноз</td>
+              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">Факт + прогноз + planner-derived overrides</td>
             </tr>
             <tr>
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
@@ -1995,6 +2558,14 @@ function StatusBadge({ status }: { status: Exclude<AggregatedIncomeMonthStatus, 
     return (
       <span className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
         Смешано
+      </span>
+    )
+  }
+
+  if (status === 'OVERRIDE') {
+    return (
+      <span className="inline-flex rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700">
+        Override
       </span>
     )
   }
@@ -2198,6 +2769,239 @@ function isPositiveAmount(value: string): boolean {
 
 function compareDecimalStrings(left: string, right: string): number {
   return Number.parseFloat(left || '0') - Number.parseFloat(right || '0')
+}
+
+interface DerivedIncomePlanExtraMonth {
+  month: number
+  amount: string
+  reasons: string[]
+}
+
+interface DerivedIncomePlanPreview {
+  normalizedVacations: PersonalFinanceVacationPeriodDto[]
+  mainVacation: PersonalFinanceVacationPeriodDto | null
+  thirteenthSalaryMonth: number | null
+  vacationPayoutMonth: number | null
+  extraMonths: DerivedIncomePlanExtraMonth[]
+}
+
+function buildIncomePlanDraft(
+  vacations: PersonalFinanceVacationPeriodDto[],
+  thirteenthSalaryEnabled: boolean,
+  thirteenthSalaryMonth: number,
+): UpdateIncomePlanRequest {
+  return {
+    vacations: sortVacationPeriods(cloneVacationPeriods(vacations)),
+    thirteenthSalaryEnabled,
+    thirteenthSalaryMonth: thirteenthSalaryEnabled ? thirteenthSalaryMonth : null,
+  }
+}
+
+function cloneVacationPeriods(
+  vacations: PersonalFinanceVacationPeriodDto[],
+): PersonalFinanceVacationPeriodDto[] {
+  return vacations.map((vacation) => ({
+    startDate: vacation.startDate,
+    endDate: vacation.endDate,
+  }))
+}
+
+function createOrderedVacationPeriod(
+  leftDate: string,
+  rightDate: string,
+): PersonalFinanceVacationPeriodDto {
+  return leftDate <= rightDate
+    ? { startDate: leftDate, endDate: rightDate }
+    : { startDate: rightDate, endDate: leftDate }
+}
+
+function sortVacationPeriods(
+  vacations: PersonalFinanceVacationPeriodDto[],
+): PersonalFinanceVacationPeriodDto[] {
+  return [...vacations].sort((left, right) =>
+    left.startDate === right.startDate
+      ? left.endDate.localeCompare(right.endDate)
+      : left.startDate.localeCompare(right.startDate),
+  )
+}
+
+function normalizeVacationPeriods(
+  vacations: PersonalFinanceVacationPeriodDto[],
+): PersonalFinanceVacationPeriodDto[] {
+  const sorted = sortVacationPeriods(
+    vacations.map((vacation) => createOrderedVacationPeriod(vacation.startDate, vacation.endDate)),
+  )
+
+  return sorted.reduce<PersonalFinanceVacationPeriodDto[]>((result, current) => {
+    const lastVacation = result[result.length - 1]
+    if (!lastVacation) {
+      result.push(current)
+      return result
+    }
+
+    const nextDayAfterLast = addDaysToIsoDate(lastVacation.endDate, 1)
+    if (current.startDate <= nextDayAfterLast) {
+      lastVacation.endDate = current.endDate > lastVacation.endDate ? current.endDate : lastVacation.endDate
+      return result
+    }
+
+    result.push({ ...current })
+    return result
+  }, [])
+}
+
+function deriveIncomePlanPreview(
+  incomePlan: Pick<
+    PersonalFinanceIncomePlanDto,
+    'vacations' | 'thirteenthSalaryEnabled' | 'thirteenthSalaryMonth'
+  > | null,
+  salaryAmount: string,
+): DerivedIncomePlanPreview {
+  const normalizedVacations = normalizeVacationPeriods(incomePlan?.vacations ?? [])
+  const extraMonthsByNumber = new Map<number, DerivedIncomePlanExtraMonth>()
+  const normalizedSalaryAmount = toDecimalAmountString(salaryAmount)
+
+  if (incomePlan?.thirteenthSalaryEnabled && incomePlan.thirteenthSalaryMonth) {
+    appendDerivedIncomeExtra(
+      extraMonthsByNumber,
+      incomePlan.thirteenthSalaryMonth,
+      normalizedSalaryAmount,
+      '13-я зарплата',
+    )
+  }
+
+  const mainVacation =
+    normalizedVacations.find((vacation) => getVacationLengthInDays(vacation) >= 14) ?? null
+
+  if (mainVacation) {
+    appendDerivedIncomeExtra(
+      extraMonthsByNumber,
+      getMonthFromIsoDate(mainVacation.startDate),
+      normalizedSalaryAmount,
+      'Основные отпускные',
+    )
+  }
+
+  return {
+    normalizedVacations,
+    mainVacation,
+    thirteenthSalaryMonth:
+      incomePlan?.thirteenthSalaryEnabled && incomePlan.thirteenthSalaryMonth
+        ? incomePlan.thirteenthSalaryMonth
+        : null,
+    vacationPayoutMonth: mainVacation ? getMonthFromIsoDate(mainVacation.startDate) : null,
+    extraMonths: Array.from(extraMonthsByNumber.values()).sort((left, right) => left.month - right.month),
+  }
+}
+
+function appendDerivedIncomeExtra(
+  extraMonthsByNumber: Map<number, DerivedIncomePlanExtraMonth>,
+  month: number,
+  amount: string,
+  reason: string,
+): void {
+  const current = extraMonthsByNumber.get(month)
+  if (!current) {
+    extraMonthsByNumber.set(month, {
+      month,
+      amount,
+      reasons: [reason],
+    })
+    return
+  }
+
+  current.amount = addDecimalAmounts(current.amount, amount)
+  current.reasons = [...current.reasons, reason]
+}
+
+function serializeIncomePlan(incomePlan: PersonalFinanceIncomePlanDto | null): string {
+  if (!incomePlan) {
+    return 'EMPTY'
+  }
+
+  return JSON.stringify({
+    vacations: sortVacationPeriods(incomePlan.vacations),
+    thirteenthSalaryEnabled: incomePlan.thirteenthSalaryEnabled,
+    thirteenthSalaryMonth: incomePlan.thirteenthSalaryMonth,
+  })
+}
+
+function formatVacationPeriod(vacation: PersonalFinanceVacationPeriodDto): string {
+  return `${formatIsoDateToRu(vacation.startDate)} - ${formatIsoDateToRu(vacation.endDate)}`
+}
+
+function getVacationLengthInDays(vacation: PersonalFinanceVacationPeriodDto): number {
+  const start = parseIsoDate(vacation.startDate)
+  const end = parseIsoDate(vacation.endDate)
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
+}
+
+function formatIsoDateToRu(value: string): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(parseIsoDate(value))
+}
+
+function formatIsoDate(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function parseIsoDate(value: string): Date {
+  const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10))
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+function addDaysToIsoDate(value: string, days: number): string {
+  const date = parseIsoDate(value)
+  date.setUTCDate(date.getUTCDate() + days)
+  return formatIsoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())
+}
+
+function getMonthFromIsoDate(value: string): number {
+  return Number.parseInt(value.slice(5, 7), 10)
+}
+
+function isWeekendDate(value: string): boolean {
+  const dayOfWeek = parseIsoDate(value).getUTCDay()
+  return dayOfWeek === 0 || dayOfWeek === 6
+}
+
+function isDateInsideVacationSelection(
+  value: string,
+  vacations: PersonalFinanceVacationPeriodDto[],
+): boolean {
+  return vacations.some((vacation) => value >= vacation.startDate && value <= vacation.endDate)
+}
+
+function isVacationBoundary(
+  value: string,
+  vacations: PersonalFinanceVacationPeriodDto[],
+): boolean {
+  return vacations.some((vacation) => vacation.startDate === value || vacation.endDate === value)
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+function monthStartOffset(year: number, month: number): number {
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()
+  return dayOfWeek === 0 ? 6 : dayOfWeek - 1
+}
+
+function incomeStatusLabel(status: Exclude<PersonalFinanceSnapshotDto['income']['months'][number]['status'], null>): string {
+  if (status === 'ACTUAL') {
+    return 'Факт'
+  }
+
+  if (status === 'OVERRIDE') {
+    return 'Override'
+  }
+
+  return 'Прогноз'
 }
 
 function isMonthlyLimitCategory(category: PersonalExpenseCategoryDto): boolean {

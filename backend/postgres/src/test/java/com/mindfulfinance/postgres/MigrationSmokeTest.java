@@ -39,7 +39,7 @@ class MigrationSmokeTest {
         flyway.clean();
         var result = flyway.migrate();
 
-        assertEquals(9, result.migrationsExecuted);
+        assertEquals(10, result.migrationsExecuted);
 
         try (var connection = DriverManager.getConnection(
             postgres.getJdbcUrl(),
@@ -49,6 +49,8 @@ class MigrationSmokeTest {
                 "accounts",
                 "personal_finance_cards",
                 "personal_finance_income_forecasts",
+                "personal_finance_income_plan_vacations",
+                "personal_finance_income_plans",
                 "personal_finance_monthly_expense_actuals",
                 "personal_finance_monthly_expense_limits",
                 "personal_finance_monthly_income_actuals",
@@ -85,6 +87,15 @@ class MigrationSmokeTest {
             assertThat(loadColumnTypes(connection, "personal_finance_monthly_income_actuals"))
                 .containsEntry("card_id", "uuid")
                 .containsEntry("total_amount", "numeric");
+
+            assertThat(loadColumnTypes(connection, "personal_finance_income_plans"))
+                .containsEntry("card_id", "uuid")
+                .containsEntry("thirteenth_salary_enabled", "boolean");
+
+            assertThat(loadColumnTypes(connection, "personal_finance_income_plan_vacations"))
+                .containsEntry("card_id", "uuid")
+                .containsEntry("start_date", "date")
+                .containsEntry("end_date", "date");
         }
     }
 
@@ -383,7 +394,9 @@ class MigrationSmokeTest {
                 'personal_finance_monthly_expense_actuals',
                 'personal_finance_monthly_expense_limits',
                 'personal_finance_monthly_income_actuals',
-                'personal_finance_income_forecasts'
+                'personal_finance_income_forecasts',
+                'personal_finance_income_plans',
+                'personal_finance_income_plan_vacations'
               )
             ORDER BY table_name
             """);

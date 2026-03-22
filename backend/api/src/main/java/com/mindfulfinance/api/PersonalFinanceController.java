@@ -1,6 +1,7 @@
 package com.mindfulfinance.api;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,14 +26,17 @@ import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
 import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.RestorePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.SaveIncomePlan;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
+import com.mindfulfinance.domain.personalfinance.IncomePlan;
 import com.mindfulfinance.domain.personalfinance.PersonalExpenseCategory;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCardId;
+import com.mindfulfinance.domain.personalfinance.VacationPeriod;
 
 @RestController
 public class PersonalFinanceController {
@@ -46,6 +50,7 @@ public class PersonalFinanceController {
     private final GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot;
     private final SaveMonthlyExpenseActual saveMonthlyExpenseActual;
     private final SaveMonthlyIncomeActual saveMonthlyIncomeActual;
+    private final SaveIncomePlan saveIncomePlan;
     private final SavePersonalFinanceSettings savePersonalFinanceSettings;
 
     public PersonalFinanceController(
@@ -59,6 +64,7 @@ public class PersonalFinanceController {
         GetCardPersonalFinanceSnapshot getCardPersonalFinanceSnapshot,
         SaveMonthlyExpenseActual saveMonthlyExpenseActual,
         SaveMonthlyIncomeActual saveMonthlyIncomeActual,
+        SaveIncomePlan saveIncomePlan,
         SavePersonalFinanceSettings savePersonalFinanceSettings
     ) {
         this.cardRepository = cardRepository;
@@ -71,6 +77,7 @@ public class PersonalFinanceController {
         this.getCardPersonalFinanceSnapshot = getCardPersonalFinanceSnapshot;
         this.saveMonthlyExpenseActual = saveMonthlyExpenseActual;
         this.saveMonthlyIncomeActual = saveMonthlyIncomeActual;
+        this.saveIncomePlan = saveIncomePlan;
         this.savePersonalFinanceSettings = savePersonalFinanceSettings;
     }
 
@@ -176,6 +183,29 @@ public class PersonalFinanceController {
             validateYear(request.year()),
             month,
             request.totalAmount()
+        ));
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/personal-finance/cards/{cardId}/income/plan/{year}")
+    public ResponseEntity<Void> updateIncomePlan(
+        @PathVariable("cardId") String rawCardId,
+        @PathVariable("year") int year,
+        @RequestBody UpdateIncomePlanRequest request
+    ) {
+        PersonalFinanceCardId cardId = requireExistingCardId(rawCardId);
+        validateYear(year);
+        if (request == null) {
+            throw new IllegalArgumentException("Request body must not be null");
+        }
+
+        saveIncomePlan.save(new SaveIncomePlan.Command(
+            cardId,
+            year,
+            toVacationPeriods(request.vacations()),
+            request.thirteenthSalaryEnabled(),
+            request.thirteenthSalaryMonth()
         ));
 
         return ResponseEntity.noContent().build();
@@ -296,12 +326,14 @@ public class PersonalFinanceController {
                     .map(month -> new IncomeMonthDto(
                         month.month(),
                         month.totalAmount().amount().toPlainString(),
-                        month.status() == null ? null : month.status().name()
+                        month.status() == null ? null : month.status().name(),
+                        month.overrideDeltaAmount() == null ? null : month.overrideDeltaAmount().amount().toPlainString()
                     ))
                     .toList(),
                 snapshot.income().annualTotal().amount().toPlainString(),
                 snapshot.income().averageMonthlyTotal().amount().toPlainString()
             ),
+            toIncomePlanDto(snapshot.incomePlan()),
             new SettingsSectionDto(
                 snapshot.settings().currentBalance().amount().toPlainString(),
                 snapshot.settings().baselineAmount().amount().toPlainString(),
@@ -311,6 +343,23 @@ public class PersonalFinanceController {
                 snapshot.settings().annualLimitTotal().amount().toPlainString(),
                 toForecastDto(snapshot.settings().incomeForecast())
             )
+        );
+    }
+
+    private static IncomePlanDto toIncomePlanDto(IncomePlan incomePlan) {
+        if (incomePlan == null) {
+            return null;
+        }
+
+        return new IncomePlanDto(
+            incomePlan.vacations().stream()
+                .map(vacation -> new VacationPeriodDto(
+                    vacation.startDate().toString(),
+                    vacation.endDate().toString()
+                ))
+                .toList(),
+            incomePlan.thirteenthSalaryEnabled(),
+            incomePlan.thirteenthSalaryMonth()
         );
     }
 
@@ -356,6 +405,19 @@ public class PersonalFinanceController {
             ));
     }
 
+    private static List<VacationPeriod> toVacationPeriods(List<VacationPeriodDto> vacations) {
+        if (vacations == null) {
+            return List.of();
+        }
+
+        return vacations.stream()
+            .map(vacation -> new VacationPeriod(
+                LocalDate.parse(vacation.startDate()),
+                LocalDate.parse(vacation.endDate())
+            ))
+            .toList();
+    }
+
     private static String toCategoryLabel(PersonalExpenseCategory category) {
         return switch (category) {
             case RESTAURANTS -> "Рестораны";
@@ -380,6 +442,12 @@ public class PersonalFinanceController {
 
     public record UpdateMonthlyIncomeActualRequest(int year, BigDecimal totalAmount) {}
 
+    public record UpdateIncomePlanRequest(
+        List<VacationPeriodDto> vacations,
+        boolean thirteenthSalaryEnabled,
+        Integer thirteenthSalaryMonth
+    ) {}
+
     public record UpdateCardSettingsRequest(
         BigDecimal baselineAmount,
         Map<String, BigDecimal> limitCategoryPercents,
@@ -395,6 +463,7 @@ public class PersonalFinanceController {
         List<ExpenseCategoryDto> categories,
         ExpensesSectionDto expenses,
         IncomeSectionDto income,
+        IncomePlanDto incomePlan,
         SettingsSectionDto settings
     ) {}
 
@@ -425,10 +494,19 @@ public class PersonalFinanceController {
         String averageMonthlyTotal
     ) {}
 
+    public record IncomePlanDto(
+        List<VacationPeriodDto> vacations,
+        boolean thirteenthSalaryEnabled,
+        Integer thirteenthSalaryMonth
+    ) {}
+
+    public record VacationPeriodDto(String startDate, String endDate) {}
+
     public record IncomeMonthDto(
         int month,
         String totalAmount,
-        String status
+        String status,
+        String overrideDeltaAmount
     ) {}
 
     public record SettingsSectionDto(
