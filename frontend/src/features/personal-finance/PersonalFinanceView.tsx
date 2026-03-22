@@ -15,7 +15,7 @@ import type {
 } from '../../api'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-export type PersonalFinanceTab = 'expenses' | 'income' | 'settings'
+export type PersonalFinanceTab = 'expenses' | 'income' | 'income-entry' | 'settings'
 export interface PersonalFinanceCardListItem extends PersonalFinanceCardDto {
   currentBalance: string | null
   currency: string | null
@@ -63,7 +63,7 @@ interface AggregatedIncomeViewModel {
   recurringForecast: AggregatedIncomeSummaryViewModel
 }
 
-type IncomeDrawerTab = 'actual' | 'plan'
+type IncomeEntryMode = 'actual' | 'plan'
 
 interface PersonalFinanceViewProps {
   status: LoadStatus
@@ -116,14 +116,16 @@ const MONTH_LABELS = [
   'Декабрь',
 ] as const
 
+const MONTH_SHORT_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] as const
+
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
 
 interface PersonalFinanceTabCopy {
   title: string
   description: string
-  actionLabel: string
-  panelTitle: string
-  panelDescription: string
+  actionLabel?: string
+  panelTitle?: string
+  panelDescription?: string
 }
 
 const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCopy> = {
@@ -138,10 +140,11 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
     title: 'Доходы по месяцам',
     description:
       'Годовой обзор суммируется по всем активным картам: факт имеет приоритет, а planner отпусков и 13-й зарплаты производит derived overrides поверх recurring forecast.',
-    actionLabel: '+ Факт и план',
-    panelTitle: 'Факт и план доходов',
-    panelDescription:
-      'Сохраняйте фактический доход по месяцу или настраивайте годовой planner отпусков и 13-й зарплаты для derived income overrides.',
+  },
+  'income-entry': {
+    title: 'Факт и план доходов',
+    description:
+      'Полноразмерная страница для сохранения фактического дохода по месяцу и настройки planner отпусков и 13-й зарплаты без узкой drawer-панели.',
   },
   settings: {
     title: 'Настройки карты',
@@ -200,7 +203,8 @@ export function PersonalFinanceView({
   const selectedCard = settingsSnapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
   const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
   const yearOptions = selectableYearOptions(year)
-  const canOpenActionPanel = activeTab === 'settings' || hasLoadedActiveSnapshots
+  const showsActionPanelButton = activeTab === 'expenses' || activeTab === 'settings'
+  const canOpenActionPanel = activeTab === 'settings' || (activeTab === 'expenses' && hasLoadedActiveSnapshots)
   const aggregatedExpenses = hasLoadedActiveSnapshots ? aggregateExpenses(activeSnapshots) : null
   const aggregatedIncome = hasLoadedActiveSnapshots ? aggregateIncome(activeSnapshots) : null
 
@@ -260,7 +264,7 @@ export function PersonalFinanceView({
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 lg:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <nav className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+          <nav className="flex flex-wrap rounded-2xl border border-slate-200 bg-slate-50 p-1">
             <NestedTabButton
               label="Расходы"
               isActive={activeTab === 'expenses'}
@@ -272,20 +276,27 @@ export function PersonalFinanceView({
               onClick={() => handleTabSelect('income')}
             />
             <NestedTabButton
+              label="Факт и план"
+              isActive={activeTab === 'income-entry'}
+              onClick={() => handleTabSelect('income-entry')}
+            />
+            <NestedTabButton
               label="Настройки"
               isActive={activeTab === 'settings'}
               onClick={() => handleTabSelect('settings')}
             />
           </nav>
 
-          <button
-            type="button"
-            onClick={() => setIsActionPanelOpen(true)}
-            disabled={!canOpenActionPanel}
-            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {activeTabCopy.actionLabel}
-          </button>
+          {showsActionPanelButton && activeTabCopy.actionLabel ? (
+            <button
+              type="button"
+              onClick={() => setIsActionPanelOpen(true)}
+              disabled={!canOpenActionPanel}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {activeTabCopy.actionLabel}
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-4 border-t border-slate-200 pt-4">
@@ -330,6 +341,28 @@ export function PersonalFinanceView({
             hasArchivedCards={archivedCards.length > 0}
           />
         )
+      ) : activeTab === 'income-entry' ? (
+        hasLoadedActiveSnapshots ? (
+          <IncomeEntryPage
+            key={`income-entry-${year}-${activeCards.length}`}
+            activeSnapshots={activeSnapshots}
+            preferredCardId={selectedCardId}
+            onSaveIncomeActual={onSaveIncomeActual}
+            onSaveIncomePlan={onSaveIncomePlan}
+          />
+        ) : hasActiveCards ? (
+          <InlineStatus
+            tone="warning"
+            message="Не удалось полностью загрузить данные активных карт. Откройте настройки нужной карты или повторите попытку."
+            actionLabel="Повторить"
+            onAction={onRetry}
+          />
+        ) : (
+          <PersonalFinanceAggregateEmptyState
+            tabLabel="доходов"
+            hasArchivedCards={archivedCards.length > 0}
+          />
+        )
       ) : !hasAnyCards ? (
         <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
       ) : !settingsSnapshot ? (
@@ -346,7 +379,7 @@ export function PersonalFinanceView({
         />
       )}
 
-      {isActionPanelOpen ? (
+      {isActionPanelOpen && activeTabCopy.panelTitle && activeTabCopy.panelDescription ? (
         <DrawerShell
           title={activeTabCopy.panelTitle}
           description={activeTabCopy.panelDescription}
@@ -357,15 +390,6 @@ export function PersonalFinanceView({
               activeSnapshots={activeSnapshots}
               preferredCardId={selectedCardId}
               onSaveExpenseActual={onSaveExpenseActual}
-              onClose={() => setIsActionPanelOpen(false)}
-            />
-          ) : null}
-          {activeTab === 'income' && hasLoadedActiveSnapshots ? (
-            <IncomeEntryDrawerPanel
-              activeSnapshots={activeSnapshots}
-              preferredCardId={selectedCardId}
-              onSaveIncomeActual={onSaveIncomeActual}
-              onSaveIncomePlan={onSaveIncomePlan}
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
@@ -450,7 +474,7 @@ function IncomeTab({ aggregate }: IncomeTabProps) {
   )
 }
 
-interface IncomeEntryDrawerPanelProps {
+interface IncomeEntryPageProps {
   activeSnapshots: PersonalFinanceSnapshotDto[]
   preferredCardId: string | null
   onSaveIncomeActual: (
@@ -463,19 +487,17 @@ interface IncomeEntryDrawerPanelProps {
     year: number,
     request: UpdateIncomePlanRequest,
   ) => Promise<boolean>
-  onClose: () => void
 }
 
-function IncomeEntryDrawerPanel({
+function IncomeEntryPage({
   activeSnapshots,
   preferredCardId,
   onSaveIncomeActual,
   onSaveIncomePlan,
-  onClose,
-}: IncomeEntryDrawerPanelProps) {
+}: IncomeEntryPageProps) {
   const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
   const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
-  const [selectedDrawerTab, setSelectedDrawerTab] = useState<IncomeDrawerTab>('actual')
+  const [selectedEntryMode, setSelectedEntryMode] = useState<IncomeEntryMode>('actual')
   const selectedSnapshot =
     activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
   const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
@@ -505,13 +527,13 @@ function IncomeEntryDrawerPanel({
               <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1">
                 <NestedTabButton
                   label="Факт"
-                  isActive={selectedDrawerTab === 'actual'}
-                  onClick={() => setSelectedDrawerTab('actual')}
+                  isActive={selectedEntryMode === 'actual'}
+                  onClick={() => setSelectedEntryMode('actual')}
                 />
                 <NestedTabButton
                   label="План доходов"
-                  isActive={selectedDrawerTab === 'plan'}
-                  onClick={() => setSelectedDrawerTab('plan')}
+                  isActive={selectedEntryMode === 'plan'}
+                  onClick={() => setSelectedEntryMode('plan')}
                 />
               </div>
             </div>
@@ -522,7 +544,7 @@ function IncomeEntryDrawerPanel({
               onSelectCard={setSelectedCardId}
             />
 
-            {selectedDrawerTab === 'actual' ? (
+            {selectedEntryMode === 'actual' ? (
               <label className="w-full text-sm text-slate-600 sm:max-w-64">
                 Месяц
                 <select
@@ -556,7 +578,7 @@ function IncomeEntryDrawerPanel({
             )}
             hint="Это базовый monthly forecast без учёта planner-derived adjustments."
           />
-          {selectedDrawerTab === 'actual' ? (
+          {selectedEntryMode === 'actual' ? (
             <>
               <MetricTile
                 label="Статус в review"
@@ -598,7 +620,7 @@ function IncomeEntryDrawerPanel({
         </div>
       </section>
 
-      {selectedDrawerTab === 'actual' ? (
+      {selectedEntryMode === 'actual' ? (
         <IncomeActualFormCard
           key={`actual-income-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${selectedMonthData.totalAmount}-${selectedMonthData.status ?? 'EMPTY'}`}
           cardId={selectedSnapshot.card.id}
@@ -607,7 +629,6 @@ function IncomeEntryDrawerPanel({
           selectedMonth={selectedMonth}
           initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
           onSave={onSaveIncomeActual}
-          onSaved={onClose}
         />
       ) : (
         <IncomePlanFormCard
@@ -620,7 +641,6 @@ function IncomeEntryDrawerPanel({
           initialIncomePlan={selectedSnapshot.incomePlan}
           incomeMonths={selectedSnapshot.income.months}
           onSave={onSaveIncomePlan}
-          onSaved={onClose}
         />
       )}
     </div>
@@ -2003,7 +2023,7 @@ function IncomeActualFormCard({
       </div>
 
       <form
-        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]"
+        className="mt-4 space-y-4"
         onSubmit={(event) => {
           void handleSubmit(event)
         }}
@@ -2020,23 +2040,22 @@ function IncomeActualFormCard({
           />
         </label>
 
-        <div className="flex items-end">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
+            </p>
+          </div>
           <button
             type="submit"
             disabled={!isValid || status === 'submitting'}
-            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 lg:w-auto"
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
             {status === 'submitting' ? 'Сохраняем...' : 'Сохранить факт'}
           </button>
         </div>
       </form>
-
-      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
-        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
-        <p className="mt-1 text-lg font-semibold text-slate-900">
-          {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
-        </p>
-      </div>
 
       {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
       {!isValid ? (
@@ -2195,49 +2214,49 @@ function IncomePlanFormCard({
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 grid gap-4 lg:grid-cols-2 lg:items-start">
             <YearVacationCalendar
               year={year}
               vacations={vacations}
               pendingStartDate={pendingStartDate}
               onSelectDate={handleDayClick}
             />
-          </div>
 
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
-              <span className="text-xs text-slate-500">{vacations.length}</span>
-            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
+                <span className="text-xs text-slate-500">{vacations.length}</span>
+              </div>
 
-            {vacations.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
-                Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {vacations.map((vacation) => (
-                  <li
-                    key={`${vacation.startDate}-${vacation.endDate}`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {getVacationLengthInDays(vacation)} календарных дней включительно
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveVacation(vacation)}
-                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+              {vacations.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {vacations.map((vacation) => (
+                    <li
+                      key={`${vacation.startDate}-${vacation.endDate}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
                     >
-                      Удалить
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {getVacationLengthInDays(vacation)} календарных дней включительно
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVacation(vacation)}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </section>
 
@@ -2389,7 +2408,7 @@ function YearVacationCalendar({
   onSelectDate: (date: string) => void
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1 lg:mx-0 lg:max-w-none lg:gap-2">
       {MONTH_LABELS.map((label, index) => (
         <VacationMonthGrid
           key={`${year}-${index + 1}`}
@@ -2424,23 +2443,22 @@ function VacationMonthGrid({
   const offset = monthStartOffset(year, month)
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
-        <h5 className="text-sm font-semibold text-slate-900">{label}</h5>
-        <span className="text-xs text-slate-400">{year}</span>
+    <section className="rounded-xl border border-slate-200 bg-white p-1.5">
+      <div className="flex items-center justify-center">
+        <h5 className="text-[10px] font-semibold text-slate-900">{shortMonthLabel(month)}</h5>
       </div>
 
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-[0.12em] text-slate-400">
+      <div className="mt-1 grid grid-cols-7 gap-px text-center text-[8px] uppercase text-slate-400">
         {DAY_LABELS.map((dayLabel) => (
-          <div key={`${label}-${dayLabel}`} className="py-1">
-            {dayLabel}
+          <div key={`${label}-${dayLabel}`} className="py-px">
+            {dayLabel.slice(0, 1)}
           </div>
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-1">
+      <div className="mt-1 grid grid-cols-7 gap-px">
         {Array.from({ length: offset }, (_, index) => (
-          <div key={`empty-${label}-${index}`} className="aspect-square rounded-lg bg-slate-50/60" />
+          <div key={`empty-${label}-${index}`} className="aspect-square rounded-[4px] bg-slate-50/60" />
         ))}
 
         {Array.from({ length: days }, (_, index) => {
@@ -2456,7 +2474,7 @@ function VacationMonthGrid({
               key={date}
               type="button"
               onClick={() => onSelectDate(date)}
-              className={`aspect-square rounded-lg border text-xs font-medium transition ${
+              className={`aspect-square rounded-[4px] border text-[9px] leading-none font-medium transition ${
                 isSelected
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : isPendingStart
@@ -2464,7 +2482,7 @@ function VacationMonthGrid({
                     : isWeekend
                       ? 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
-              } ${isBoundary ? 'ring-2 ring-inset ring-cyan-300' : ''}`}
+              } ${isBoundary ? 'ring-1 ring-inset ring-cyan-300' : ''}`}
             >
               {day}
             </button>
@@ -2653,6 +2671,10 @@ function controlClassName(isValid: boolean): string {
 
 function toMonthLabel(month: number): string {
   return MONTH_LABELS[month - 1] ?? String(month)
+}
+
+function shortMonthLabel(month: number): string {
+  return MONTH_SHORT_LABELS[month - 1] ?? String(month)
 }
 
 function defaultActualMonth(year: number): number {
