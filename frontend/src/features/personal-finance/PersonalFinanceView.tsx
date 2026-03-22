@@ -116,6 +116,8 @@ const MONTH_LABELS = [
   'Декабрь',
 ] as const
 
+const MONTH_SHORT_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] as const
+
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
 
 interface PersonalFinanceTabCopy {
@@ -2406,7 +2408,7 @@ function YearVacationCalendar({
   onSelectDate: (date: string) => void
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1">
       {MONTH_LABELS.map((label, index) => (
         <VacationMonthGrid
           key={`${year}-${index + 1}`}
@@ -2441,23 +2443,22 @@ function VacationMonthGrid({
   const offset = monthStartOffset(year, month)
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
-        <h5 className="text-sm font-semibold text-slate-900">{label}</h5>
-        <span className="text-xs text-slate-400">{year}</span>
+    <section className="rounded-xl border border-slate-200 bg-white p-1.5">
+      <div className="flex items-center justify-center">
+        <h5 className="text-[10px] font-semibold text-slate-900">{shortMonthLabel(month)}</h5>
       </div>
 
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-[0.12em] text-slate-400">
+      <div className="mt-1 grid grid-cols-7 gap-px text-center text-[8px] uppercase text-slate-400">
         {DAY_LABELS.map((dayLabel) => (
-          <div key={`${label}-${dayLabel}`} className="py-1">
-            {dayLabel}
+          <div key={`${label}-${dayLabel}`} className="py-px">
+            {dayLabel.slice(0, 1)}
           </div>
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-1">
+      <div className="mt-1 grid grid-cols-7 gap-px">
         {Array.from({ length: offset }, (_, index) => (
-          <div key={`empty-${label}-${index}`} className="aspect-square rounded-lg bg-slate-50/60" />
+          <div key={`empty-${label}-${index}`} className="aspect-square rounded-[4px] bg-slate-50/60" />
         ))}
 
         {Array.from({ length: days }, (_, index) => {
@@ -2473,7 +2474,7 @@ function VacationMonthGrid({
               key={date}
               type="button"
               onClick={() => onSelectDate(date)}
-              className={`aspect-square rounded-lg border text-xs font-medium transition ${
+              className={`aspect-square rounded-[4px] border text-[9px] leading-none font-medium transition ${
                 isSelected
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : isPendingStart
@@ -2481,7 +2482,7 @@ function VacationMonthGrid({
                     : isWeekend
                       ? 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
-              } ${isBoundary ? 'ring-2 ring-inset ring-cyan-300' : ''}`}
+              } ${isBoundary ? 'ring-1 ring-inset ring-cyan-300' : ''}`}
             >
               {day}
             </button>
@@ -2670,6 +2671,10 @@ function controlClassName(isValid: boolean): string {
 
 function toMonthLabel(month: number): string {
   return MONTH_LABELS[month - 1] ?? String(month)
+}
+
+function shortMonthLabel(month: number): string {
+  return MONTH_SHORT_LABELS[month - 1] ?? String(month)
 }
 
 function defaultActualMonth(year: number): number {
