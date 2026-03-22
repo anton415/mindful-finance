@@ -2214,7 +2214,7 @@ function IncomePlanFormCard({
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+          <div className="mt-4 grid gap-4 lg:grid-cols-2 lg:items-start">
             <YearVacationCalendar
               year={year}
               vacations={vacations}
@@ -2408,7 +2408,7 @@ function YearVacationCalendar({
   onSelectDate: (date: string) => void
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1 lg:mx-0">
+    <div className="mx-auto grid w-full max-w-[22rem] grid-cols-4 gap-1 lg:mx-0 lg:max-w-none lg:gap-2">
       {MONTH_LABELS.map((label, index) => (
         <VacationMonthGrid
           key={`${year}-${index + 1}`}
