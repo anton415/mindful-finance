@@ -997,11 +997,13 @@ function AccountsView({
     isEditingSelectedAccount &&
     editingAccountName.trim().length > 0 &&
     updateAccountStatus !== 'submitting'
-  const hasLoadedTransactions = transactionsStatus === 'ready' && totalTransactionsCount > 0
+  const isDeleteAvailabilityKnown = transactionsStatus === 'ready'
+  const hasLoadedTransactions = isDeleteAvailabilityKnown && totalTransactionsCount > 0
   const canDeleteAccount =
     selectedAccount !== null &&
     !isEditingSelectedAccount &&
-    !hasLoadedTransactions &&
+    isDeleteAvailabilityKnown &&
+    totalTransactionsCount === 0 &&
     deleteAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
@@ -1438,6 +1440,12 @@ function AccountsView({
                 Валюта счета фиксируется при создании и не редактируется.
               </p>
             )}
+
+            {!isEditingSelectedAccount && !isDeleteAvailabilityKnown ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Удаление станет доступно после загрузки транзакций счета.
+              </p>
+            ) : null}
 
             {!isEditingSelectedAccount && hasLoadedTransactions ? (
               <p className="mt-2 text-xs text-slate-500">

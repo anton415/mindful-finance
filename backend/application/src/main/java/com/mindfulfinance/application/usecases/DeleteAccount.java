@@ -19,6 +19,7 @@ public final class DeleteAccount {
         Objects.requireNonNull(command, "command");
         Account account = Objects.requireNonNull(command.account(), "command.account");
 
+        accounts.lock(account.id());
         account.ensureCanBeDeleted(!transactions.findByAccountId(account.id()).isEmpty());
         accounts.delete(account.id());
     }

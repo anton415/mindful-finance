@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.mindfulfinance.application.ports.AccountRepository;
 import com.mindfulfinance.application.ports.PersonalFinanceCardRepository;
@@ -137,6 +138,7 @@ public class AccountsController {
     }
 
     @DeleteMapping("/accounts/{accountId}")
+    @Transactional
     public ResponseEntity<Void> deleteAccount(@PathVariable("accountId") String accountId) {
         AccountId parsedAccountId = parseAccountId(accountId);
         Account account = requireInvestmentAccount(parsedAccountId);

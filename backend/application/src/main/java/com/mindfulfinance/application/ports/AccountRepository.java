@@ -25,5 +25,7 @@ public interface AccountRepository {
      */
     List<Account> findAll();
 
+    void lock(AccountId id);
+
     void delete(AccountId id);
 }
