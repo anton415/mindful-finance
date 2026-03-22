@@ -31,6 +31,11 @@ public final class InMemoryAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void lock(AccountId id) {
+      // In-memory adapter has no concurrent database writers to coordinate with.
+    }
+
+    @Override
     public void delete(AccountId id) {
       store.remove(id);
     }

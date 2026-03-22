@@ -71,6 +71,15 @@ public final class PostgresAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void lock(AccountId id) {
+        jdbcTemplate.queryForList(
+            "SELECT id FROM accounts WHERE id = ? FOR UPDATE",
+            UUID.class,
+            id.value()
+        );
+    }
+
+    @Override
     public void delete(AccountId id) {
         jdbcTemplate.update("DELETE FROM accounts WHERE id = ?", id.value());
     }

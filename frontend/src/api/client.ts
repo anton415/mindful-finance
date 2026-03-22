@@ -25,6 +25,7 @@ import type {
 export interface ApiClient {
   createAccount(request: CreateAccountRequest, signal?: AbortSignal): Promise<CreateAccountResponse>
   updateAccount(accountId: string, request: UpdateAccountRequest, signal?: AbortSignal): Promise<void>
+  deleteAccount(accountId: string, signal?: AbortSignal): Promise<void>
   createTransaction(
     accountId: string,
     request: CreateTransactionRequest,
@@ -101,6 +102,10 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       return http.putJson<void, UpdateAccountRequest>(`/accounts/${toEncodedAccountId(accountId)}`, request, {
         signal,
       })
+    },
+
+    deleteAccount(accountId: string, signal?: AbortSignal): Promise<void> {
+      return http.deleteVoid(`/accounts/${toEncodedAccountId(accountId)}`, { signal })
     },
 
     createTransaction(

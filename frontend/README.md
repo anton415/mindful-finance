@@ -34,5 +34,6 @@ Covered write endpoints:
 
 - `POST /accounts`
 - `PUT /accounts/{accountId}`
+- `DELETE /accounts/{accountId}`
 - `POST /accounts/{accountId}/transactions`
 - `POST /imports/transactions/csv` (multipart form data: `accountId` + `file`)

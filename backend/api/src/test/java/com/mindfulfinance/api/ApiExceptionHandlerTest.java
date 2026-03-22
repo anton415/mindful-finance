@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static com.mindfulfinance.domain.shared.DomainErrorCode.ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS;
+import com.mindfulfinance.domain.shared.DomainException;
+
 public class ApiExceptionHandlerTest {
     private MockMvc mockMvc;
 
@@ -64,6 +67,14 @@ public class ApiExceptionHandlerTest {
             .andExpect(jsonPath("$.error").value("CONFLICT"));
     }
 
+    @Test
+    public void accountDeleteForbiddenDomainException_returns409Conflict() throws Exception {
+        mockMvc.perform(get("/throw/account-delete-conflict"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message").value("Нельзя удалить счет, пока у него есть транзакции."));
+    }
+
     @RestController
     private static class ThrowingController {
         // Milestone 3 requires 409 mapping for state/conflict failures.
@@ -97,6 +108,15 @@ public class ApiExceptionHandlerTest {
         @GetMapping("/throw/duplicate-key")
         public String duplicateKey() {
             throw new DuplicateKeyException("duplicate transaction");
+        }
+
+        @GetMapping("/throw/account-delete-conflict")
+        public String accountDeleteConflict() {
+            throw new DomainException(
+                ACCOUNT_DELETE_FORBIDDEN_HAS_TRANSACTIONS,
+                "Account cannot be deleted while it has transactions",
+                null
+            );
         }
     }
 }

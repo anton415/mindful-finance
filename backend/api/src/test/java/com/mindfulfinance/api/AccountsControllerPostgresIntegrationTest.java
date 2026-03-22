@@ -116,6 +116,49 @@ public class AccountsControllerPostgresIntegrationTest {
     }
 
     @Test
+    public void delete_account_endpoint_removes_empty_account_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(delete("/accounts/{accountId}", accountId))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    public void delete_account_endpoint_rejects_account_with_transactions_with_postgres_profile() throws Exception {
+        MvcResult accountResult = mockMvc.perform(post("/accounts")
+            .contentType("application/json")
+            .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String accountId = JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+        mockMvc.perform(post("/accounts/{accountId}/transactions", accountId)
+            .contentType("application/json")
+            .content("{\"occurredOn\":\"2026-03-02\",\"direction\":\"INFLOW\",\"amount\":\"100.00\",\"memo\":\"Salary\"}"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/accounts/{accountId}", accountId))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message").value("Нельзя удалить счет, пока у него есть транзакции."));
+
+        mockMvc.perform(get("/accounts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[*].id").value(hasItem(accountId)));
+    }
+
+    @Test
     public void update_transaction_endpoint_updates_list_balance_and_metrics_with_postgres_profile() throws Exception {
         MvcResult accountResult = mockMvc.perform(post("/accounts")
             .contentType("application/json")

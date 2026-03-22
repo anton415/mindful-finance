@@ -30,6 +30,11 @@ public final class InMemoryAccountRepository implements AccountRepository {
     }
 
     @Override
+    public void lock(AccountId id) {
+      // In-memory test double has no row-level locking semantics.
+    }
+
+    @Override
     public void delete(AccountId id) {
       store.remove(id);
     }
