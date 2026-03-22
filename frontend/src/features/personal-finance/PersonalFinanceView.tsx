@@ -2003,7 +2003,7 @@ function IncomeActualFormCard({
       </div>
 
       <form
-        className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]"
+        className="mt-4 space-y-4"
         onSubmit={(event) => {
           void handleSubmit(event)
         }}
@@ -2020,23 +2020,22 @@ function IncomeActualFormCard({
           />
         </label>
 
-        <div className="flex items-end">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
+            </p>
+          </div>
           <button
             type="submit"
             disabled={!isValid || status === 'submitting'}
-            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 lg:w-auto"
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
             {status === 'submitting' ? 'Сохраняем...' : 'Сохранить факт'}
           </button>
         </div>
       </form>
-
-      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3">
-        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
-        <p className="mt-1 text-lg font-semibold text-slate-900">
-          {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
-        </p>
-      </div>
 
       {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
       {!isValid ? (
