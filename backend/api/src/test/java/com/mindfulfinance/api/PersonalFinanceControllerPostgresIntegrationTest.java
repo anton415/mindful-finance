@@ -622,6 +622,23 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Income plan vacations must stay inside the selected year"));
 
+        mockMvc.perform(put("/personal-finance/cards/{cardId}/income/plan/2026", cardId)
+            .contentType("application/json")
+            .content("""
+                {
+                  "vacations": [
+                    {
+                      "startDate": "2026-13-40",
+                      "endDate": "2026-01-05"
+                    }
+                  ],
+                  "thirteenthSalaryEnabled": false,
+                  "thirteenthSalaryMonth": null
+                }
+                """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Income plan vacations must contain valid startDate and endDate values"));
+
         mockMvc.perform(put("/personal-finance/cards/{cardId}", cardId)
             .contentType("application/json")
             .content("""

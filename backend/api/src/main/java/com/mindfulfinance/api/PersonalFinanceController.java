@@ -2,6 +2,7 @@ package com.mindfulfinance.api;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -411,10 +412,25 @@ public class PersonalFinanceController {
         }
 
         return vacations.stream()
-            .map(vacation -> new VacationPeriod(
-                LocalDate.parse(vacation.startDate()),
-                LocalDate.parse(vacation.endDate())
-            ))
+            .map(vacation -> {
+                if (vacation == null || vacation.startDate() == null || vacation.endDate() == null) {
+                    throw new IllegalArgumentException(
+                        "Income plan vacations must contain valid startDate and endDate values"
+                    );
+                }
+
+                try {
+                    return new VacationPeriod(
+                        LocalDate.parse(vacation.startDate()),
+                        LocalDate.parse(vacation.endDate())
+                    );
+                } catch (DateTimeParseException exception) {
+                    throw new IllegalArgumentException(
+                        "Income plan vacations must contain valid startDate and endDate values",
+                        exception
+                    );
+                }
+            })
             .toList();
     }
 
