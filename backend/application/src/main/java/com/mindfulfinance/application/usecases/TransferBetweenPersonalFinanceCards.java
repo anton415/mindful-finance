@@ -19,6 +19,7 @@ import com.mindfulfinance.domain.transaction.TransactionId;
 public final class TransferBetweenPersonalFinanceCards {
     static final String SAME_CARD_TRANSFER_MESSAGE = "Transfer source and destination cards must be different";
     static final String POSITIVE_AMOUNT_REQUIRED_MESSAGE = "Transfer amount must be positive RUB";
+    static final String TRANSFER_DATE_REQUIRED_MESSAGE = "Transfer date must be provided";
 
     private static final Currency RUB = Currency.getInstance("RUB");
 
@@ -47,7 +48,9 @@ public final class TransferBetweenPersonalFinanceCards {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(command.sourceCardId(), "sourceCardId");
         Objects.requireNonNull(command.destinationCardId(), "destinationCardId");
-        Objects.requireNonNull(command.occurredOn(), "occurredOn");
+        if (command.occurredOn() == null) {
+            throw new IllegalArgumentException(TRANSFER_DATE_REQUIRED_MESSAGE);
+        }
 
         if (command.sourceCardId().equals(command.destinationCardId())) {
             throw new IllegalArgumentException(SAME_CARD_TRANSFER_MESSAGE);

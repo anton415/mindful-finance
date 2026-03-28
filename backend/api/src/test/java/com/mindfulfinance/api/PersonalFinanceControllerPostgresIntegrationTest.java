@@ -722,6 +722,18 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .contentType("application/json")
             .content("""
                 {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "amount": "10.00"
+                }
+                """.formatted(cardId, secondCardId)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transfer date must be provided"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
                   "sourceCardId": "e5c4e878-f48f-466f-b75d-d4474ff4d970",
                   "destinationCardId": "%s",
                   "occurredOn": "2026-03-14",
