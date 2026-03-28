@@ -275,6 +275,52 @@ public class PersonalFinanceUseCasesTest {
     }
 
     @Test
+    void transfer_requires_different_source_and_destination_cards() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card(CARD_ID, LINKED_ACCOUNT_ID, "Основная карта"));
+
+        IllegalArgumentException error = assertThrows(
+            IllegalArgumentException.class,
+            () -> new TransferBetweenPersonalFinanceCards(cards, transactions).transfer(
+                new TransferBetweenPersonalFinanceCards.Command(
+                    CARD_ID,
+                    CARD_ID,
+                    LocalDate.of(2026, 3, 14),
+                    new BigDecimal("100.00")
+                )
+            )
+        );
+
+        assertEquals(TransferBetweenPersonalFinanceCards.SAME_CARD_TRANSFER_MESSAGE, error.getMessage());
+        assertTrue(transactions.findByAccountId(LINKED_ACCOUNT_ID).isEmpty());
+    }
+
+    @Test
+    void transfer_requires_positive_amount() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card(CARD_ID, LINKED_ACCOUNT_ID, "Основная карта"));
+        cards.save(card(SECOND_CARD_ID, SECOND_LINKED_ACCOUNT_ID, "Резервная карта"));
+
+        IllegalArgumentException error = assertThrows(
+            IllegalArgumentException.class,
+            () -> new TransferBetweenPersonalFinanceCards(cards, transactions).transfer(
+                new TransferBetweenPersonalFinanceCards.Command(
+                    CARD_ID,
+                    SECOND_CARD_ID,
+                    LocalDate.of(2026, 3, 14),
+                    BigDecimal.ZERO
+                )
+            )
+        );
+
+        assertEquals(TransferBetweenPersonalFinanceCards.POSITIVE_AMOUNT_REQUIRED_MESSAGE, error.getMessage());
+        assertTrue(transactions.findByAccountId(LINKED_ACCOUNT_ID).isEmpty());
+        assertTrue(transactions.findByAccountId(SECOND_LINKED_ACCOUNT_ID).isEmpty());
+    }
+
+    @Test
     void investments_stay_in_category_maps_but_drop_from_expense_review_totals() {
         InMemoryCardRepository cards = new InMemoryCardRepository();
         InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
