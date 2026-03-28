@@ -3,10 +3,15 @@ interface ParsedMoneyInput {
   fractionPart: string
   hasDecimalSeparator: boolean
   hasValue: boolean
+  isValid: boolean
 }
 
 export function formatMoneyInput(value: string): string {
   const parsed = parseMoneyInput(value)
+  if (!parsed.isValid) {
+    return value.trim()
+  }
+
   if (!parsed.hasValue) {
     return ''
   }
@@ -21,6 +26,10 @@ export function formatMoneyInput(value: string): string {
 
 export function normalizeMoneyInput(value: string): string {
   const parsed = parseMoneyInput(value)
+  if (!parsed.isValid) {
+    return value.trim()
+  }
+
   if (!parsed.hasValue) {
     return ''
   }
@@ -33,39 +42,56 @@ export function normalizeMoneyInput(value: string): string {
 }
 
 function parseMoneyInput(value: string): ParsedMoneyInput {
-  const source = value.trim().replace(/\s+/g, '').replace(/,/g, '.')
-
-  let integerDigits = ''
-  let fractionDigits = ''
-  let hasDecimalSeparator = false
-
-  for (const symbol of source) {
-    if (symbol >= '0' && symbol <= '9') {
-      if (hasDecimalSeparator) {
-        if (fractionDigits.length < 2) {
-          fractionDigits += symbol
-        }
-      } else {
-        integerDigits += symbol
-      }
-      continue
-    }
-
-    if (symbol === '.' && !hasDecimalSeparator) {
-      hasDecimalSeparator = true
+  const trimmed = value.trim()
+  if (trimmed.length === 0) {
+    return {
+      integerPart: '',
+      fractionPart: '',
+      hasDecimalSeparator: false,
+      hasValue: false,
+      isValid: true,
     }
   }
 
-  if (integerDigits.length === 0 && (hasDecimalSeparator || fractionDigits.length > 0)) {
+  const source = trimmed.replace(/\s+/g, '')
+  if (/[+-]/.test(source) || /[^0-9.,]/.test(source)) {
+    return invalidParsedMoneyInput
+  }
+
+  const dotCount = countOccurrences(source, '.')
+  const commaCount = countOccurrences(source, ',')
+  if ((dotCount > 0 && commaCount > 0) || dotCount > 1 || commaCount > 1) {
+    return invalidParsedMoneyInput
+  }
+
+  const decimalSeparator = dotCount === 1 ? '.' : commaCount === 1 ? ',' : null
+  const [integerRaw, fractionRaw = ''] = decimalSeparator === null ? [source, ''] : source.split(decimalSeparator)
+  if (!/^\d*$/.test(integerRaw) || !/^\d*$/.test(fractionRaw)) {
+    return invalidParsedMoneyInput
+  }
+
+  let integerDigits = integerRaw.replace(/^0+(?=\d)/, '')
+  if (integerDigits.length === 0 && decimalSeparator !== null) {
     integerDigits = '0'
   }
 
-  integerDigits = integerDigits.replace(/^0+(?=\d)/, '')
-
   return {
     integerPart: integerDigits,
-    fractionPart: fractionDigits,
-    hasDecimalSeparator,
-    hasValue: integerDigits.length > 0 || fractionDigits.length > 0 || hasDecimalSeparator,
+    fractionPart: fractionRaw,
+    hasDecimalSeparator: decimalSeparator !== null,
+    hasValue: integerDigits.length > 0 || fractionRaw.length > 0 || decimalSeparator !== null,
+    isValid: true,
   }
+}
+
+const invalidParsedMoneyInput: ParsedMoneyInput = {
+  integerPart: '',
+  fractionPart: '',
+  hasDecimalSeparator: false,
+  hasValue: false,
+  isValid: false,
+}
+
+function countOccurrences(value: string, symbol: string): number {
+  return value.split(symbol).length - 1
 }
