@@ -14,6 +14,7 @@ import type {
   UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
 } from '../../api'
+import { formatMoneyInput, normalizeMoneyInput } from '../../money-input'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type PersonalFinanceTab = 'expenses' | 'income' | 'income-entry' | 'settings'
@@ -2944,28 +2945,28 @@ function toExpenseDraftValues(
 }
 
 function toDraftAmount(value: string): string {
-  return value === '0.00' ? '' : value
+  return value === '0.00' ? '' : formatMoneyInput(value)
 }
 
 function normalizeAmountInput(value: string): string {
-  return value.replace(',', '.').replace(/[^\d.]/g, '')
+  return formatMoneyInput(value)
 }
 
 function isValidNonNegativeAmountValue(value: string): boolean {
-  const trimmed = value.trim()
-  if (trimmed.length === 0) {
+  const normalized = normalizeMoneyInput(value)
+  if (normalized.length === 0) {
     return true
   }
-  return /^\d+(\.\d{0,2})?$/.test(trimmed)
+  return /^\d+(\.\d{0,2})?$/.test(normalized)
 }
 
 function toDecimalAmountString(value: string): string {
-  const trimmed = value.trim()
-  if (trimmed.length === 0 || !isValidNonNegativeAmountValue(trimmed)) {
+  const normalized = normalizeMoneyInput(value)
+  if (normalized.length === 0 || !isValidNonNegativeAmountValue(normalized)) {
     return '0.00'
   }
 
-  const parsed = Number.parseFloat(trimmed)
+  const parsed = Number.parseFloat(normalized)
   if (!Number.isFinite(parsed) || parsed < 0) {
     return '0.00'
   }

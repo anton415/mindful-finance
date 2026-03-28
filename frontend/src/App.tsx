@@ -28,6 +28,7 @@ import {
   type PersonalFinanceCardListItem,
   type PersonalFinanceTab,
 } from './features/personal-finance/PersonalFinanceView'
+import { formatMoneyInput, normalizeMoneyInput } from './money-input'
 
 interface DashboardData {
   asOf: string
@@ -1041,7 +1042,7 @@ function AccountsView({
     deleteAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
-  const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
+  const transactionAmountCandidate = normalizeMoneyInput(newTransactionAmount)
   const transactionMemoCandidate = newTransactionMemo.trim()
   const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
   const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
@@ -1051,7 +1052,7 @@ function AccountsView({
     isTransactionAmountValid &&
     createTransactionStatus !== 'submitting'
   const editingTransactionDateCandidate = editingTransactionDate.trim()
-  const editingTransactionAmountCandidate = normalizeAmountInput(editingTransactionAmount)
+  const editingTransactionAmountCandidate = normalizeMoneyInput(editingTransactionAmount)
   const editingTransactionMemoCandidate = editingTransactionMemo.trim()
   const isEditingTransactionDateValid = isValidIsoDateValue(editingTransactionDateCandidate)
   const isEditingTransactionAmountValid = isValidPositiveAmountValue(editingTransactionAmountCandidate)
@@ -1195,7 +1196,7 @@ function AccountsView({
     setEditingTransactionId(transaction.id)
     setEditingTransactionDate(transaction.occurredOn)
     setEditingTransactionDirection(transaction.direction)
-    setEditingTransactionAmount(transaction.amount)
+    setEditingTransactionAmount(formatMoneyInput(transaction.amount))
     setEditingTransactionMemo(normalizeTransactionMemo(transaction.memo))
     setUpdateTransactionStatus('idle')
     setUpdateTransactionErrorMessage(null)
@@ -1537,7 +1538,7 @@ function AccountsView({
                     type="text"
                     inputMode="decimal"
                     value={newTransactionAmount}
-                    onChange={(event) => setNewTransactionAmount(event.target.value)}
+                    onChange={(event) => setNewTransactionAmount(formatMoneyInput(event.target.value))}
                     placeholder="0,00"
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   />
@@ -1732,7 +1733,9 @@ function AccountsView({
                                   type="text"
                                   inputMode="decimal"
                                   value={editingTransactionAmount}
-                                  onChange={(event) => setEditingTransactionAmount(event.target.value)}
+                                  onChange={(event) =>
+                                    setEditingTransactionAmount(formatMoneyInput(event.target.value))
+                                  }
                                   placeholder="0,00"
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                                 />
@@ -1939,10 +1942,6 @@ function formatAmount(amount: string): string {
 function formatSignedAmount(amount: string, direction: 'INFLOW' | 'OUTFLOW'): string {
   const prefix = direction === 'OUTFLOW' ? '-' : '+'
   return `${prefix}${formatAmount(amount)}`
-}
-
-function normalizeAmountInput(value: string): string {
-  return value.trim().replace(',', '.')
 }
 
 function isValidIsoDateValue(value: string): boolean {
