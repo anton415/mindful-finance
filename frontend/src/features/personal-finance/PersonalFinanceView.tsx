@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type {
+  CreatePersonalFinanceTransferRequest,
   CreatePersonalFinanceCardRequest,
   PersonalExpenseCategoryCode,
   PersonalExpenseCategoryDto,
@@ -13,6 +14,7 @@ import type {
   UpdatePersonalFinanceCardRequest,
   UpdatePersonalFinanceSettingsRequest,
 } from '../../api'
+import { formatMoneyInput, normalizeMoneyInput } from '../../money-input'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type PersonalFinanceTab = 'expenses' | 'income' | 'income-entry' | 'settings'
@@ -84,6 +86,7 @@ interface PersonalFinanceViewProps {
     month: number,
     request: UpdateMonthlyExpenseRequest,
   ) => Promise<boolean>
+  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
   onSaveIncomeActual: (
     cardId: string,
     month: number,
@@ -132,9 +135,9 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
   expenses: {
     title: 'Фактические расходы',
     description: 'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
-    actionLabel: '+ Добавить расходы',
-    panelTitle: 'Добавить фактические расходы',
-    panelDescription: 'Выберите карту и месяц, чтобы сохранить фактические расходы по категориям.',
+    actionLabel: '+ Операция',
+    panelTitle: 'Расходы и переводы',
+    panelDescription: 'Добавляйте фактические расходы по категориям или переводите сумму между активными картами.',
   },
   income: {
     title: 'Доходы по месяцам',
@@ -170,6 +173,7 @@ export function PersonalFinanceView({
   onRetry,
   onCreateCard,
   onSaveExpenseActual,
+  onCreateTransfer,
   onSaveIncomeActual,
   onSaveIncomePlan,
   onRenameCard,
@@ -390,6 +394,7 @@ export function PersonalFinanceView({
               activeSnapshots={activeSnapshots}
               preferredCardId={selectedCardId}
               onSaveExpenseActual={onSaveExpenseActual}
+              onCreateTransfer={onCreateTransfer}
               onClose={() => setIsActionPanelOpen(false)}
             />
           ) : null}
@@ -421,6 +426,7 @@ interface ExpenseEntryDrawerPanelProps {
     month: number,
     request: UpdateMonthlyExpenseRequest,
   ) => Promise<boolean>
+  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
   onClose: () => void
 }
 
@@ -428,9 +434,12 @@ function ExpenseEntryDrawerPanel({
   activeSnapshots,
   preferredCardId,
   onSaveExpenseActual,
+  onCreateTransfer,
   onClose,
 }: ExpenseEntryDrawerPanelProps) {
+  const cards = activeSnapshots.map((snapshot) => snapshot.card)
   const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
+  const [selectedMode, setSelectedMode] = useState<'expenses' | 'transfer'>('expenses')
   const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
   const selectedSnapshot =
     activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
@@ -438,25 +447,70 @@ function ExpenseEntryDrawerPanel({
   const selectedMonthData =
     selectedSnapshot.expenses.months.find((month) => month.month === selectedMonth) ??
     selectedSnapshot.expenses.months[0]
+  const [sourceCardId, setSourceCardId] = useState<string>(defaultCardId)
+  const [destinationCardId, setDestinationCardId] = useState<string>(() =>
+    resolveDefaultTransferDestinationId(cards, defaultCardId),
+  )
+  const hasTransferCandidates = cards.length > 1
 
   return (
-    <ExpenseEntryFormCard
-      key={`actual-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, selectedSnapshot.categories)}`}
-      title="Расходы по категориям"
-      description="Лимиты и цели задаются на вкладке настроек: большинство расходов помесячно, развлечения и обучение на год, инвестиции как годовая цель перевода."
-      submitLabel="Сохранить факт"
-      cards={activeSnapshots.map((snapshot) => snapshot.card)}
-      selectedCardId={selectedSnapshot.card.id}
-      onSelectCard={setSelectedCardId}
-      selectedMonth={selectedMonth}
-      onSelectMonth={setSelectedMonth}
-      year={selectedSnapshot.year}
-      currency={selectedSnapshot.currency}
-      categories={selectedSnapshot.categories}
-      initialValues={selectedMonthData.actualCategoryAmounts}
-      onSave={onSaveExpenseActual}
-      onSaved={onClose}
-    />
+    <div className="space-y-4">
+      <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+        <h3 className="text-base font-semibold text-slate-900">Тип операции</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Факт расходов двигает expense review и linked balance. Перевод двигает только balances между картами и не
+          увеличивает расходные totals.
+        </p>
+        <div className="mt-3 inline-flex rounded-2xl border border-slate-200 bg-white p-1">
+          <NestedTabButton
+            label="Расходы"
+            isActive={selectedMode === 'expenses'}
+            onClick={() => setSelectedMode('expenses')}
+          />
+          <NestedTabButton
+            label="Перевод"
+            isActive={selectedMode === 'transfer'}
+            disabled={!hasTransferCandidates}
+            onClick={() => setSelectedMode('transfer')}
+          />
+        </div>
+      </section>
+
+      {selectedMode === 'expenses' ? (
+        <ExpenseEntryFormCard
+          key={`actual-${selectedSnapshot.card.id}-${selectedSnapshot.year}-${selectedMonth}-${serializeExpenseMonth(selectedMonthData.actualCategoryAmounts, selectedSnapshot.categories)}`}
+          title="Расходы по категориям"
+          description="Лимиты и цели задаются на вкладке настроек: большинство расходов помесячно, развлечения и обучение на год, инвестиции как годовая цель перевода."
+          submitLabel="Сохранить факт"
+          cards={cards}
+          selectedCardId={selectedSnapshot.card.id}
+          onSelectCard={setSelectedCardId}
+          selectedMonth={selectedMonth}
+          onSelectMonth={setSelectedMonth}
+          year={selectedSnapshot.year}
+          currency={selectedSnapshot.currency}
+          categories={selectedSnapshot.categories}
+          initialValues={selectedMonthData.actualCategoryAmounts}
+          onSave={onSaveExpenseActual}
+          onSaved={onClose}
+        />
+      ) : hasTransferCandidates ? (
+        <CardTransferFormCard
+          cards={cards}
+          selectedSourceCardId={sourceCardId}
+          selectedDestinationCardId={destinationCardId}
+          onSelectSourceCard={setSourceCardId}
+          onSelectDestinationCard={setDestinationCardId}
+          onCreateTransfer={onCreateTransfer}
+          onSaved={onClose}
+        />
+      ) : (
+        <InlineStatus
+          tone="warning"
+          message="Для перевода нужно минимум две активные карты. Добавьте ещё одну карту на вкладке настроек."
+        />
+      )}
+    </div>
   )
 }
 
@@ -1654,6 +1708,183 @@ function ExpenseEntryFormCard({
   )
 }
 
+interface CardTransferFormCardProps {
+  cards: PersonalFinanceCardDto[]
+  selectedSourceCardId: string
+  selectedDestinationCardId: string
+  onSelectSourceCard: (cardId: string) => void
+  onSelectDestinationCard: (cardId: string) => void
+  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
+  onSaved?: () => void
+}
+
+function CardTransferFormCard({
+  cards,
+  selectedSourceCardId,
+  selectedDestinationCardId,
+  onSelectSourceCard,
+  onSelectDestinationCard,
+  onCreateTransfer,
+  onSaved,
+}: CardTransferFormCardProps) {
+  const [occurredOn, setOccurredOn] = useState<string>(todayIsoDate())
+  const [amount, setAmount] = useState<string>('')
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const destinationOptions = cards.filter((card) => card.id !== selectedSourceCardId)
+  const normalizedAmount = toDecimalAmountString(amount)
+  const hasPositiveAmount = compareDecimalStrings(normalizedAmount, '0.00') > 0
+  const hasValidAmount = isValidNonNegativeAmountValue(amount)
+  const hasValidDate = /^\d{4}-\d{2}-\d{2}$/.test(occurredOn)
+  const hasDifferentCards = selectedSourceCardId !== selectedDestinationCardId
+  const canSave =
+    destinationOptions.length > 0 &&
+    hasDifferentCards &&
+    hasValidDate &&
+    hasValidAmount &&
+    hasPositiveAmount &&
+    status !== 'submitting'
+
+  const sourceCardName = cards.find((card) => card.id === selectedSourceCardId)?.name ?? 'Источник'
+  const destinationCardName = cards.find((card) => card.id === selectedDestinationCardId)?.name ?? 'Получатель'
+
+  useEffect(() => {
+    if (destinationOptions.length === 0) {
+      return
+    }
+
+    if (!destinationOptions.some((card) => card.id === selectedDestinationCardId)) {
+      onSelectDestinationCard(destinationOptions[0].id)
+    }
+  }, [destinationOptions, onSelectDestinationCard, selectedDestinationCardId])
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!canSave) {
+      return
+    }
+
+    setStatus('submitting')
+    setErrorMessage(null)
+    const saved = await onCreateTransfer({
+      sourceCardId: selectedSourceCardId,
+      destinationCardId: selectedDestinationCardId,
+      occurredOn,
+      amount: normalizedAmount,
+    })
+
+    if (saved) {
+      setStatus('idle')
+      setAmount('')
+      onSaved?.()
+      return
+    }
+
+    setStatus('error')
+    setErrorMessage('Не удалось выполнить перевод между картами.')
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4">
+      <div>
+        <h3 className="text-base font-semibold text-slate-900">Перевод между картами</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Перевод создаёт парную запись: outflow на карте-источнике и inflow на карте-получателе. Это меняет balances,
+          но не добавляет расходы в monthly review.
+        </p>
+      </div>
+
+      <form
+        className="mt-4 space-y-4"
+        onSubmit={(event) => {
+          void handleSubmit(event)
+        }}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <CardField
+            cards={cards}
+            selectedCardId={selectedSourceCardId}
+            onSelectCard={onSelectSourceCard}
+          />
+          <label className="w-full text-sm text-slate-600">
+            Карта-получатель
+            <select
+              value={selectedDestinationCardId}
+              onChange={(event) => onSelectDestinationCard(event.target.value)}
+              disabled={destinationOptions.length === 0}
+              className={selectClassName()}
+            >
+              {destinationOptions.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm text-slate-600">
+            Дата
+            <input
+              type="date"
+              value={occurredOn}
+              onChange={(event) => setOccurredOn(event.target.value)}
+              className={inputClassName(hasValidDate)}
+            />
+          </label>
+          <label className="text-sm text-slate-600">
+            Сумма
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(normalizeAmountInput(event.target.value))}
+              placeholder="0.00"
+              className={inputClassName(hasValidAmount && (hasPositiveAmount || amount.trim().length === 0))}
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <MetricTile
+            label={`Списываем с «${sourceCardName}»`}
+            value={hasPositiveAmount ? `-${formatAmount(normalizedAmount)} RUB` : '—'}
+          />
+          <MetricTile
+            label={`Зачисляем в «${destinationCardName}»`}
+            value={hasPositiveAmount ? `+${formatAmount(normalizedAmount)} RUB` : '—'}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-sm text-slate-600">Обе транзакции создаются атомарно одним действием.</p>
+          <button
+            type="submit"
+            disabled={!canSave}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {status === 'submitting' ? 'Проводим...' : 'Провести перевод'}
+          </button>
+        </div>
+      </form>
+
+      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {!hasDifferentCards ? (
+        <p className="mt-3 text-xs text-rose-600">Карта-источник и карта-получатель должны отличаться.</p>
+      ) : null}
+      {!hasValidAmount || (!hasPositiveAmount && amount.trim().length > 0) ? (
+        <p className="mt-1 text-xs text-rose-600">Укажите положительную сумму с точностью до 2 знаков.</p>
+      ) : null}
+      {!hasValidDate ? (
+        <p className="mt-1 text-xs text-rose-600">Укажите корректную дату перевода.</p>
+      ) : null}
+    </section>
+  )
+}
+
 function DrawerShell({
   title,
   description,
@@ -2714,28 +2945,28 @@ function toExpenseDraftValues(
 }
 
 function toDraftAmount(value: string): string {
-  return value === '0.00' ? '' : value
+  return value === '0.00' ? '' : formatMoneyInput(value)
 }
 
 function normalizeAmountInput(value: string): string {
-  return value.replace(',', '.').replace(/[^\d.]/g, '')
+  return formatMoneyInput(value)
 }
 
 function isValidNonNegativeAmountValue(value: string): boolean {
-  const trimmed = value.trim()
-  if (trimmed.length === 0) {
+  const normalized = normalizeMoneyInput(value)
+  if (normalized.length === 0) {
     return true
   }
-  return /^\d+(\.\d{0,2})?$/.test(trimmed)
+  return /^\d+(\.\d{0,2})?$/.test(normalized)
 }
 
 function toDecimalAmountString(value: string): string {
-  const trimmed = value.trim()
-  if (trimmed.length === 0 || !isValidNonNegativeAmountValue(trimmed)) {
+  const normalized = normalizeMoneyInput(value)
+  if (normalized.length === 0 || !isValidNonNegativeAmountValue(normalized)) {
     return '0.00'
   }
 
-  const parsed = Number.parseFloat(trimmed)
+  const parsed = Number.parseFloat(normalized)
   if (!Number.isFinite(parsed) || parsed < 0) {
     return '0.00'
   }
@@ -2965,6 +3196,11 @@ function formatIsoDateToRu(value: string): string {
 
 function formatIsoDate(year: number, month: number, day: number): string {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function todayIsoDate(): string {
+  const now = new Date()
+  return formatIsoDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
 }
 
 function parseIsoDate(value: string): Date {
@@ -3218,6 +3454,13 @@ function resolveDefaultActiveCardId(
   }
 
   return activeSnapshots[0]?.card.id ?? ''
+}
+
+function resolveDefaultTransferDestinationId(
+  cards: PersonalFinanceCardDto[],
+  sourceCardId: string,
+): string {
+  return cards.find((card) => card.id !== sourceCardId)?.id ?? cards[0]?.id ?? sourceCardId
 }
 
 function createZeroAmountMap(

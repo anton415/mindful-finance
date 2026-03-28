@@ -5,6 +5,7 @@ import {
   type AccountDto,
   type AccountType,
   type CreatePersonalFinanceCardRequest,
+  type CreatePersonalFinanceTransferRequest,
   type CreateAccountRequest,
   type CreateTransactionRequest,
   type CurrencyTotalsDto,
@@ -27,6 +28,7 @@ import {
   type PersonalFinanceCardListItem,
   type PersonalFinanceTab,
 } from './features/personal-finance/PersonalFinanceView'
+import { formatMoneyInput, normalizeMoneyInput } from './money-input'
 
 interface DashboardData {
   asOf: string
@@ -327,10 +329,11 @@ function App() {
         const activeSnapshots = activeSnapshotResults.flatMap((result) =>
           result.status === 'fulfilled' ? [result.value] : [],
         )
+        const normalizedActiveSnapshots = activeSnapshots.map(normalizePersonalFinanceSnapshotCategoryOrder)
         const settingsCardId = resolvePersonalFinanceSettingsSelection(
           cards,
           resolvedCardId,
-          activeSnapshots,
+          normalizedActiveSnapshots,
         )
 
         if (settingsCardId !== selectedPersonalFinanceCardId) {
@@ -338,7 +341,7 @@ function App() {
         }
 
         let settingsSnapshot =
-          activeSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
+          normalizedActiveSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
 
         if (!settingsSnapshot && settingsCardId) {
           const settingsSnapshotResult = await Promise.allSettled([
@@ -350,7 +353,7 @@ function App() {
           ])
           const fulfilledSettingsSnapshot = settingsSnapshotResult[0]
           if (fulfilledSettingsSnapshot?.status === 'fulfilled') {
-            settingsSnapshot = fulfilledSettingsSnapshot.value
+            settingsSnapshot = normalizePersonalFinanceSnapshotCategoryOrder(fulfilledSettingsSnapshot.value)
           }
         }
 
@@ -361,9 +364,9 @@ function App() {
         const mergedActiveSnapshots =
           settingsSnapshot &&
           settingsSnapshot.card.status === 'ACTIVE' &&
-          !activeSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
-            ? [...activeSnapshots, settingsSnapshot]
-            : activeSnapshots
+          !normalizedActiveSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
+            ? [...normalizedActiveSnapshots, settingsSnapshot]
+            : normalizedActiveSnapshots
 
         setActivePersonalFinanceSnapshots(mergedActiveSnapshots)
         setSelectedPersonalFinanceSettingsSnapshot(settingsSnapshot)
@@ -590,6 +593,18 @@ function App() {
     }
   }
 
+  const handleCreatePersonalFinanceTransfer = async (
+    request: CreatePersonalFinanceTransferRequest,
+  ): Promise<boolean> => {
+    try {
+      await apiClient.createPersonalFinanceTransfer(request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const handleSaveIncomeActual = async (
     cardId: string,
     month: number,
@@ -762,6 +777,7 @@ function App() {
               }}
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
+              onCreateTransfer={handleCreatePersonalFinanceTransfer}
               onSaveIncomeActual={handleSaveIncomeActual}
               onSaveIncomePlan={handleSaveIncomePlan}
               onRenameCard={handleRenamePersonalFinanceCard}
@@ -1027,7 +1043,7 @@ function AccountsView({
     deleteAccountStatus !== 'submitting'
 
   const transactionDateCandidate = newTransactionDate.trim()
-  const transactionAmountCandidate = normalizeAmountInput(newTransactionAmount)
+  const transactionAmountCandidate = normalizeMoneyInput(newTransactionAmount)
   const transactionMemoCandidate = newTransactionMemo.trim()
   const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
   const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
@@ -1037,7 +1053,7 @@ function AccountsView({
     isTransactionAmountValid &&
     createTransactionStatus !== 'submitting'
   const editingTransactionDateCandidate = editingTransactionDate.trim()
-  const editingTransactionAmountCandidate = normalizeAmountInput(editingTransactionAmount)
+  const editingTransactionAmountCandidate = normalizeMoneyInput(editingTransactionAmount)
   const editingTransactionMemoCandidate = editingTransactionMemo.trim()
   const isEditingTransactionDateValid = isValidIsoDateValue(editingTransactionDateCandidate)
   const isEditingTransactionAmountValid = isValidPositiveAmountValue(editingTransactionAmountCandidate)
@@ -1181,7 +1197,7 @@ function AccountsView({
     setEditingTransactionId(transaction.id)
     setEditingTransactionDate(transaction.occurredOn)
     setEditingTransactionDirection(transaction.direction)
-    setEditingTransactionAmount(transaction.amount)
+    setEditingTransactionAmount(formatMoneyInput(transaction.amount))
     setEditingTransactionMemo(normalizeTransactionMemo(transaction.memo))
     setUpdateTransactionStatus('idle')
     setUpdateTransactionErrorMessage(null)
@@ -1523,7 +1539,7 @@ function AccountsView({
                     type="text"
                     inputMode="decimal"
                     value={newTransactionAmount}
-                    onChange={(event) => setNewTransactionAmount(event.target.value)}
+                    onChange={(event) => setNewTransactionAmount(formatMoneyInput(event.target.value))}
                     placeholder="0,00"
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   />
@@ -1718,7 +1734,9 @@ function AccountsView({
                                   type="text"
                                   inputMode="decimal"
                                   value={editingTransactionAmount}
-                                  onChange={(event) => setEditingTransactionAmount(event.target.value)}
+                                  onChange={(event) =>
+                                    setEditingTransactionAmount(formatMoneyInput(event.target.value))
+                                  }
                                   placeholder="0,00"
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                                 />
@@ -1927,10 +1945,6 @@ function formatSignedAmount(amount: string, direction: 'INFLOW' | 'OUTFLOW'): st
   return `${prefix}${formatAmount(amount)}`
 }
 
-function normalizeAmountInput(value: string): string {
-  return value.trim().replace(',', '.')
-}
-
 function isValidIsoDateValue(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
@@ -1992,6 +2006,38 @@ function toAccountStatusLabel(status: AccountStatus): string {
     return 'Архивный'
   }
   return status
+}
+
+function normalizePersonalFinanceSnapshotCategoryOrder(
+  snapshot: PersonalFinanceSnapshotDto,
+): PersonalFinanceSnapshotDto {
+  const categories = swapEducationAndInvestments(snapshot.categories)
+  if (categories === snapshot.categories) {
+    return snapshot
+  }
+
+  return {
+    ...snapshot,
+    categories,
+  }
+}
+
+function swapEducationAndInvestments(
+  categories: PersonalFinanceSnapshotDto['categories'],
+): PersonalFinanceSnapshotDto['categories'] {
+  const investmentsIndex = categories.findIndex((category) => category.code === 'INVESTMENTS')
+  const educationIndex = categories.findIndex((category) => category.code === 'EDUCATION')
+
+  if (investmentsIndex < 0 || educationIndex < 0 || investmentsIndex === educationIndex) {
+    return categories
+  }
+
+  const reorderedCategories = [...categories]
+  ;[reorderedCategories[investmentsIndex], reorderedCategories[educationIndex]] = [
+    reorderedCategories[educationIndex],
+    reorderedCategories[investmentsIndex],
+  ]
+  return reorderedCategories
 }
 
 function enrichPersonalFinanceCards(

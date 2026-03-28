@@ -193,6 +193,13 @@ export interface UpdateMonthlyIncomeActualRequest {
   totalAmount: DecimalAmount
 }
 
+export interface CreatePersonalFinanceTransferRequest {
+  sourceCardId: string
+  destinationCardId: string
+  occurredOn: IsoDate
+  amount: DecimalAmount
+}
+
 export interface UpdateIncomePlanRequest {
   vacations: PersonalFinanceVacationPeriodDto[]
   thirteenthSalaryEnabled: boolean
