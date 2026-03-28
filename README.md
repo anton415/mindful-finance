@@ -64,6 +64,10 @@ make build
 - `MINDFUL_FINANCE_DB_USERNAME`
 - `MINDFUL_FINANCE_DB_PASSWORD`
 
+## 📘 Документы по workflow
+- Для разработчика: [`docs/product/05-developer-local-workflow.md`](docs/product/05-developer-local-workflow.md)
+- Для пользователя: [`docs/product/06-user-personal-finance-review-flow.md`](docs/product/06-user-personal-finance-review-flow.md)
+
 ## 🧘 Принципы системы
 1. **Сначала Truth:** никаких float/double для денег. Только `BigDecimal`.
 2. **Контекст важнее шума:** акцент на долгосрочных трендах, а не на дневных колебаниях.
