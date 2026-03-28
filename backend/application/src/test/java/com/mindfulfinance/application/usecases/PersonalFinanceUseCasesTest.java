@@ -52,6 +52,12 @@ public class PersonalFinanceUseCasesTest {
     private static final AccountId LINKED_ACCOUNT_ID = new AccountId(
         UUID.fromString("f8dc54e2-44a0-4cd1-89a6-f6f087d7b66f")
     );
+    private static final PersonalFinanceCardId SECOND_CARD_ID = new PersonalFinanceCardId(
+        UUID.fromString("f09f5ff5-d4d4-41bc-89cf-4f967deac79f")
+    );
+    private static final AccountId SECOND_LINKED_ACCOUNT_ID = new AccountId(
+        UUID.fromString("76e2a2ee-2ee2-4f8a-813f-f9fab4f08f55")
+    );
 
     @Test
     void empty_snapshot_returns_zero_filled_year_for_selected_card() {
@@ -171,6 +177,101 @@ public class PersonalFinanceUseCasesTest {
         assertEquals(0, snapshot.settings().annualLimitTotal().amount().compareTo(new BigDecimal("3600.00")));
         assertEquals(0, snapshot.settings().currentBalance().amount().compareTo(new BigDecimal("1700.00")));
         assertEquals(3, transactions.findByAccountId(LINKED_ACCOUNT_ID).size());
+    }
+
+    @Test
+    void transfer_between_active_cards_creates_paired_transactions_and_keeps_expense_totals_clean() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryExpenseActualRepository expenseActuals = new InMemoryExpenseActualRepository();
+        InMemoryExpenseLimitRepository expenseLimits = new InMemoryExpenseLimitRepository();
+        InMemoryIncomeActualRepository incomeActuals = new InMemoryIncomeActualRepository();
+        InMemoryIncomeForecastRepository incomeForecasts = new InMemoryIncomeForecastRepository();
+        InMemoryIncomePlanRepository incomePlans = new InMemoryIncomePlanRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card(CARD_ID, LINKED_ACCOUNT_ID, "Основная карта"));
+        cards.save(card(SECOND_CARD_ID, SECOND_LINKED_ACCOUNT_ID, "Резервная карта"));
+
+        new TransferBetweenPersonalFinanceCards(cards, transactions).transfer(
+            new TransferBetweenPersonalFinanceCards.Command(
+                CARD_ID,
+                SECOND_CARD_ID,
+                LocalDate.of(2026, 3, 14),
+                new BigDecimal("450.00")
+            )
+        );
+
+        List<Transaction> sourceLedger = transactions.findByAccountId(LINKED_ACCOUNT_ID);
+        List<Transaction> destinationLedger = transactions.findByAccountId(SECOND_LINKED_ACCOUNT_ID);
+        assertEquals(1, sourceLedger.size());
+        assertEquals(1, destinationLedger.size());
+        assertEquals(TransactionDirection.OUTFLOW, sourceLedger.get(0).direction());
+        assertEquals(TransactionDirection.INFLOW, destinationLedger.get(0).direction());
+        assertEquals(new BigDecimal("450.00"), sourceLedger.get(0).amount().amount());
+        assertEquals(new BigDecimal("450.00"), destinationLedger.get(0).amount().amount());
+        assertEquals(sourceLedger.get(0).memo(), destinationLedger.get(0).memo());
+        assertEquals(sourceLedger.get(0).createdAt(), destinationLedger.get(0).createdAt());
+
+        GetCardPersonalFinanceSnapshot sourceSnapshot = new GetCardPersonalFinanceSnapshot(
+            cards,
+            expenseActuals,
+            expenseLimits,
+            incomeActuals,
+            incomeForecasts,
+            incomePlans,
+            transactions
+        );
+        GetCardPersonalFinanceSnapshot destinationSnapshot = new GetCardPersonalFinanceSnapshot(
+            cards,
+            expenseActuals,
+            expenseLimits,
+            incomeActuals,
+            incomeForecasts,
+            incomePlans,
+            transactions
+        );
+
+        assertEquals(
+            0,
+            sourceSnapshot.get(CARD_ID, 2026).settings().currentBalance().amount().compareTo(new BigDecimal("-450.00"))
+        );
+        assertEquals(
+            0,
+            destinationSnapshot.get(SECOND_CARD_ID, 2026).settings().currentBalance().amount()
+                .compareTo(new BigDecimal("450.00"))
+        );
+        assertEquals(
+            0,
+            sourceSnapshot.get(CARD_ID, 2026).expenses().annualActualTotal().amount().compareTo(new BigDecimal("0.00"))
+        );
+        assertEquals(
+            0,
+            destinationSnapshot.get(SECOND_CARD_ID, 2026).expenses().annualActualTotal().amount()
+                .compareTo(new BigDecimal("0.00"))
+        );
+    }
+
+    @Test
+    void transfer_requires_date() {
+        InMemoryCardRepository cards = new InMemoryCardRepository();
+        InMemoryTransactionRepository transactions = new InMemoryTransactionRepository();
+        cards.save(card(CARD_ID, LINKED_ACCOUNT_ID, "Основная карта"));
+        cards.save(card(SECOND_CARD_ID, SECOND_LINKED_ACCOUNT_ID, "Резервная карта"));
+
+        IllegalArgumentException error = assertThrows(
+            IllegalArgumentException.class,
+            () -> new TransferBetweenPersonalFinanceCards(cards, transactions).transfer(
+                new TransferBetweenPersonalFinanceCards.Command(
+                    CARD_ID,
+                    SECOND_CARD_ID,
+                    null,
+                    new BigDecimal("450.00")
+                )
+            )
+        );
+
+        assertEquals(TransferBetweenPersonalFinanceCards.TRANSFER_DATE_REQUIRED_MESSAGE, error.getMessage());
+        assertTrue(transactions.findByAccountId(LINKED_ACCOUNT_ID).isEmpty());
+        assertTrue(transactions.findByAccountId(SECOND_LINKED_ACCOUNT_ID).isEmpty());
     }
 
     @Test
@@ -598,10 +699,14 @@ public class PersonalFinanceUseCasesTest {
     }
 
     private static PersonalFinanceCard card(String name) {
+        return card(CARD_ID, LINKED_ACCOUNT_ID, name);
+    }
+
+    private static PersonalFinanceCard card(PersonalFinanceCardId cardId, AccountId linkedAccountId, String name) {
         return new PersonalFinanceCard(
-            CARD_ID,
+            cardId,
             name,
-            LINKED_ACCOUNT_ID,
+            linkedAccountId,
             Instant.parse("2026-01-01T00:00:00Z"),
             PersonalFinanceCardStatus.ACTIVE
         );

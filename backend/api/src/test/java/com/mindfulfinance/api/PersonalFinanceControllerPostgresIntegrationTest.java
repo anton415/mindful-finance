@@ -353,6 +353,34 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
     }
 
     @Test
+    void transfer_between_cards_moves_balances_without_touching_expense_totals() throws Exception {
+        String sourceCardId = createCard("Основная карта");
+        String destinationCardId = createCard("Резервная карта");
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "occurredOn": "2026-03-14",
+                  "amount": "450.00"
+                }
+                """.formatted(sourceCardId, destinationCardId)))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", sourceCardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.settings.currentBalance").value("-450.00"))
+            .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"));
+
+        mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", destinationCardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.settings.currentBalance").value("450.00"))
+            .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"));
+    }
+
+    @Test
     void rename_card_updates_list_snapshot_and_linked_account_name_without_touching_settings() throws Exception {
         String cardId = createCard("Основная карта");
 
@@ -475,6 +503,7 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
     @Test
     void archived_card_mutations_return_conflict() throws Exception {
         String cardId = createCard("Основная карта");
+        String destinationCardId = createCard("Резервная карта");
 
         mockMvc.perform(put("/personal-finance/cards/{cardId}/archive", cardId))
             .andExpect(status().isNoContent());
@@ -535,11 +564,25 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "occurredOn": "2026-03-14",
+                  "amount": "100.00"
+                }
+                """.formatted(cardId, destinationCardId)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Archived personal finance cards are read-only"));
     }
 
     @Test
     void invalid_inputs_and_missing_card_return_errors() throws Exception {
         String cardId = createCard("Основная карта");
+        String secondCardId = createCard("Резервная карта");
 
         mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", "f5df5351-3c25-4486-a2ec-8f8b2ba3a95c"))
             .andExpect(status().isNotFound())
@@ -648,6 +691,57 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
                 """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("name must not be null or blank"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "occurredOn": "2026-03-14",
+                  "amount": "100.00"
+                }
+                """.formatted(cardId, cardId)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transfer source and destination cards must be different"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "occurredOn": "2026-03-14",
+                  "amount": "-1.00"
+                }
+                """.formatted(cardId, secondCardId)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transfer amount must be positive RUB"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "%s",
+                  "destinationCardId": "%s",
+                  "amount": "10.00"
+                }
+                """.formatted(cardId, secondCardId)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transfer date must be provided"));
+
+        mockMvc.perform(post("/personal-finance/transfers")
+            .contentType("application/json")
+            .content("""
+                {
+                  "sourceCardId": "e5c4e878-f48f-466f-b75d-d4474ff4d970",
+                  "destinationCardId": "%s",
+                  "occurredOn": "2026-03-14",
+                  "amount": "10.00"
+                }
+                """.formatted(secondCardId)))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     private String createCard(String name) throws Exception {

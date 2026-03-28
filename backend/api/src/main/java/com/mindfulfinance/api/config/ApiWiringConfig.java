@@ -46,6 +46,7 @@ import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseLimit;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
+import com.mindfulfinance.application.usecases.TransferBetweenPersonalFinanceCards;
 import com.mindfulfinance.application.usecases.UpdateAccount;
 import com.mindfulfinance.application.usecases.UpdateTransaction;
 import com.mindfulfinance.postgres.PostgresAccountRepository;
@@ -345,6 +346,17 @@ public class ApiWiringConfig {
             monthlyExpenseLimitRepository,
             incomeForecastRepository,
             incomePlanRepository,
+            personalFinanceCardRepository,
+            transactionRepository
+        );
+    }
+
+    @Bean
+    public TransferBetweenPersonalFinanceCards transferBetweenPersonalFinanceCards(
+        PersonalFinanceCardRepository personalFinanceCardRepository,
+        TransactionRepository transactionRepository
+    ) {
+        return new TransferBetweenPersonalFinanceCards(
             personalFinanceCardRepository,
             transactionRepository
         );
