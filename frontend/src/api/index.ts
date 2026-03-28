@@ -14,6 +14,7 @@ export type {
   ApiErrorDto,
   CurrencyCode,
   CurrencyTotalsDto,
+  CreatePersonalFinanceTransferRequest,
   CreatePersonalFinanceCardRequest,
   CreatePersonalFinanceCardResponse,
   CreateAccountRequest,

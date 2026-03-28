@@ -5,6 +5,7 @@ import type {
   CreateAccountResponse,
   CreatePersonalFinanceCardRequest,
   CreatePersonalFinanceCardResponse,
+  CreatePersonalFinanceTransferRequest,
   CreateTransactionRequest,
   CreateTransactionResponse,
   CurrencyTotalsDto,
@@ -75,6 +76,10 @@ export interface ApiClient {
     cardId: string,
     month: number,
     request: UpdateMonthlyIncomeActualRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
+  createPersonalFinanceTransfer(
+    request: CreatePersonalFinanceTransferRequest,
     signal?: AbortSignal,
   ): Promise<void>
   updateIncomePlan(
@@ -254,6 +259,17 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
     ): Promise<void> {
       return http.putJson<void, UpdateMonthlyIncomeActualRequest>(
         `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/income/actual/${toRequiredMonth(month)}`,
+        request,
+        { signal },
+      )
+    },
+
+    createPersonalFinanceTransfer(
+      request: CreatePersonalFinanceTransferRequest,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.postJson<void, CreatePersonalFinanceTransferRequest>(
+        '/personal-finance/transfers',
         request,
         { signal },
       )

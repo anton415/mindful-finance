@@ -31,6 +31,7 @@ import com.mindfulfinance.application.usecases.SaveIncomePlan;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
 import com.mindfulfinance.application.usecases.SaveMonthlyIncomeActual;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
+import com.mindfulfinance.application.usecases.TransferBetweenPersonalFinanceCards;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.personalfinance.IncomeForecast;
 import com.mindfulfinance.domain.personalfinance.IncomePlan;
@@ -53,6 +54,7 @@ public class PersonalFinanceController {
     private final SaveMonthlyIncomeActual saveMonthlyIncomeActual;
     private final SaveIncomePlan saveIncomePlan;
     private final SavePersonalFinanceSettings savePersonalFinanceSettings;
+    private final TransferBetweenPersonalFinanceCards transferBetweenPersonalFinanceCards;
 
     public PersonalFinanceController(
         PersonalFinanceCardRepository cardRepository,
@@ -66,7 +68,8 @@ public class PersonalFinanceController {
         SaveMonthlyExpenseActual saveMonthlyExpenseActual,
         SaveMonthlyIncomeActual saveMonthlyIncomeActual,
         SaveIncomePlan saveIncomePlan,
-        SavePersonalFinanceSettings savePersonalFinanceSettings
+        SavePersonalFinanceSettings savePersonalFinanceSettings,
+        TransferBetweenPersonalFinanceCards transferBetweenPersonalFinanceCards
     ) {
         this.cardRepository = cardRepository;
         this.listPersonalFinanceCards = listPersonalFinanceCards;
@@ -80,6 +83,7 @@ public class PersonalFinanceController {
         this.saveMonthlyIncomeActual = saveMonthlyIncomeActual;
         this.saveIncomePlan = saveIncomePlan;
         this.savePersonalFinanceSettings = savePersonalFinanceSettings;
+        this.transferBetweenPersonalFinanceCards = transferBetweenPersonalFinanceCards;
     }
 
     @GetMapping("/personal-finance/cards")
@@ -186,6 +190,25 @@ public class PersonalFinanceController {
             request.totalAmount()
         ));
 
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/personal-finance/transfers")
+    @Transactional
+    public ResponseEntity<Void> transferBetweenCards(@RequestBody CreateCardTransferRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body must not be null");
+        }
+
+        PersonalFinanceCardId sourceCardId = requireExistingCardId(request.sourceCardId());
+        PersonalFinanceCardId destinationCardId = requireExistingCardId(request.destinationCardId());
+
+        transferBetweenPersonalFinanceCards.transfer(new TransferBetweenPersonalFinanceCards.Command(
+            sourceCardId,
+            destinationCardId,
+            request.occurredOn(),
+            request.amount()
+        ));
         return ResponseEntity.noContent().build();
     }
 
@@ -457,6 +480,13 @@ public class PersonalFinanceController {
     public record UpdateMonthlyExpenseRequest(int year, Map<String, BigDecimal> categoryAmounts) {}
 
     public record UpdateMonthlyIncomeActualRequest(int year, BigDecimal totalAmount) {}
+
+    public record CreateCardTransferRequest(
+        String sourceCardId,
+        String destinationCardId,
+        LocalDate occurredOn,
+        BigDecimal amount
+    ) {}
 
     public record UpdateIncomePlanRequest(
         List<VacationPeriodDto> vacations,

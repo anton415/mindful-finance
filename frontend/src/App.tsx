@@ -5,6 +5,7 @@ import {
   type AccountDto,
   type AccountType,
   type CreatePersonalFinanceCardRequest,
+  type CreatePersonalFinanceTransferRequest,
   type CreateAccountRequest,
   type CreateTransactionRequest,
   type CurrencyTotalsDto,
@@ -590,6 +591,18 @@ function App() {
     }
   }
 
+  const handleCreatePersonalFinanceTransfer = async (
+    request: CreatePersonalFinanceTransferRequest,
+  ): Promise<boolean> => {
+    try {
+      await apiClient.createPersonalFinanceTransfer(request)
+      refreshPersonalFinanceDerivedViews()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const handleSaveIncomeActual = async (
     cardId: string,
     month: number,
@@ -762,6 +775,7 @@ function App() {
               }}
               onCreateCard={handleCreatePersonalFinanceCard}
               onSaveExpenseActual={handleSaveExpenseActual}
+              onCreateTransfer={handleCreatePersonalFinanceTransfer}
               onSaveIncomeActual={handleSaveIncomeActual}
               onSaveIncomePlan={handleSaveIncomePlan}
               onRenameCard={handleRenamePersonalFinanceCard}
