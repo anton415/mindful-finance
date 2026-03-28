@@ -329,10 +329,11 @@ function App() {
         const activeSnapshots = activeSnapshotResults.flatMap((result) =>
           result.status === 'fulfilled' ? [result.value] : [],
         )
+        const normalizedActiveSnapshots = activeSnapshots.map(normalizePersonalFinanceSnapshotCategoryOrder)
         const settingsCardId = resolvePersonalFinanceSettingsSelection(
           cards,
           resolvedCardId,
-          activeSnapshots,
+          normalizedActiveSnapshots,
         )
 
         if (settingsCardId !== selectedPersonalFinanceCardId) {
@@ -340,7 +341,7 @@ function App() {
         }
 
         let settingsSnapshot =
-          activeSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
+          normalizedActiveSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
 
         if (!settingsSnapshot && settingsCardId) {
           const settingsSnapshotResult = await Promise.allSettled([
@@ -352,7 +353,7 @@ function App() {
           ])
           const fulfilledSettingsSnapshot = settingsSnapshotResult[0]
           if (fulfilledSettingsSnapshot?.status === 'fulfilled') {
-            settingsSnapshot = fulfilledSettingsSnapshot.value
+            settingsSnapshot = normalizePersonalFinanceSnapshotCategoryOrder(fulfilledSettingsSnapshot.value)
           }
         }
 
@@ -363,9 +364,9 @@ function App() {
         const mergedActiveSnapshots =
           settingsSnapshot &&
           settingsSnapshot.card.status === 'ACTIVE' &&
-          !activeSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
-            ? [...activeSnapshots, settingsSnapshot]
-            : activeSnapshots
+          !normalizedActiveSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
+            ? [...normalizedActiveSnapshots, settingsSnapshot]
+            : normalizedActiveSnapshots
 
         setActivePersonalFinanceSnapshots(mergedActiveSnapshots)
         setSelectedPersonalFinanceSettingsSnapshot(settingsSnapshot)
@@ -2005,6 +2006,38 @@ function toAccountStatusLabel(status: AccountStatus): string {
     return 'Архивный'
   }
   return status
+}
+
+function normalizePersonalFinanceSnapshotCategoryOrder(
+  snapshot: PersonalFinanceSnapshotDto,
+): PersonalFinanceSnapshotDto {
+  const categories = swapEducationAndInvestments(snapshot.categories)
+  if (categories === snapshot.categories) {
+    return snapshot
+  }
+
+  return {
+    ...snapshot,
+    categories,
+  }
+}
+
+function swapEducationAndInvestments(
+  categories: PersonalFinanceSnapshotDto['categories'],
+): PersonalFinanceSnapshotDto['categories'] {
+  const investmentsIndex = categories.findIndex((category) => category.code === 'INVESTMENTS')
+  const educationIndex = categories.findIndex((category) => category.code === 'EDUCATION')
+
+  if (investmentsIndex < 0 || educationIndex < 0 || investmentsIndex === educationIndex) {
+    return categories
+  }
+
+  const reorderedCategories = [...categories]
+  ;[reorderedCategories[investmentsIndex], reorderedCategories[educationIndex]] = [
+    reorderedCategories[educationIndex],
+    reorderedCategories[investmentsIndex],
+  ]
+  return reorderedCategories
 }
 
 function enrichPersonalFinanceCards(

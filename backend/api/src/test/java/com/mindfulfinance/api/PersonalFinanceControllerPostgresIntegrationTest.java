@@ -1,6 +1,7 @@
 package com.mindfulfinance.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -76,9 +77,9 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
             .andExpect(jsonPath("$.categories", hasSize(9)))
             .andExpect(jsonPath("$.categories[0].limitPeriod").value("MONTHLY"))
             .andExpect(jsonPath("$.categories[0].classification").value("EXPENSE"))
-            .andExpect(jsonPath("$.categories[6].limitPeriod").value("ANNUAL"))
-            .andExpect(jsonPath("$.categories[6].classification").value("TRANSFER"))
-            .andExpect(jsonPath("$.categories[7].limitPeriod").value("ANNUAL"))
+            .andExpect(jsonPath("$.categories[?(@.code=='INVESTMENTS')].limitPeriod").value(hasItem("ANNUAL")))
+            .andExpect(jsonPath("$.categories[?(@.code=='INVESTMENTS')].classification").value(hasItem("TRANSFER")))
+            .andExpect(jsonPath("$.categories[?(@.code=='EDUCATION')].limitPeriod").value(hasItem("ANNUAL")))
             .andExpect(jsonPath("$.expenses.months", hasSize(12)))
             .andExpect(jsonPath("$.income.months", hasSize(12)))
             .andExpect(jsonPath("$.expenses.annualActualTotal").value("0.00"))
@@ -194,8 +195,8 @@ public class PersonalFinanceControllerPostgresIntegrationTest {
 
         mockMvc.perform(get("/personal-finance/cards/{cardId}/years/2026", cardId))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.categories[6].limitPeriod").value("ANNUAL"))
-            .andExpect(jsonPath("$.categories[6].classification").value("TRANSFER"))
+            .andExpect(jsonPath("$.categories[?(@.code=='INVESTMENTS')].limitPeriod").value(hasItem("ANNUAL")))
+            .andExpect(jsonPath("$.categories[?(@.code=='INVESTMENTS')].classification").value(hasItem("TRANSFER")))
             .andExpect(jsonPath("$.expenses.months[1].actualCategoryAmounts.INVESTMENTS").value("200.00"))
             .andExpect(jsonPath("$.expenses.months[1].actualTotal").value("100.00"))
             .andExpect(jsonPath("$.expenses.months[1].limitTotal").value("0.00"))
