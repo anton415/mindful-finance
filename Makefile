@@ -5,11 +5,12 @@ FRONTEND_DIR := frontend
 FRONTEND_STAMP := $(FRONTEND_DIR)/node_modules/.package-lock.stamp
 DOCKER_COMPOSE := docker compose -f backend/docker-compose.yml
 POSTGRES_CONTAINER := mindful-finance-postgres
-LOCAL_DB_URL := jdbc:postgresql://localhost:55432/mindfulfinance
-LOCAL_DB_USERNAME := mindfulfinance
-LOCAL_DB_PASSWORD := mindfulfinance
-BACKEND_PROFILE := postgres
-BACKEND_ENV := SPRING_PROFILES_ACTIVE=$(BACKEND_PROFILE) MINDFUL_FINANCE_DB_URL=$(LOCAL_DB_URL) MINDFUL_FINANCE_DB_USERNAME=$(LOCAL_DB_USERNAME) MINDFUL_FINANCE_DB_PASSWORD=$(LOCAL_DB_PASSWORD)
+# Shared local defaults stay overridable via exported env vars.
+SPRING_PROFILES_ACTIVE ?= postgres
+MINDFUL_FINANCE_DB_URL ?= jdbc:postgresql://localhost:55432/mindfulfinance
+MINDFUL_FINANCE_DB_USERNAME ?= mindfulfinance
+MINDFUL_FINANCE_DB_PASSWORD ?= mindfulfinance
+BACKEND_ENV := SPRING_PROFILES_ACTIVE=$(SPRING_PROFILES_ACTIVE) MINDFUL_FINANCE_DB_URL=$(MINDFUL_FINANCE_DB_URL) MINDFUL_FINANCE_DB_USERNAME=$(MINDFUL_FINANCE_DB_USERNAME) MINDFUL_FINANCE_DB_PASSWORD=$(MINDFUL_FINANCE_DB_PASSWORD)
 BACKEND_PREPARE_CMD := mvn -f $(BACKEND_POM) -pl api -am -Dmaven.test.skip=true install
 BACKEND_DEV_CMD := $(BACKEND_ENV) mvn -f $(BACKEND_POM) -pl api -am -rf :api spring-boot:run
 BACKEND_BUILD_CMD := mvn -f $(BACKEND_POM) -Dmaven.test.skip=true package
