@@ -1,5 +1,7 @@
 # 🌿 Mindful Finance
 
+[![Built with Codex](https://img.shields.io/badge/Built%20with-Codex-0A66C2?logo=openai&logoColor=white)](https://openai.com/codex/)
+
 **Подход Calm Architect к финансовой свободе.**
 
 ## 🎯 Видение
