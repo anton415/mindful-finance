@@ -50,6 +50,13 @@ make dev
 make down
 ```
 
+`make down` останавливает контейнер, но не удаляет локальные данные. Postgres хранит данные в named volume `mindful-finance-postgres-data`, поэтому база переживает `make down` и следующий `make dev`.
+
+Чтобы намеренно сбросить локальную dev-базу и начать с пустого состояния:
+```bash
+docker compose -f backend/docker-compose.yml down -v
+```
+
 Собрать backend и frontend одной командой:
 ```bash
 make build
@@ -63,6 +70,23 @@ make build
 - `MINDFUL_FINANCE_DB_URL`
 - `MINDFUL_FINANCE_DB_USERNAME`
 - `MINDFUL_FINANCE_DB_PASSWORD`
+
+## ☕ Backend-only запуск для разработки
+
+Если нужен только API без frontend, используй отдельный backend runtime из корня репозитория:
+```bash
+make backend-dev
+```
+
+Этот режим:
+- поднимает тот же локальный PostgreSQL;
+- ждёт healthcheck контейнера;
+- запускает Spring Boot с `SPRING_PROFILES_ACTIVE=postgres`;
+- использует те же `MINDFUL_FINANCE_DB_*`, что и `make dev`.
+
+Для VS Code в репозитории сохранён launch config `Mindful Finance API (postgres)` и pre-launch task, который поднимает локальный PostgreSQL перед стартом приложения.
+
+Ручной локальный backend-запуск без профиля `postgres` считается вспомогательным in-memory режимом, а не основным dev-runtime.
 
 ## 📘 Документы по workflow
 - Для разработчика: [`docs/product/05-developer-local-workflow.md`](docs/product/05-developer-local-workflow.md)

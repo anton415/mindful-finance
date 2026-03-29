@@ -13,6 +13,8 @@
 
 Для локальной разработки требуются Java 21+, Maven, Docker, Node.js, npm и `make`. Перед началом работы необходимо убедиться, что локальный репозиторий синхронизирован с `main`, а рабочее дерево не содержит нерелевантных незакоммиченных изменений.
 
+Ручной локальный runtime backend должен использовать профиль `postgres` и общий local datasource через `MINDFUL_FINANCE_DB_URL`, `MINDFUL_FINANCE_DB_USERNAME`, `MINDFUL_FINANCE_DB_PASSWORD`. In-memory режим допустим только как вспомогательный и не считается стандартным dev-запуском.
+
 ## 3. Базовый цикл разработки
 
 1. Определить outcome задачи и зафиксировать done criteria в issue.
@@ -38,6 +40,14 @@
 2. `curl http://localhost:8080/health` (ожидаемый ответ: `{"status":"ok"}`)
 3. открыть `http://localhost:5173`
 4. `make down`
+
+Backend-only smoke для разработки с сохранением тех же данных:
+
+1. `make backend-dev`
+2. `curl http://localhost:8080/health` (ожидаемый ответ: `{"status":"ok"}`)
+3. остановить процесс через `Ctrl+C`
+
+Локальный PostgreSQL хранит данные в persistent Docker volume и должен переживать `make down`. Если нужен чистый старт базы, он выполняется явно через `docker compose -f backend/docker-compose.yml down -v`.
 
 ## 5. Проверка регрессий и багов
 

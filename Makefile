@@ -5,13 +5,19 @@ FRONTEND_DIR := frontend
 FRONTEND_STAMP := $(FRONTEND_DIR)/node_modules/.package-lock.stamp
 DOCKER_COMPOSE := docker compose -f backend/docker-compose.yml
 POSTGRES_CONTAINER := mindful-finance-postgres
+# Shared local defaults stay overridable via exported env vars.
+SPRING_PROFILES_ACTIVE ?= postgres
+MINDFUL_FINANCE_DB_URL ?= jdbc:postgresql://localhost:55432/mindfulfinance
+MINDFUL_FINANCE_DB_USERNAME ?= mindfulfinance
+MINDFUL_FINANCE_DB_PASSWORD ?= mindfulfinance
+BACKEND_ENV := SPRING_PROFILES_ACTIVE=$(SPRING_PROFILES_ACTIVE) MINDFUL_FINANCE_DB_URL=$(MINDFUL_FINANCE_DB_URL) MINDFUL_FINANCE_DB_USERNAME=$(MINDFUL_FINANCE_DB_USERNAME) MINDFUL_FINANCE_DB_PASSWORD=$(MINDFUL_FINANCE_DB_PASSWORD)
 BACKEND_PREPARE_CMD := mvn -f $(BACKEND_POM) -pl api -am -Dmaven.test.skip=true install
-BACKEND_DEV_CMD := mvn -f $(BACKEND_POM) -pl api -am -rf :api -Dspring-boot.run.profiles=postgres spring-boot:run
+BACKEND_DEV_CMD := $(BACKEND_ENV) mvn -f $(BACKEND_POM) -pl api -am -rf :api spring-boot:run
 BACKEND_BUILD_CMD := mvn -f $(BACKEND_POM) -Dmaven.test.skip=true package
 FRONTEND_DEV_CMD := npm --prefix $(FRONTEND_DIR) run dev
 FRONTEND_BUILD_CMD := npm --prefix $(FRONTEND_DIR) run build
 
-.PHONY: dev build down frontend-deps
+.PHONY: dev build down frontend-deps db-up backend-dev
 
 $(FRONTEND_STAMP): $(FRONTEND_DIR)/package.json $(FRONTEND_DIR)/package-lock.json
 	@echo "Installing frontend dependencies..."
@@ -29,6 +35,29 @@ build: $(FRONTEND_STAMP)
 
 down:
 	@$(DOCKER_COMPOSE) down
+
+db-up:
+	@set -eu; \
+	echo "Starting PostgreSQL..."; \
+	$(DOCKER_COMPOSE) up -d postgres; \
+	echo "Waiting for PostgreSQL healthcheck..."; \
+	attempt=0; \
+	until [ "$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $(POSTGRES_CONTAINER) 2>/dev/null || echo missing)" = "healthy" ]; do \
+		attempt=$$((attempt + 1)); \
+		if [ "$$attempt" -ge 30 ]; then \
+			echo "PostgreSQL did not become healthy in time."; \
+			exit 1; \
+		fi; \
+		sleep 2; \
+	done; \
+	echo "PostgreSQL is healthy."
+
+backend-dev:
+	@echo "Preparing backend modules..."
+	@$(BACKEND_PREPARE_CMD)
+	@$(MAKE) db-up
+	@echo "Starting backend on http://localhost:8080 ..."
+	@$(BACKEND_DEV_CMD)
 
 dev: $(FRONTEND_STAMP)
 	@set -eu; \
@@ -53,19 +82,7 @@ dev: $(FRONTEND_STAMP)
 	trap 'cleanup 130' INT TERM; \
 	echo "Preparing backend modules..."; \
 	$(BACKEND_PREPARE_CMD); \
-	echo "Starting PostgreSQL..."; \
-	$(DOCKER_COMPOSE) up -d postgres; \
-	echo "Waiting for PostgreSQL healthcheck..."; \
-	attempt=0; \
-	until [ "$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $(POSTGRES_CONTAINER) 2>/dev/null || echo missing)" = "healthy" ]; do \
-		attempt=$$((attempt + 1)); \
-		if [ "$$attempt" -ge 30 ]; then \
-			echo "PostgreSQL did not become healthy in time."; \
-			exit 1; \
-		fi; \
-		sleep 2; \
-	done; \
-	echo "PostgreSQL is healthy."; \
+	$(MAKE) db-up; \
 	echo "Starting backend on http://localhost:8080 ..."; \
 	$(BACKEND_DEV_CMD) & \
 	backend_pid=$$!; \
