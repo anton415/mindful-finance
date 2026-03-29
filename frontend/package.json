@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "lint": "eslint .",
+    "lint": "npm run lint:safe",
+    "lint:safe": "ESLINT_PROFILE=safe eslint .",
+    "lint:strict": "ESLINT_PROFILE=strict eslint . --max-warnings=0",
     "preview": "vite preview"
   },
   "dependencies": {

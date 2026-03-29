@@ -89,8 +89,8 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Run frontend lint
-        run: npm run lint
+      - name: Run frontend lint (safe profile)
+        run: npm run lint:safe
         working-directory: frontend
 
       - name: Run frontend build
