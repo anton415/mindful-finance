@@ -29,6 +29,29 @@ jobs:
       - name: Run backend tests
         run: mvn --batch-mode -f backend/pom.xml test
 
+  frontend-format:
+    name: Frontend format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run frontend format check
+        run: npm run format:check
+        working-directory: frontend
+
   frontend-quality:
     name: Frontend lint and build
     runs-on: ubuntu-latest

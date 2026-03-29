@@ -15,8 +15,16 @@ export interface RequestFormDataOptions {
 
 export interface HttpClient {
   getJson<T>(path: string, options?: RequestJsonOptions): Promise<T>
-  postJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
-  putJson<TResponse, TBody>(path: string, body: TBody, options?: RequestJsonOptions): Promise<TResponse>
+  postJson<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: RequestJsonOptions,
+  ): Promise<TResponse>
+  putJson<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: RequestJsonOptions,
+  ): Promise<TResponse>
   putVoid(path: string, options?: RequestJsonOptions): Promise<void>
   deleteJson<T>(path: string, options?: RequestJsonOptions): Promise<T>
   deleteVoid(path: string, options?: RequestJsonOptions): Promise<void>
@@ -51,7 +59,10 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
   const fetchFn = config.fetchFn ?? fetch
 
   return {
-    async getJson<T>(path: string, options: RequestJsonOptions = {}): Promise<T> {
+    async getJson<T>(
+      path: string,
+      options: RequestJsonOptions = {},
+    ): Promise<T> {
       const url = buildUrl(baseUrl, path, options.query)
       const response = await fetchFn(url, {
         method: 'GET',
@@ -102,7 +113,10 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
       return parseJsonResponse<TResponse>(response, { allowEmpty: true })
     },
 
-    async putVoid(path: string, options: RequestJsonOptions = {}): Promise<void> {
+    async putVoid(
+      path: string,
+      options: RequestJsonOptions = {},
+    ): Promise<void> {
       const url = buildUrl(baseUrl, path, options.query)
       const response = await fetchFn(url, {
         method: 'PUT',
@@ -115,7 +129,10 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
       return parseJsonResponse<void>(response, { allowEmpty: true })
     },
 
-    async deleteJson<T>(path: string, options: RequestJsonOptions = {}): Promise<T> {
+    async deleteJson<T>(
+      path: string,
+      options: RequestJsonOptions = {},
+    ): Promise<T> {
       const url = buildUrl(baseUrl, path, options.query)
       const response = await fetchFn(url, {
         method: 'DELETE',
@@ -128,7 +145,10 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
       return parseJsonResponse<T>(response, { allowEmpty: true })
     },
 
-    async deleteVoid(path: string, options: RequestJsonOptions = {}): Promise<void> {
+    async deleteVoid(
+      path: string,
+      options: RequestJsonOptions = {},
+    ): Promise<void> {
       const url = buildUrl(baseUrl, path, options.query)
       const response = await fetchFn(url, {
         method: 'DELETE',
@@ -164,7 +184,10 @@ export function createHttpClient(config: HttpClientConfig = {}): HttpClient {
 function buildUrl(baseUrl: string, path: string, query?: QueryParams): string {
   const normalizedBase = trimTrailingSlash(baseUrl)
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const url = new URL(`${normalizedBase}${normalizedPath}`, window.location.origin)
+  const url = new URL(
+    `${normalizedBase}${normalizedPath}`,
+    window.location.origin,
+  )
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -185,7 +208,8 @@ async function parseJsonResponse<T>(
 
   if (!response.ok) {
     const apiError = isApiErrorDto(body) ? body : null
-    const message = apiError?.message ?? `Request failed with status ${response.status}`
+    const message =
+      apiError?.message ?? `Request failed with status ${response.status}`
     const code = apiError?.error ?? null
     throw new ApiClientError(message, response.status, code)
   }
@@ -194,7 +218,11 @@ async function parseJsonResponse<T>(
     if (options.allowEmpty) {
       return undefined as T
     }
-    throw new ApiClientError('Expected JSON response body but got empty response', response.status, null)
+    throw new ApiClientError(
+      'Expected JSON response body but got empty response',
+      response.status,
+      null,
+    )
   }
 
   return body as T
@@ -219,7 +247,9 @@ function isApiErrorDto(value: unknown): value is ApiErrorDto {
   }
 
   const candidate = value as Record<string, unknown>
-  return typeof candidate.error === 'string' && typeof candidate.message === 'string'
+  return (
+    typeof candidate.error === 'string' && typeof candidate.message === 'string'
+  )
 }
 
 function trimTrailingSlash(value: string): string {

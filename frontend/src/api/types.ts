@@ -128,7 +128,10 @@ export interface PersonalFinanceExpensesDto {
   averageMonthlyActualTotal: DecimalAmount
 }
 
-export type PersonalFinanceIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'OVERRIDE'
+export type PersonalFinanceIncomeMonthStatus =
+  | 'ACTUAL'
+  | 'FORECAST'
+  | 'OVERRIDE'
 
 export interface PersonalFinanceIncomeMonthDto {
   month: number
