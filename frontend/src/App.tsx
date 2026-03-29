@@ -1,4 +1,11 @@
-import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import {
   ApiClientError,
   apiClient,
@@ -56,10 +63,17 @@ interface NavigationState {
   financeCardId: string | null
 }
 
-const ACCOUNT_TYPE_OPTIONS: AccountType[] = ['CASH', 'DEPOSIT', 'FUND', 'IIS', 'BROKERAGE']
+const ACCOUNT_TYPE_OPTIONS: AccountType[] = [
+  'CASH',
+  'DEPOSIT',
+  'FUND',
+  'IIS',
+  'BROKERAGE',
+]
 const ACCOUNT_CURRENCY_OPTIONS: string[] = getAccountCurrencyOptions()
 const DEFAULT_ACCOUNT_CURRENCY =
-  ACCOUNT_CURRENCY_OPTIONS.includes('USD') && ACCOUNT_CURRENCY_OPTIONS.length > 0
+  ACCOUNT_CURRENCY_OPTIONS.includes('USD') &&
+  ACCOUNT_CURRENCY_OPTIONS.length > 0
     ? 'USD'
     : (ACCOUNT_CURRENCY_OPTIONS[0] ?? 'USD')
 const DEFAULT_NAVIGATION_STATE: NavigationState = {
@@ -71,52 +85,75 @@ const DEFAULT_NAVIGATION_STATE: NavigationState = {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<ViewTab>(() => readNavigationFromUrl().tab)
-  const [activePersonalFinanceTab, setActivePersonalFinanceTab] = useState<PersonalFinanceTab>(
-    () => readNavigationFromUrl().financeTab,
+  const [activeView, setActiveView] = useState<ViewTab>(
+    () => readNavigationFromUrl().tab,
   )
-  const [selectedPersonalFinanceYear, setSelectedPersonalFinanceYear] = useState<number>(
-    () => readNavigationFromUrl().financeYear,
-  )
-  const [selectedPersonalFinanceCardId, setSelectedPersonalFinanceCardId] = useState<string | null>(
-    () => readNavigationFromUrl().financeCardId,
-  )
+  const [activePersonalFinanceTab, setActivePersonalFinanceTab] =
+    useState<PersonalFinanceTab>(() => readNavigationFromUrl().financeTab)
+  const [selectedPersonalFinanceYear, setSelectedPersonalFinanceYear] =
+    useState<number>(() => readNavigationFromUrl().financeYear)
+  const [selectedPersonalFinanceCardId, setSelectedPersonalFinanceCardId] =
+    useState<string | null>(() => readNavigationFromUrl().financeCardId)
 
   const [dashboardStatus, setDashboardStatus] = useState<LoadStatus>('idle')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
-  const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null)
+  const [dashboardErrorMessage, setDashboardErrorMessage] = useState<
+    string | null
+  >(null)
   const [dashboardReloadTick, setDashboardReloadTick] = useState<number>(0)
 
   const [accountsStatus, setAccountsStatus] = useState<LoadStatus>('idle')
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([])
-  const [accountsErrorMessage, setAccountsErrorMessage] = useState<string | null>(null)
+  const [accountsErrorMessage, setAccountsErrorMessage] = useState<
+    string | null
+  >(null)
   const [accountsReloadTick, setAccountsReloadTick] = useState<number>(0)
-  const [createAccountStatus, setCreateAccountStatus] = useState<CreateAccountStatus>('idle')
-  const [createAccountErrorMessage, setCreateAccountErrorMessage] = useState<string | null>(null)
+  const [createAccountStatus, setCreateAccountStatus] =
+    useState<CreateAccountStatus>('idle')
+  const [createAccountErrorMessage, setCreateAccountErrorMessage] = useState<
+    string | null
+  >(null)
 
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     () => readNavigationFromUrl().accountId,
   )
-  const [transactionsStatus, setTransactionsStatus] = useState<LoadStatus>('idle')
+  const [transactionsStatus, setTransactionsStatus] =
+    useState<LoadStatus>('idle')
   const [transactions, setTransactions] = useState<TransactionDto[]>([])
-  const [transactionsErrorMessage, setTransactionsErrorMessage] = useState<string | null>(null)
-  const [transactionsReloadTick, setTransactionsReloadTick] = useState<number>(0)
-  const [createTransactionStatus, setCreateTransactionStatus] = useState<CreateTransactionStatus>('idle')
-  const [createTransactionErrorMessage, setCreateTransactionErrorMessage] = useState<string | null>(null)
-  const [csvImportStatus, setCsvImportStatus] = useState<CsvImportStatus>('idle')
-  const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<string | null>(null)
-  const [csvImportResult, setCsvImportResult] = useState<ImportTransactionsCsvResponse | null>(null)
-  const [personalFinanceStatus, setPersonalFinanceStatus] = useState<LoadStatus>('idle')
-  const [personalFinanceCards, setPersonalFinanceCards] = useState<PersonalFinanceCardListItem[]>([])
-  const [activePersonalFinanceSnapshots, setActivePersonalFinanceSnapshots] = useState<
-    PersonalFinanceSnapshotDto[]
+  const [transactionsErrorMessage, setTransactionsErrorMessage] = useState<
+    string | null
+  >(null)
+  const [transactionsReloadTick, setTransactionsReloadTick] =
+    useState<number>(0)
+  const [createTransactionStatus, setCreateTransactionStatus] =
+    useState<CreateTransactionStatus>('idle')
+  const [createTransactionErrorMessage, setCreateTransactionErrorMessage] =
+    useState<string | null>(null)
+  const [csvImportStatus, setCsvImportStatus] =
+    useState<CsvImportStatus>('idle')
+  const [csvImportErrorMessage, setCsvImportErrorMessage] = useState<
+    string | null
+  >(null)
+  const [csvImportResult, setCsvImportResult] =
+    useState<ImportTransactionsCsvResponse | null>(null)
+  const [personalFinanceStatus, setPersonalFinanceStatus] =
+    useState<LoadStatus>('idle')
+  const [personalFinanceCards, setPersonalFinanceCards] = useState<
+    PersonalFinanceCardListItem[]
   >([])
-  const [selectedPersonalFinanceSettingsSnapshot, setSelectedPersonalFinanceSettingsSnapshot] =
-    useState<PersonalFinanceSnapshotDto | null>(null)
-  const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] = useState<string | null>(null)
-  const [personalFinanceReloadTick, setPersonalFinanceReloadTick] = useState<number>(0)
+  const [activePersonalFinanceSnapshots, setActivePersonalFinanceSnapshots] =
+    useState<PersonalFinanceSnapshotDto[]>([])
+  const [
+    selectedPersonalFinanceSettingsSnapshot,
+    setSelectedPersonalFinanceSettingsSnapshot,
+  ] = useState<PersonalFinanceSnapshotDto | null>(null)
+  const [personalFinanceErrorMessage, setPersonalFinanceErrorMessage] =
+    useState<string | null>(null)
+  const [personalFinanceReloadTick, setPersonalFinanceReloadTick] =
+    useState<number>(0)
 
-  const [directionFilter, setDirectionFilter] = useState<TransactionDirectionFilter>('ALL')
+  const [directionFilter, setDirectionFilter] =
+    useState<TransactionDirectionFilter>('ALL')
   const [memoFilter, setMemoFilter] = useState<string>('')
 
   useEffect(() => {
@@ -192,7 +229,9 @@ function App() {
       try {
         const accountRows = await apiClient.listAccounts(controller.signal)
         const balances = await Promise.all(
-          accountRows.map((account) => apiClient.getAccountBalance(account.id, controller.signal)),
+          accountRows.map((account) =>
+            apiClient.getAccountBalance(account.id, controller.signal),
+          ),
         )
 
         if (controller.signal.aborted) {
@@ -212,7 +251,10 @@ function App() {
             return null
           }
 
-          if (currentSelection && rows.some((account) => account.id === currentSelection)) {
+          if (
+            currentSelection &&
+            rows.some((account) => account.id === currentSelection)
+          ) {
             return currentSelection
           }
 
@@ -254,13 +296,18 @@ function App() {
       setTransactionsErrorMessage(null)
 
       try {
-        const rows = await apiClient.listAccountTransactions(selectedAccountId, controller.signal)
+        const rows = await apiClient.listAccountTransactions(
+          selectedAccountId,
+          controller.signal,
+        )
 
         if (controller.signal.aborted) {
           return
         }
 
-        const sortedRows = [...rows].sort((left, right) => right.occurredOn.localeCompare(left.occurredOn))
+        const sortedRows = [...rows].sort((left, right) =>
+          right.occurredOn.localeCompare(left.occurredOn),
+        )
         setTransactions(sortedRows)
         setTransactionsStatus('ready')
         setCreateTransactionStatus('idle')
@@ -294,7 +341,9 @@ function App() {
       setPersonalFinanceErrorMessage(null)
 
       try {
-        const cards = await apiClient.listPersonalFinanceCards(controller.signal)
+        const cards = await apiClient.listPersonalFinanceCards(
+          controller.signal,
+        )
         const activeCards = cards.filter((card) => card.status === 'ACTIVE')
 
         if (controller.signal.aborted) {
@@ -311,14 +360,21 @@ function App() {
           return
         }
 
-        const resolvedCardId = resolvePersonalFinanceSelection(cards, selectedPersonalFinanceCardId)
+        const resolvedCardId = resolvePersonalFinanceSelection(
+          cards,
+          selectedPersonalFinanceCardId,
+        )
         if (resolvedCardId !== selectedPersonalFinanceCardId) {
           setSelectedPersonalFinanceCardId(resolvedCardId)
         }
 
         const activeSnapshotResults = await Promise.allSettled(
           activeCards.map((card) =>
-            apiClient.getPersonalFinanceSnapshot(card.id, selectedPersonalFinanceYear, controller.signal),
+            apiClient.getPersonalFinanceSnapshot(
+              card.id,
+              selectedPersonalFinanceYear,
+              controller.signal,
+            ),
           ),
         )
 
@@ -329,7 +385,9 @@ function App() {
         const activeSnapshots = activeSnapshotResults.flatMap((result) =>
           result.status === 'fulfilled' ? [result.value] : [],
         )
-        const normalizedActiveSnapshots = activeSnapshots.map(normalizePersonalFinanceSnapshotCategoryOrder)
+        const normalizedActiveSnapshots = activeSnapshots.map(
+          normalizePersonalFinanceSnapshotCategoryOrder,
+        )
         const settingsCardId = resolvePersonalFinanceSettingsSelection(
           cards,
           resolvedCardId,
@@ -341,7 +399,9 @@ function App() {
         }
 
         let settingsSnapshot =
-          normalizedActiveSnapshots.find((snapshot) => snapshot.card.id === settingsCardId) ?? null
+          normalizedActiveSnapshots.find(
+            (snapshot) => snapshot.card.id === settingsCardId,
+          ) ?? null
 
         if (!settingsSnapshot && settingsCardId) {
           const settingsSnapshotResult = await Promise.allSettled([
@@ -353,7 +413,9 @@ function App() {
           ])
           const fulfilledSettingsSnapshot = settingsSnapshotResult[0]
           if (fulfilledSettingsSnapshot?.status === 'fulfilled') {
-            settingsSnapshot = normalizePersonalFinanceSnapshotCategoryOrder(fulfilledSettingsSnapshot.value)
+            settingsSnapshot = normalizePersonalFinanceSnapshotCategoryOrder(
+              fulfilledSettingsSnapshot.value,
+            )
           }
         }
 
@@ -364,14 +426,22 @@ function App() {
         const mergedActiveSnapshots =
           settingsSnapshot &&
           settingsSnapshot.card.status === 'ACTIVE' &&
-          !normalizedActiveSnapshots.some((snapshot) => snapshot.card.id === settingsSnapshot.card.id)
+          !normalizedActiveSnapshots.some(
+            (snapshot) => snapshot.card.id === settingsSnapshot.card.id,
+          )
             ? [...normalizedActiveSnapshots, settingsSnapshot]
             : normalizedActiveSnapshots
 
         setActivePersonalFinanceSnapshots(mergedActiveSnapshots)
         setSelectedPersonalFinanceSettingsSnapshot(settingsSnapshot)
         setPersonalFinanceCards(
-          enrichPersonalFinanceCards(cards, buildPersonalFinanceCardSummary(mergedActiveSnapshots, settingsSnapshot)),
+          enrichPersonalFinanceCards(
+            cards,
+            buildPersonalFinanceCardSummary(
+              mergedActiveSnapshots,
+              settingsSnapshot,
+            ),
+          ),
         )
         setPersonalFinanceStatus('ready')
       } catch (error) {
@@ -389,22 +459,32 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [activeView, selectedPersonalFinanceCardId, selectedPersonalFinanceYear, personalFinanceReloadTick])
+  }, [
+    activeView,
+    selectedPersonalFinanceCardId,
+    selectedPersonalFinanceYear,
+    personalFinanceReloadTick,
+  ])
 
   const selectedAccount = selectedAccountId
-    ? accounts.find((account) => account.id === selectedAccountId) ?? null
+    ? (accounts.find((account) => account.id === selectedAccountId) ?? null)
     : null
 
   const filteredTransactions = useMemo(() => {
     const normalizedMemoFilter = memoFilter.trim().toLowerCase()
 
     return transactions.filter((transaction) => {
-      if (directionFilter !== 'ALL' && transaction.direction !== directionFilter) {
+      if (
+        directionFilter !== 'ALL' &&
+        transaction.direction !== directionFilter
+      ) {
         return false
       }
 
       if (normalizedMemoFilter.length > 0) {
-        return normalizeTransactionMemo(transaction.memo).toLowerCase().includes(normalizedMemoFilter)
+        return normalizeTransactionMemo(transaction.memo)
+          .toLowerCase()
+          .includes(normalizedMemoFilter)
       }
 
       return true
@@ -442,7 +522,9 @@ function App() {
     setCsvImportResult(null)
   }
 
-  const handleCreateAccount = async (request: CreateAccountRequest): Promise<boolean> => {
+  const handleCreateAccount = async (
+    request: CreateAccountRequest,
+  ): Promise<boolean> => {
     setCreateAccountStatus('submitting')
     setCreateAccountErrorMessage(null)
 
@@ -485,7 +567,9 @@ function App() {
       setMemoFilter('')
     }
 
-    setAccounts((current) => current.filter((account) => account.id !== accountId))
+    setAccounts((current) =>
+      current.filter((account) => account.id !== accountId),
+    )
     setAccountsReloadTick((tick) => tick + 1)
     setDashboardReloadTick((tick) => tick + 1)
   }
@@ -523,7 +607,10 @@ function App() {
     }
   }
 
-  const handleImportTransactionsCsv = async (accountId: string, file: File): Promise<boolean> => {
+  const handleImportTransactionsCsv = async (
+    accountId: string,
+    file: File,
+  ): Promise<boolean> => {
     setCsvImportStatus('submitting')
     setCsvImportErrorMessage(null)
     setCsvImportResult(null)
@@ -557,7 +644,9 @@ function App() {
     transactionId: string,
   ): Promise<void> => {
     await apiClient.deleteTransaction(accountId, transactionId)
-    setTransactions((current) => current.filter((transaction) => transaction.id !== transactionId))
+    setTransactions((current) =>
+      current.filter((transaction) => transaction.id !== transactionId),
+    )
     startTransition(() => {
       refreshTransactionDerivedViews()
     })
@@ -615,11 +704,7 @@ function App() {
     }
 
     try {
-      await apiClient.updateMonthlyIncomeActual(
-        cardId,
-        month,
-        request,
-      )
+      await apiClient.updateMonthlyIncomeActual(cardId, month, request)
       refreshPersonalFinanceDerivedViews()
       return true
     } catch {
@@ -653,7 +738,10 @@ function App() {
     }
 
     try {
-      await apiClient.updatePersonalFinanceSettings(selectedPersonalFinanceCardId, request)
+      await apiClient.updatePersonalFinanceSettings(
+        selectedPersonalFinanceCardId,
+        request,
+      )
       refreshPersonalFinanceDerivedViews()
       return true
     } catch {
@@ -669,7 +757,10 @@ function App() {
     }
 
     try {
-      await apiClient.updatePersonalFinanceCard(selectedPersonalFinanceCardId, request)
+      await apiClient.updatePersonalFinanceCard(
+        selectedPersonalFinanceCardId,
+        request,
+      )
       refreshPersonalFinanceDerivedViews()
       return true
     } catch {
@@ -677,7 +768,9 @@ function App() {
     }
   }
 
-  const handleArchivePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+  const handleArchivePersonalFinanceCard = async (
+    cardId: string,
+  ): Promise<boolean> => {
     try {
       await apiClient.archivePersonalFinanceCard(cardId)
       setSelectedPersonalFinanceCardId(null)
@@ -689,7 +782,9 @@ function App() {
     }
   }
 
-  const handleRestorePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+  const handleRestorePersonalFinanceCard = async (
+    cardId: string,
+  ): Promise<boolean> => {
     try {
       await apiClient.restorePersonalFinanceCard(cardId)
       setSelectedPersonalFinanceCardId(cardId)
@@ -701,10 +796,14 @@ function App() {
     }
   }
 
-  const handleDeletePersonalFinanceCard = async (cardId: string): Promise<boolean> => {
+  const handleDeletePersonalFinanceCard = async (
+    cardId: string,
+  ): Promise<boolean> => {
     try {
       await apiClient.deletePersonalFinanceCard(cardId)
-      setSelectedPersonalFinanceCardId((current) => (current === cardId ? null : current))
+      setSelectedPersonalFinanceCardId((current) =>
+        current === cardId ? null : current,
+      )
       setActivePersonalFinanceTab('settings')
       refreshPersonalFinanceDerivedViews()
       return true
@@ -721,12 +820,16 @@ function App() {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
               Mindful Finance
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{localizedTitle}</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+              {localizedTitle}
+            </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
               {localizedDescription}
             </p>
           </div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">{headerContextLabel}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {headerContextLabel}
+          </p>
         </header>
 
         <nav className="mt-8 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -838,7 +941,12 @@ interface DashboardViewProps {
   onRetry: () => void
 }
 
-function DashboardView({ status, dashboard, errorMessage, onRetry }: DashboardViewProps) {
+function DashboardView({
+  status,
+  dashboard,
+  errorMessage,
+  onRetry,
+}: DashboardViewProps) {
   if (status === 'loading' || status === 'idle') {
     return <StatusCard tone="neutral" message="Загружаем метрики обзора..." />
   }
@@ -861,11 +969,16 @@ function DashboardView({ status, dashboard, errorMessage, onRetry }: DashboardVi
   return (
     <div className="space-y-4">
       <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-        Общие метрики учитывают и инвестиционные счета, и активные карты из раздела личных финансов.
+        Общие метрики учитывают и инвестиционные счета, и активные карты из
+        раздела личных финансов.
       </p>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard title="Капитал" subtitle="С группировкой по валютам" totals={dashboard.netWorth} />
+        <MetricCard
+          title="Капитал"
+          subtitle="С группировкой по валютам"
+          totals={dashboard.netWorth}
+        />
         <MetricCard
           title="Месячный расход"
           subtitle="Сумма расходов за последние 30 дней"
@@ -898,17 +1011,26 @@ interface AccountsViewProps {
   createAccountStatus: CreateAccountStatus
   createAccountErrorMessage: string | null
   onCreateAccount: (request: CreateAccountRequest) => Promise<boolean>
-  onUpdateAccount: (accountId: string, request: UpdateAccountRequest) => Promise<void>
+  onUpdateAccount: (
+    accountId: string,
+    request: UpdateAccountRequest,
+  ) => Promise<void>
   onDeleteAccount: (accountId: string) => Promise<void>
   createTransactionStatus: CreateTransactionStatus
   createTransactionErrorMessage: string | null
-  onCreateTransaction: (accountId: string, request: CreateTransactionRequest) => Promise<boolean>
+  onCreateTransaction: (
+    accountId: string,
+    request: CreateTransactionRequest,
+  ) => Promise<boolean>
   onUpdateTransaction: (
     accountId: string,
     transactionId: string,
     request: UpdateTransactionRequest,
   ) => Promise<void>
-  onDeleteTransaction: (accountId: string, transactionId: string) => Promise<void>
+  onDeleteTransaction: (
+    accountId: string,
+    transactionId: string,
+  ) => Promise<void>
   csvImportStatus: CsvImportStatus
   csvImportErrorMessage: string | null
   csvImportResult: ImportTransactionsCsvResponse | null
@@ -951,31 +1073,54 @@ function AccountsView({
   onRetryTransactions,
 }: AccountsViewProps) {
   const [newAccountName, setNewAccountName] = useState<string>('')
-  const [newAccountCurrency, setNewAccountCurrency] = useState<string>(DEFAULT_ACCOUNT_CURRENCY)
+  const [newAccountCurrency, setNewAccountCurrency] = useState<string>(
+    DEFAULT_ACCOUNT_CURRENCY,
+  )
   const [newAccountType, setNewAccountType] = useState<AccountType>('CASH')
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [editingAccountName, setEditingAccountName] = useState<string>('')
-  const [editingAccountType, setEditingAccountType] = useState<AccountType>('CASH')
-  const [updateAccountStatus, setUpdateAccountStatus] = useState<CreateAccountStatus>('idle')
-  const [updateAccountErrorMessage, setUpdateAccountErrorMessage] = useState<string | null>(null)
-  const [deleteAccountStatus, setDeleteAccountStatus] = useState<CreateAccountStatus>('idle')
-  const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState<string | null>(null)
-  const [deleteAccountErrorAccountId, setDeleteAccountErrorAccountId] = useState<string | null>(null)
-  const [newTransactionDate, setNewTransactionDate] = useState<string>(todayIsoDate())
-  const [newTransactionDirection, setNewTransactionDirection] = useState<TransactionDirection>('OUTFLOW')
+  const [editingAccountType, setEditingAccountType] =
+    useState<AccountType>('CASH')
+  const [updateAccountStatus, setUpdateAccountStatus] =
+    useState<CreateAccountStatus>('idle')
+  const [updateAccountErrorMessage, setUpdateAccountErrorMessage] = useState<
+    string | null
+  >(null)
+  const [deleteAccountStatus, setDeleteAccountStatus] =
+    useState<CreateAccountStatus>('idle')
+  const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState<
+    string | null
+  >(null)
+  const [deleteAccountErrorAccountId, setDeleteAccountErrorAccountId] =
+    useState<string | null>(null)
+  const [newTransactionDate, setNewTransactionDate] =
+    useState<string>(todayIsoDate())
+  const [newTransactionDirection, setNewTransactionDirection] =
+    useState<TransactionDirection>('OUTFLOW')
   const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
   const [newTransactionMemo, setNewTransactionMemo] = useState<string>('')
-  const [editingTransactionAccountId, setEditingTransactionAccountId] = useState<string | null>(null)
-  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
-  const [editingTransactionDate, setEditingTransactionDate] = useState<string>(todayIsoDate())
+  const [editingTransactionAccountId, setEditingTransactionAccountId] =
+    useState<string | null>(null)
+  const [editingTransactionId, setEditingTransactionId] = useState<
+    string | null
+  >(null)
+  const [editingTransactionDate, setEditingTransactionDate] =
+    useState<string>(todayIsoDate())
   const [editingTransactionDirection, setEditingTransactionDirection] =
     useState<TransactionDirection>('OUTFLOW')
-  const [editingTransactionAmount, setEditingTransactionAmount] = useState<string>('')
-  const [editingTransactionMemo, setEditingTransactionMemo] = useState<string>('')
-  const [updateTransactionStatus, setUpdateTransactionStatus] = useState<CreateTransactionStatus>('idle')
-  const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] = useState<string | null>(null)
-  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null)
-  const [deleteTransactionErrorMessage, setDeleteTransactionErrorMessage] = useState<string | null>(null)
+  const [editingTransactionAmount, setEditingTransactionAmount] =
+    useState<string>('')
+  const [editingTransactionMemo, setEditingTransactionMemo] =
+    useState<string>('')
+  const [updateTransactionStatus, setUpdateTransactionStatus] =
+    useState<CreateTransactionStatus>('idle')
+  const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] =
+    useState<string | null>(null)
+  const [deletingTransactionId, setDeletingTransactionId] = useState<
+    string | null
+  >(null)
+  const [deleteTransactionErrorMessage, setDeleteTransactionErrorMessage] =
+    useState<string | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const csvFileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -1010,7 +1155,9 @@ function AccountsView({
   }
 
   if (status === 'loading' || status === 'idle') {
-    return <StatusCard tone="neutral" message="Загружаем инвестиции и балансы..." />
+    return (
+      <StatusCard tone="neutral" message="Загружаем инвестиции и балансы..." />
+    )
   }
 
   if (status === 'error') {
@@ -1026,7 +1173,9 @@ function AccountsView({
 
   const isCurrencyValid = ACCOUNT_CURRENCY_OPTIONS.includes(newAccountCurrency)
   const canCreate =
-    newAccountName.trim().length > 0 && isCurrencyValid && createAccountStatus !== 'submitting'
+    newAccountName.trim().length > 0 &&
+    isCurrencyValid &&
+    createAccountStatus !== 'submitting'
   const isEditingSelectedAccount =
     selectedAccount !== null && editingAccountId === selectedAccount.id
   const canUpdateAccount =
@@ -1034,7 +1183,8 @@ function AccountsView({
     editingAccountName.trim().length > 0 &&
     updateAccountStatus !== 'submitting'
   const isDeleteAvailabilityKnown = transactionsStatus === 'ready'
-  const hasLoadedTransactions = isDeleteAvailabilityKnown && totalTransactionsCount > 0
+  const hasLoadedTransactions =
+    isDeleteAvailabilityKnown && totalTransactionsCount > 0
   const canDeleteAccount =
     selectedAccount !== null &&
     !isEditingSelectedAccount &&
@@ -1046,19 +1196,29 @@ function AccountsView({
   const transactionAmountCandidate = normalizeMoneyInput(newTransactionAmount)
   const transactionMemoCandidate = newTransactionMemo.trim()
   const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
-  const isTransactionAmountValid = isValidPositiveAmountValue(transactionAmountCandidate)
+  const isTransactionAmountValid = isValidPositiveAmountValue(
+    transactionAmountCandidate,
+  )
   const canCreateTransaction =
     selectedAccount !== null &&
     isTransactionDateValid &&
     isTransactionAmountValid &&
     createTransactionStatus !== 'submitting'
   const editingTransactionDateCandidate = editingTransactionDate.trim()
-  const editingTransactionAmountCandidate = normalizeMoneyInput(editingTransactionAmount)
+  const editingTransactionAmountCandidate = normalizeMoneyInput(
+    editingTransactionAmount,
+  )
   const editingTransactionMemoCandidate = editingTransactionMemo.trim()
-  const isEditingTransactionDateValid = isValidIsoDateValue(editingTransactionDateCandidate)
-  const isEditingTransactionAmountValid = isValidPositiveAmountValue(editingTransactionAmountCandidate)
+  const isEditingTransactionDateValid = isValidIsoDateValue(
+    editingTransactionDateCandidate,
+  )
+  const isEditingTransactionAmountValid = isValidPositiveAmountValue(
+    editingTransactionAmountCandidate,
+  )
   const activeEditingTransactionId =
-    editingTransactionAccountId === selectedAccountId ? editingTransactionId : null
+    editingTransactionAccountId === selectedAccountId
+      ? editingTransactionId
+      : null
   const canUpdateTransaction =
     selectedAccount !== null &&
     activeEditingTransactionId !== null &&
@@ -1072,7 +1232,9 @@ function AccountsView({
   const isDeleteTransactionSubmitting =
     deletingTransactionId !== null && deleteTransactionErrorMessage === null
 
-  const handleCreateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleCreateAccountSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canCreate) {
@@ -1103,7 +1265,9 @@ function AccountsView({
     setUpdateAccountErrorMessage(null)
   }
 
-  const handleUpdateAccountSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleUpdateAccountSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!selectedAccount || !isEditingSelectedAccount || !canUpdateAccount) {
@@ -1131,7 +1295,11 @@ function AccountsView({
       return
     }
 
-    if (!window.confirm(`Удалить счет «${selectedAccount.name}»? Это действие необратимо.`)) {
+    if (
+      !window.confirm(
+        `Удалить счет «${selectedAccount.name}»? Это действие необратимо.`,
+      )
+    ) {
       return
     }
 
@@ -1151,7 +1319,9 @@ function AccountsView({
     }
   }
 
-  const handleCreateTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleCreateTransactionSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!selectedAccount || !canCreateTransaction) {
@@ -1172,7 +1342,9 @@ function AccountsView({
     }
   }
 
-  const handleImportCsvSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleImportCsvSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!selectedAccount || !csvFile || !canImportCsv) {
@@ -1203,10 +1375,16 @@ function AccountsView({
     setUpdateTransactionErrorMessage(null)
   }
 
-  const handleUpdateTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleUpdateTransactionSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
-    if (!selectedAccount || !activeEditingTransactionId || !canUpdateTransaction) {
+    if (
+      !selectedAccount ||
+      !activeEditingTransactionId ||
+      !canUpdateTransaction
+    ) {
       return
     }
 
@@ -1215,12 +1393,16 @@ function AccountsView({
     setUpdateTransactionErrorMessage(null)
 
     try {
-      await onUpdateTransaction(selectedAccount.id, activeEditingTransactionId, {
-        occurredOn: editingTransactionDateCandidate,
-        direction: editingTransactionDirection,
-        amount: editingTransactionAmountCandidate,
-        memo: editingTransactionMemoCandidate,
-      })
+      await onUpdateTransaction(
+        selectedAccount.id,
+        activeEditingTransactionId,
+        {
+          occurredOn: editingTransactionDateCandidate,
+          direction: editingTransactionDirection,
+          amount: editingTransactionAmountCandidate,
+          memo: editingTransactionMemoCandidate,
+        },
+      )
       resetEditingTransaction()
     } catch (error) {
       setUpdateTransactionStatus('error')
@@ -1228,7 +1410,9 @@ function AccountsView({
     }
   }
 
-  const handleDeleteTransactionClick = async (transaction: TransactionDto): Promise<void> => {
+  const handleDeleteTransactionClick = async (
+    transaction: TransactionDto,
+  ): Promise<void> => {
     if (!selectedAccount || isDeleteTransactionSubmitting) {
       return
     }
@@ -1268,8 +1452,12 @@ function AccountsView({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Список инвестиций</h2>
-        <p className="mt-1 text-xs text-slate-500">Выберите инструмент, чтобы посмотреть транзакции.</p>
+        <h2 className="text-sm font-semibold text-slate-900">
+          Список инвестиций
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Выберите инструмент, чтобы посмотреть транзакции.
+        </p>
 
         <form
           className="mt-4 rounded-lg border border-slate-200 bg-white p-3"
@@ -1277,7 +1465,9 @@ function AccountsView({
             void handleCreateAccountSubmit(event)
           }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Добавить инструмент</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Добавить инструмент
+          </p>
 
           <div className="mt-3 space-y-2">
             <input
@@ -1303,7 +1493,9 @@ function AccountsView({
 
               <select
                 value={newAccountType}
-                onChange={(event) => setNewAccountType(event.target.value as AccountType)}
+                onChange={(event) =>
+                  setNewAccountType(event.target.value as AccountType)
+                }
                 className="block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
               >
                 {ACCOUNT_TYPE_OPTIONS.map((type) => (
@@ -1316,11 +1508,15 @@ function AccountsView({
           </div>
 
           {!isCurrencyValid ? (
-            <p className="mt-2 text-xs text-amber-700">Выберите валюту из списка.</p>
+            <p className="mt-2 text-xs text-amber-700">
+              Выберите валюту из списка.
+            </p>
           ) : null}
 
           {createAccountStatus === 'error' && createAccountErrorMessage ? (
-            <p className="mt-2 text-xs text-amber-700">{createAccountErrorMessage}</p>
+            <p className="mt-2 text-xs text-amber-700">
+              {createAccountErrorMessage}
+            </p>
           ) : null}
 
           <button
@@ -1334,7 +1530,10 @@ function AccountsView({
 
         {accounts.length === 0 ? (
           <div className="mt-4">
-            <StatusCard tone="neutral" message="Пока нет инвестиций. Добавьте первый инструмент." />
+            <StatusCard
+              tone="neutral"
+              message="Пока нет инвестиций. Добавьте первый инструмент."
+            />
           </div>
         ) : (
           <ul className="mt-4 space-y-2">
@@ -1351,9 +1550,12 @@ function AccountsView({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{account.name}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {account.name}
+                      </p>
                       <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                        {toAccountTypeLabel(account.type)} · {toAccountStatusLabel(account.status)}
+                        {toAccountTypeLabel(account.type)} ·{' '}
+                        {toAccountStatusLabel(account.status)}
                       </p>
                     </div>
                     <div className="text-right">
@@ -1374,12 +1576,17 @@ function AccountsView({
 
       <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         {!selectedAccount ? (
-          <StatusCard tone="neutral" message="Выберите инструмент, чтобы посмотреть транзакции." />
+          <StatusCard
+            tone="neutral"
+            message="Выберите инструмент, чтобы посмотреть транзакции."
+          />
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">{selectedAccount.name}</h2>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  {selectedAccount.name}
+                </h2>
                 <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
                   Транзакции · {selectedAccount.balance.currency}
                 </p>
@@ -1402,7 +1609,9 @@ function AccountsView({
                     disabled={!canDeleteAccount}
                     className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {deleteAccountStatus === 'submitting' ? 'Удаляем счет...' : 'Удалить счет'}
+                    {deleteAccountStatus === 'submitting'
+                      ? 'Удаляем счет...'
+                      : 'Удалить счет'}
                   </button>
                 </div>
               ) : null}
@@ -1425,7 +1634,9 @@ function AccountsView({
                     <input
                       type="text"
                       value={editingAccountName}
-                      onChange={(event) => setEditingAccountName(event.target.value)}
+                      onChange={(event) =>
+                        setEditingAccountName(event.target.value)
+                      }
                       className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                     />
                   </label>
@@ -1434,7 +1645,9 @@ function AccountsView({
                     Тип
                     <select
                       value={editingAccountType}
-                      onChange={(event) => setEditingAccountType(event.target.value as AccountType)}
+                      onChange={(event) =>
+                        setEditingAccountType(event.target.value as AccountType)
+                      }
                       className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                     >
                       {ACCOUNT_TYPE_OPTIONS.map((type) => (
@@ -1447,11 +1660,15 @@ function AccountsView({
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Валюта счета фиксируется при создании и не редактируется: {selectedAccount.currency}.
+                  Валюта счета фиксируется при создании и не редактируется:{' '}
+                  {selectedAccount.currency}.
                 </p>
 
-                {updateAccountStatus === 'error' && updateAccountErrorMessage ? (
-                  <p className="mt-2 text-xs text-amber-700">{updateAccountErrorMessage}</p>
+                {updateAccountStatus === 'error' &&
+                updateAccountErrorMessage ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    {updateAccountErrorMessage}
+                  </p>
                 ) : null}
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1460,7 +1677,9 @@ function AccountsView({
                     disabled={!canUpdateAccount}
                     className="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {updateAccountStatus === 'submitting' ? 'Сохраняем...' : 'Сохранить'}
+                    {updateAccountStatus === 'submitting'
+                      ? 'Сохраняем...'
+                      : 'Сохранить'}
                   </button>
                   <button
                     type="button"
@@ -1493,7 +1712,9 @@ function AccountsView({
             deleteAccountStatus === 'error' &&
             deleteAccountErrorMessage &&
             deleteAccountErrorAccountId === selectedAccount.id ? (
-              <p className="mt-2 text-xs text-amber-700">{deleteAccountErrorMessage}</p>
+              <p className="mt-2 text-xs text-amber-700">
+                {deleteAccountErrorMessage}
+              </p>
             ) : null}
 
             <form
@@ -1512,7 +1733,9 @@ function AccountsView({
                   <input
                     type="date"
                     value={newTransactionDate}
-                    onChange={(event) => setNewTransactionDate(event.target.value)}
+                    onChange={(event) =>
+                      setNewTransactionDate(event.target.value)
+                    }
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   />
                 </label>
@@ -1522,12 +1745,18 @@ function AccountsView({
                   <select
                     value={newTransactionDirection}
                     onChange={(event) =>
-                      setNewTransactionDirection(event.target.value as TransactionDirection)
+                      setNewTransactionDirection(
+                        event.target.value as TransactionDirection,
+                      )
                     }
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   >
-                    <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
-                    <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                    <option value="OUTFLOW">
+                      {toDirectionSelectLabel('OUTFLOW')}
+                    </option>
+                    <option value="INFLOW">
+                      {toDirectionSelectLabel('INFLOW')}
+                    </option>
                   </select>
                 </label>
               </div>
@@ -1539,7 +1768,11 @@ function AccountsView({
                     type="text"
                     inputMode="decimal"
                     value={newTransactionAmount}
-                    onChange={(event) => setNewTransactionAmount(formatMoneyInput(event.target.value))}
+                    onChange={(event) =>
+                      setNewTransactionAmount(
+                        formatMoneyInput(event.target.value),
+                      )
+                    }
                     placeholder="0,00"
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   />
@@ -1550,21 +1783,28 @@ function AccountsView({
                   <input
                     type="text"
                     value={newTransactionMemo}
-                    onChange={(event) => setNewTransactionMemo(event.target.value)}
+                    onChange={(event) =>
+                      setNewTransactionMemo(event.target.value)
+                    }
                     placeholder="Продукты"
                     className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   />
                 </label>
               </div>
 
-              {!isTransactionAmountValid && newTransactionAmount.trim().length > 0 ? (
+              {!isTransactionAmountValid &&
+              newTransactionAmount.trim().length > 0 ? (
                 <p className="mt-2 text-xs text-amber-700">
-                  Сумма должна быть положительной и содержать не более 2 знаков после запятой.
+                  Сумма должна быть положительной и содержать не более 2 знаков
+                  после запятой.
                 </p>
               ) : null}
 
-              {createTransactionStatus === 'error' && createTransactionErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{createTransactionErrorMessage}</p>
+              {createTransactionStatus === 'error' &&
+              createTransactionErrorMessage ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  {createTransactionErrorMessage}
+                </p>
               ) : null}
 
               <button
@@ -1572,7 +1812,9 @@ function AccountsView({
                 disabled={!canCreateTransaction}
                 className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {createTransactionStatus === 'submitting' ? 'Добавляем...' : 'Добавить транзакцию'}
+                {createTransactionStatus === 'submitting'
+                  ? 'Добавляем...'
+                  : 'Добавить транзакцию'}
               </button>
             </form>
 
@@ -1582,9 +1824,12 @@ function AccountsView({
                 void handleImportCsvSubmit(event)
               }}
             >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Импорт из CSV</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Импорт из CSV
+              </p>
               <p className="mt-1 text-xs text-slate-500">
-                Формат заголовка: <code>occurred_on,direction,amount,currency,memo</code>
+                Формат заголовка:{' '}
+                <code>occurred_on,direction,amount,currency,memo</code>
               </p>
 
               <label className="mt-3 block text-xs text-slate-600">
@@ -1593,26 +1838,33 @@ function AccountsView({
                   ref={csvFileInputRef}
                   type="file"
                   accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) =>
+                    setCsvFile(event.target.files?.[0] ?? null)
+                  }
                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700"
                 />
               </label>
 
               {csvFile ? (
                 <p className="mt-2 text-xs text-slate-500">
-                  Выбран файл: <span className="font-medium text-slate-700">{csvFile.name}</span>
+                  Выбран файл:{' '}
+                  <span className="font-medium text-slate-700">
+                    {csvFile.name}
+                  </span>
                 </p>
               ) : null}
 
               {csvImportStatus === 'error' && csvImportErrorMessage ? (
-                <p className="mt-2 text-xs text-amber-700">{csvImportErrorMessage}</p>
+                <p className="mt-2 text-xs text-amber-700">
+                  {csvImportErrorMessage}
+                </p>
               ) : null}
 
               {csvImportStatus === 'success' && csvImportResult ? (
                 <p className="mt-2 text-xs text-emerald-700">
-                  Импорт завершен: получено {csvImportResult.receivedRows}, добавлено{' '}
-                  {csvImportResult.importedCount}, пропущено дубликатов{' '}
-                  {csvImportResult.skippedDuplicates}.
+                  Импорт завершен: получено {csvImportResult.receivedRows},
+                  добавлено {csvImportResult.importedCount}, пропущено
+                  дубликатов {csvImportResult.skippedDuplicates}.
                 </p>
               ) : null}
 
@@ -1621,7 +1873,9 @@ function AccountsView({
                 disabled={!canImportCsv}
                 className="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {csvImportStatus === 'submitting' ? 'Импортируем...' : 'Импортировать CSV'}
+                {csvImportStatus === 'submitting'
+                  ? 'Импортируем...'
+                  : 'Импортировать CSV'}
               </button>
             </form>
 
@@ -1631,7 +1885,9 @@ function AccountsView({
                 <select
                   value={directionFilter}
                   onChange={(event) =>
-                    onDirectionFilterChange(event.target.value as TransactionDirectionFilter)
+                    onDirectionFilterChange(
+                      event.target.value as TransactionDirectionFilter,
+                    )
                   }
                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                 >
@@ -1654,35 +1910,52 @@ function AccountsView({
             </div>
 
             <div className="mt-4">
-              {transactionsStatus === 'loading' || transactionsStatus === 'idle' ? (
+              {transactionsStatus === 'loading' ||
+              transactionsStatus === 'idle' ? (
                 <StatusCard tone="neutral" message="Загружаем транзакции..." />
               ) : null}
 
               {transactionsStatus === 'error' ? (
                 <StatusCard
                   tone="warning"
-                  message={transactionsErrorMessage ?? 'Не удалось загрузить транзакции.'}
+                  message={
+                    transactionsErrorMessage ??
+                    'Не удалось загрузить транзакции.'
+                  }
                   actionLabel="Повторить"
                   onAction={onRetryTransactions}
                 />
               ) : null}
 
-              {transactionsStatus === 'ready' && totalTransactionsCount === 0 ? (
-                <StatusCard tone="neutral" message="Для этого инструмента пока нет транзакций." />
+              {transactionsStatus === 'ready' &&
+              totalTransactionsCount === 0 ? (
+                <StatusCard
+                  tone="neutral"
+                  message="Для этого инструмента пока нет транзакций."
+                />
               ) : null}
 
-              {transactionsStatus === 'ready' && totalTransactionsCount > 0 && filteredTransactions.length === 0 ? (
-                <StatusCard tone="neutral" message="Нет транзакций, подходящих под фильтры." />
+              {transactionsStatus === 'ready' &&
+              totalTransactionsCount > 0 &&
+              filteredTransactions.length === 0 ? (
+                <StatusCard
+                  tone="neutral"
+                  message="Нет транзакций, подходящих под фильтры."
+                />
               ) : null}
 
-              {transactionsStatus === 'ready' && filteredTransactions.length > 0 ? (
+              {transactionsStatus === 'ready' &&
+              filteredTransactions.length > 0 ? (
                 <ul className="space-y-2">
                   {filteredTransactions.map((transaction) => {
-                    const isEditing = activeEditingTransactionId === transaction.id
+                    const isEditing =
+                      activeEditingTransactionId === transaction.id
                     const hasDeleteError =
-                      deletingTransactionId === transaction.id && deleteTransactionErrorMessage !== null
+                      deletingTransactionId === transaction.id &&
+                      deleteTransactionErrorMessage !== null
                     const isDeletingThisTransaction =
-                      deletingTransactionId === transaction.id && deleteTransactionErrorMessage === null
+                      deletingTransactionId === transaction.id &&
+                      deleteTransactionErrorMessage === null
 
                     return (
                       <li
@@ -1705,7 +1978,11 @@ function AccountsView({
                                 <input
                                   type="date"
                                   value={editingTransactionDate}
-                                  onChange={(event) => setEditingTransactionDate(event.target.value)}
+                                  onChange={(event) =>
+                                    setEditingTransactionDate(
+                                      event.target.value,
+                                    )
+                                  }
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                                 />
                               </label>
@@ -1716,13 +1993,18 @@ function AccountsView({
                                   value={editingTransactionDirection}
                                   onChange={(event) =>
                                     setEditingTransactionDirection(
-                                      event.target.value as TransactionDirection,
+                                      event.target
+                                        .value as TransactionDirection,
                                     )
                                   }
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                                 >
-                                  <option value="OUTFLOW">{toDirectionSelectLabel('OUTFLOW')}</option>
-                                  <option value="INFLOW">{toDirectionSelectLabel('INFLOW')}</option>
+                                  <option value="OUTFLOW">
+                                    {toDirectionSelectLabel('OUTFLOW')}
+                                  </option>
+                                  <option value="INFLOW">
+                                    {toDirectionSelectLabel('INFLOW')}
+                                  </option>
                                 </select>
                               </label>
                             </div>
@@ -1735,7 +2017,9 @@ function AccountsView({
                                   inputMode="decimal"
                                   value={editingTransactionAmount}
                                   onChange={(event) =>
-                                    setEditingTransactionAmount(formatMoneyInput(event.target.value))
+                                    setEditingTransactionAmount(
+                                      formatMoneyInput(event.target.value),
+                                    )
                                   }
                                   placeholder="0,00"
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
@@ -1747,7 +2031,11 @@ function AccountsView({
                                 <input
                                   type="text"
                                   value={editingTransactionMemo}
-                                  onChange={(event) => setEditingTransactionMemo(event.target.value)}
+                                  onChange={(event) =>
+                                    setEditingTransactionMemo(
+                                      event.target.value,
+                                    )
+                                  }
                                   placeholder="Без описания"
                                   className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                                 />
@@ -1757,12 +2045,13 @@ function AccountsView({
                             {!isEditingTransactionAmountValid &&
                             editingTransactionAmount.trim().length > 0 ? (
                               <p className="mt-2 text-xs text-amber-700">
-                                Сумма должна быть положительной и содержать не более 2 знаков после
-                                запятой.
+                                Сумма должна быть положительной и содержать не
+                                более 2 знаков после запятой.
                               </p>
                             ) : null}
 
-                            {updateTransactionStatus === 'error' && updateTransactionErrorMessage ? (
+                            {updateTransactionStatus === 'error' &&
+                            updateTransactionErrorMessage ? (
                               <p className="mt-2 text-xs text-amber-700">
                                 {updateTransactionErrorMessage}
                               </p>
@@ -1809,12 +2098,17 @@ function AccountsView({
                                     : 'text-emerald-700'
                                 }`}
                               >
-                                {formatSignedAmount(transaction.amount, transaction.direction)}
+                                {formatSignedAmount(
+                                  transaction.amount,
+                                  transaction.direction,
+                                )}
                               </p>
                               <div className="mt-2 flex flex-wrap justify-end gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => handleStartEditingTransaction(transaction)}
+                                  onClick={() =>
+                                    handleStartEditingTransaction(transaction)
+                                  }
                                   disabled={isDeleteTransactionSubmitting}
                                   className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
@@ -1823,16 +2117,22 @@ function AccountsView({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    void handleDeleteTransactionClick(transaction)
+                                    void handleDeleteTransactionClick(
+                                      transaction,
+                                    )
                                   }}
                                   disabled={isDeleteTransactionSubmitting}
                                   className="rounded-md border border-rose-200 px-2.5 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {isDeletingThisTransaction ? 'Удаляем...' : 'Удалить'}
+                                  {isDeletingThisTransaction
+                                    ? 'Удаляем...'
+                                    : 'Удалить'}
                                 </button>
                               </div>
                               {hasDeleteError ? (
-                                <p className="mt-2 text-xs text-amber-700">{deleteTransactionErrorMessage}</p>
+                                <p className="mt-2 text-xs text-amber-700">
+                                  {deleteTransactionErrorMessage}
+                                </p>
                               ) : null}
                             </div>
                           </div>
@@ -1879,7 +2179,9 @@ interface MetricCardProps {
 }
 
 function MetricCard({ title, subtitle, totals }: MetricCardProps) {
-  const entries = Object.entries(totals).sort(([left], [right]) => left.localeCompare(right))
+  const entries = Object.entries(totals).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )
 
   return (
     <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1891,9 +2193,14 @@ function MetricCard({ title, subtitle, totals }: MetricCardProps) {
       ) : (
         <ul className="mt-6 space-y-2">
           {entries.map(([currency, amount]) => (
-            <li key={currency} className="flex items-center justify-between gap-3 text-sm">
+            <li
+              key={currency}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
               <span className="font-medium text-slate-700">{currency}</span>
-              <span className="font-semibold text-slate-900">{formatAmount(amount)}</span>
+              <span className="font-semibold text-slate-900">
+                {formatAmount(amount)}
+              </span>
             </li>
           ))}
         </ul>
@@ -1940,7 +2247,10 @@ function formatAmount(amount: string): string {
   return `${isNegative ? '-' : ''}${integerPart},${fractionPart}`
 }
 
-function formatSignedAmount(amount: string, direction: 'INFLOW' | 'OUTFLOW'): string {
+function formatSignedAmount(
+  amount: string,
+  direction: 'INFLOW' | 'OUTFLOW',
+): string {
   const prefix = direction === 'OUTFLOW' ? '-' : '+'
   return `${prefix}${formatAmount(amount)}`
 }
@@ -2025,15 +2335,26 @@ function normalizePersonalFinanceSnapshotCategoryOrder(
 function swapEducationAndInvestments(
   categories: PersonalFinanceSnapshotDto['categories'],
 ): PersonalFinanceSnapshotDto['categories'] {
-  const investmentsIndex = categories.findIndex((category) => category.code === 'INVESTMENTS')
-  const educationIndex = categories.findIndex((category) => category.code === 'EDUCATION')
+  const investmentsIndex = categories.findIndex(
+    (category) => category.code === 'INVESTMENTS',
+  )
+  const educationIndex = categories.findIndex(
+    (category) => category.code === 'EDUCATION',
+  )
 
-  if (investmentsIndex < 0 || educationIndex < 0 || investmentsIndex === educationIndex) {
+  if (
+    investmentsIndex < 0 ||
+    educationIndex < 0 ||
+    investmentsIndex === educationIndex
+  ) {
     return categories
   }
 
   const reorderedCategories = [...categories]
-  ;[reorderedCategories[investmentsIndex], reorderedCategories[educationIndex]] = [
+  ;[
+    reorderedCategories[investmentsIndex],
+    reorderedCategories[educationIndex],
+  ] = [
     reorderedCategories[educationIndex],
     reorderedCategories[investmentsIndex],
   ]
@@ -2069,7 +2390,9 @@ function resolvePersonalFinanceSelection(
     return selectedCardId
   }
 
-  return cards.find((card) => card.status === 'ACTIVE')?.id ?? cards[0]?.id ?? null
+  return (
+    cards.find((card) => card.status === 'ACTIVE')?.id ?? cards[0]?.id ?? null
+  )
 }
 
 function buildPersonalFinanceCardSummary(
@@ -2121,7 +2444,9 @@ function resolvePersonalFinanceSettingsSelection(
     return resolvedCard.id
   }
 
-  if (activeSnapshots.some((snapshot) => snapshot.card.id === resolvedCard.id)) {
+  if (
+    activeSnapshots.some((snapshot) => snapshot.card.id === resolvedCard.id)
+  ) {
     return resolvedCard.id
   }
 
@@ -2129,18 +2454,38 @@ function resolvePersonalFinanceSettingsSelection(
 }
 
 function getAccountCurrencyOptions(): string[] {
-  const fallbackOptions = ['USD', 'EUR', 'RUB', 'GBP', 'CHF', 'CNY', 'JPY', 'KZT', 'TRY']
+  const fallbackOptions = [
+    'USD',
+    'EUR',
+    'RUB',
+    'GBP',
+    'CHF',
+    'CNY',
+    'JPY',
+    'KZT',
+    'TRY',
+  ]
   const intlWithSupportedValues = Intl as typeof Intl & {
-    supportedValuesOf?: (key: 'calendar' | 'collation' | 'currency' | 'numberingSystem' | 'timeZone' | 'unit') => string[]
+    supportedValuesOf?: (
+      key:
+        | 'calendar'
+        | 'collation'
+        | 'currency'
+        | 'numberingSystem'
+        | 'timeZone'
+        | 'unit',
+    ) => string[]
   }
   const dynamicOptions = intlWithSupportedValues.supportedValuesOf?.('currency')
   if (!dynamicOptions || dynamicOptions.length === 0) {
     return fallbackOptions
   }
 
-  return [...new Set(dynamicOptions.map((currencyCode) => currencyCode.toUpperCase()))].sort((left, right) =>
-    left.localeCompare(right),
-  )
+  return [
+    ...new Set(
+      dynamicOptions.map((currencyCode) => currencyCode.toUpperCase()),
+    ),
+  ].sort((left, right) => left.localeCompare(right))
 }
 
 function getViewTitle(view: ViewTab): string {
@@ -2174,16 +2519,20 @@ function readNavigationFromUrl(): NavigationState {
   const financeTabParam = params.get('financeTab')
   const financeYearParam = params.get('financeYear')
   const financeCardIdRaw = params.get('financeCardId')
-  const accountId = accountIdRaw && accountIdRaw.trim().length > 0 ? accountIdRaw : null
-  const financeCardId = financeCardIdRaw && financeCardIdRaw.trim().length > 0 ? financeCardIdRaw : null
+  const accountId =
+    accountIdRaw && accountIdRaw.trim().length > 0 ? accountIdRaw : null
+  const financeCardId =
+    financeCardIdRaw && financeCardIdRaw.trim().length > 0
+      ? financeCardIdRaw
+      : null
   const financeTab: PersonalFinanceTab =
     financeTabParam === 'settings'
       ? 'settings'
       : financeTabParam === 'income-entry'
         ? 'income-entry'
-      : financeTabParam === 'income'
-        ? 'income'
-        : 'expenses'
+        : financeTabParam === 'income'
+          ? 'income'
+          : 'expenses'
   const financeYear = toNavigationYear(financeYearParam)
 
   const tab: ViewTab =

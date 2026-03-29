@@ -16,7 +16,10 @@ export function formatMoneyInput(value: string): string {
     return ''
   }
 
-  const groupedInteger = parsed.integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  const groupedInteger = parsed.integerPart.replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ' ',
+  )
   if (parsed.hasDecimalSeparator) {
     return `${groupedInteger}.${parsed.fractionPart}`
   }
@@ -65,7 +68,8 @@ function parseMoneyInput(value: string): ParsedMoneyInput {
   }
 
   const decimalSeparator = dotCount === 1 ? '.' : commaCount === 1 ? ',' : null
-  const [integerRaw, fractionRaw = ''] = decimalSeparator === null ? [source, ''] : source.split(decimalSeparator)
+  const [integerRaw, fractionRaw = ''] =
+    decimalSeparator === null ? [source, ''] : source.split(decimalSeparator)
   if (!/^\d*$/.test(integerRaw) || !/^\d*$/.test(fractionRaw)) {
     return invalidParsedMoneyInput
   }
@@ -79,7 +83,10 @@ function parseMoneyInput(value: string): ParsedMoneyInput {
     integerPart: integerDigits,
     fractionPart: fractionRaw,
     hasDecimalSeparator: decimalSeparator !== null,
-    hasValue: integerDigits.length > 0 || fractionRaw.length > 0 || decimalSeparator !== null,
+    hasValue:
+      integerDigits.length > 0 ||
+      fractionRaw.length > 0 ||
+      decimalSeparator !== null,
     isValid: true,
   }
 }

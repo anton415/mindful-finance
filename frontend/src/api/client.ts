@@ -25,8 +25,15 @@ import type {
 } from './types'
 
 export interface ApiClient {
-  createAccount(request: CreateAccountRequest, signal?: AbortSignal): Promise<CreateAccountResponse>
-  updateAccount(accountId: string, request: UpdateAccountRequest, signal?: AbortSignal): Promise<void>
+  createAccount(
+    request: CreateAccountRequest,
+    signal?: AbortSignal,
+  ): Promise<CreateAccountResponse>
+  updateAccount(
+    accountId: string,
+    request: UpdateAccountRequest,
+    signal?: AbortSignal,
+  ): Promise<void>
   deleteAccount(accountId: string, signal?: AbortSignal): Promise<void>
   createTransaction(
     accountId: string,
@@ -39,19 +46,34 @@ export interface ApiClient {
     request: UpdateTransactionRequest,
     signal?: AbortSignal,
   ): Promise<void>
-  deleteTransaction(accountId: string, transactionId: string, signal?: AbortSignal): Promise<void>
+  deleteTransaction(
+    accountId: string,
+    transactionId: string,
+    signal?: AbortSignal,
+  ): Promise<void>
   importTransactionsCsv(
     accountId: string,
     file: File,
     signal?: AbortSignal,
   ): Promise<ImportTransactionsCsvResponse>
   listAccounts(signal?: AbortSignal): Promise<AccountDto[]>
-  listAccountTransactions(accountId: string, signal?: AbortSignal): Promise<TransactionDto[]>
+  listAccountTransactions(
+    accountId: string,
+    signal?: AbortSignal,
+  ): Promise<TransactionDto[]>
   getAccountBalance(accountId: string, signal?: AbortSignal): Promise<MoneyDto>
   getNetWorth(signal?: AbortSignal): Promise<CurrencyTotalsDto>
-  getMonthlyBurn(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto>
-  getMonthlySavings(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto>
-  listPersonalFinanceCards(signal?: AbortSignal): Promise<PersonalFinanceCardDto[]>
+  getMonthlyBurn(options?: {
+    asOf?: IsoDate
+    signal?: AbortSignal
+  }): Promise<CurrencyTotalsDto>
+  getMonthlySavings(options?: {
+    asOf?: IsoDate
+    signal?: AbortSignal
+  }): Promise<CurrencyTotalsDto>
+  listPersonalFinanceCards(
+    signal?: AbortSignal,
+  ): Promise<PersonalFinanceCardDto[]>
   createPersonalFinanceCard(
     request: CreatePersonalFinanceCardRequest,
     signal?: AbortSignal,
@@ -93,8 +115,14 @@ export interface ApiClient {
     request: UpdatePersonalFinanceSettingsRequest,
     signal?: AbortSignal,
   ): Promise<void>
-  archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
-  restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
+  archivePersonalFinanceCard(
+    cardId: string,
+    signal?: AbortSignal,
+  ): Promise<void>
+  restorePersonalFinanceCard(
+    cardId: string,
+    signal?: AbortSignal,
+  ): Promise<void>
   deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void>
 }
 
@@ -102,8 +130,15 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
   const http = createHttpClient(config)
 
   return {
-    createAccount(request: CreateAccountRequest, signal?: AbortSignal): Promise<CreateAccountResponse> {
-      return http.postJson<CreateAccountResponse, CreateAccountRequest>('/accounts', request, { signal })
+    createAccount(
+      request: CreateAccountRequest,
+      signal?: AbortSignal,
+    ): Promise<CreateAccountResponse> {
+      return http.postJson<CreateAccountResponse, CreateAccountRequest>(
+        '/accounts',
+        request,
+        { signal },
+      )
     },
 
     updateAccount(
@@ -111,13 +146,19 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       request: UpdateAccountRequest,
       signal?: AbortSignal,
     ): Promise<void> {
-      return http.putJson<void, UpdateAccountRequest>(`/accounts/${toEncodedAccountId(accountId)}`, request, {
-        signal,
-      })
+      return http.putJson<void, UpdateAccountRequest>(
+        `/accounts/${toEncodedAccountId(accountId)}`,
+        request,
+        {
+          signal,
+        },
+      )
     },
 
     deleteAccount(accountId: string, signal?: AbortSignal): Promise<void> {
-      return http.deleteVoid(`/accounts/${toEncodedAccountId(accountId)}`, { signal })
+      return http.deleteVoid(`/accounts/${toEncodedAccountId(accountId)}`, {
+        signal,
+      })
     },
 
     createTransaction(
@@ -145,7 +186,11 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       )
     },
 
-    deleteTransaction(accountId: string, transactionId: string, signal?: AbortSignal): Promise<void> {
+    deleteTransaction(
+      accountId: string,
+      transactionId: string,
+      signal?: AbortSignal,
+    ): Promise<void> {
       return http.deleteVoid(
         `/accounts/${toEncodedAccountId(accountId)}/transactions/${toEncodedTransactionId(transactionId)}`,
         { signal },
@@ -161,30 +206,49 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       formData.append('accountId', toRequiredAccountId(accountId))
       formData.append('file', file)
 
-      return http.postFormData<ImportTransactionsCsvResponse>('/imports/transactions/csv', formData, {
-        signal,
-      })
+      return http.postFormData<ImportTransactionsCsvResponse>(
+        '/imports/transactions/csv',
+        formData,
+        {
+          signal,
+        },
+      )
     },
 
     listAccounts(signal?: AbortSignal): Promise<AccountDto[]> {
       return http.getJson<AccountDto[]>('/accounts', { signal })
     },
 
-    listAccountTransactions(accountId: string, signal?: AbortSignal): Promise<TransactionDto[]> {
-      return http.getJson<TransactionDto[]>(`/accounts/${toEncodedAccountId(accountId)}/transactions`, {
-        signal,
-      })
+    listAccountTransactions(
+      accountId: string,
+      signal?: AbortSignal,
+    ): Promise<TransactionDto[]> {
+      return http.getJson<TransactionDto[]>(
+        `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+        {
+          signal,
+        },
+      )
     },
 
-    getAccountBalance(accountId: string, signal?: AbortSignal): Promise<MoneyDto> {
-      return http.getJson<MoneyDto>(`/accounts/${toEncodedAccountId(accountId)}/balance`, { signal })
+    getAccountBalance(
+      accountId: string,
+      signal?: AbortSignal,
+    ): Promise<MoneyDto> {
+      return http.getJson<MoneyDto>(
+        `/accounts/${toEncodedAccountId(accountId)}/balance`,
+        { signal },
+      )
     },
 
     getNetWorth(signal?: AbortSignal): Promise<CurrencyTotalsDto> {
       return http.getJson<CurrencyTotalsDto>('/net-worth', { signal })
     },
 
-    getMonthlyBurn(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto> {
+    getMonthlyBurn(options?: {
+      asOf?: IsoDate
+      signal?: AbortSignal
+    }): Promise<CurrencyTotalsDto> {
       const query = options?.asOf ? { asOf: options.asOf } : undefined
       return http.getJson<CurrencyTotalsDto>('/peace/monthly-burn', {
         query,
@@ -192,7 +256,10 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       })
     },
 
-    getMonthlySavings(options?: { asOf?: IsoDate; signal?: AbortSignal }): Promise<CurrencyTotalsDto> {
+    getMonthlySavings(options?: {
+      asOf?: IsoDate
+      signal?: AbortSignal
+    }): Promise<CurrencyTotalsDto> {
       const query = options?.asOf ? { asOf: options.asOf } : undefined
       return http.getJson<CurrencyTotalsDto>('/peace/monthly-savings', {
         query,
@@ -200,19 +267,22 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       })
     },
 
-    listPersonalFinanceCards(signal?: AbortSignal): Promise<PersonalFinanceCardDto[]> {
-      return http.getJson<PersonalFinanceCardDto[]>('/personal-finance/cards', { signal })
+    listPersonalFinanceCards(
+      signal?: AbortSignal,
+    ): Promise<PersonalFinanceCardDto[]> {
+      return http.getJson<PersonalFinanceCardDto[]>('/personal-finance/cards', {
+        signal,
+      })
     },
 
     createPersonalFinanceCard(
       request: CreatePersonalFinanceCardRequest,
       signal?: AbortSignal,
     ): Promise<CreatePersonalFinanceCardResponse> {
-      return http.postJson<CreatePersonalFinanceCardResponse, CreatePersonalFinanceCardRequest>(
-        '/personal-finance/cards',
-        request,
-        { signal },
-      )
+      return http.postJson<
+        CreatePersonalFinanceCardResponse,
+        CreatePersonalFinanceCardRequest
+      >('/personal-finance/cards', request, { signal })
     },
 
     updatePersonalFinanceCard(
@@ -300,16 +370,34 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       )
     },
 
-    archivePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
-      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/archive`, { signal })
+    archivePersonalFinanceCard(
+      cardId: string,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putVoid(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/archive`,
+        { signal },
+      )
     },
 
-    restorePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
-      return http.putVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/restore`, { signal })
+    restorePersonalFinanceCard(
+      cardId: string,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.putVoid(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}/restore`,
+        { signal },
+      )
     },
 
-    deletePersonalFinanceCard(cardId: string, signal?: AbortSignal): Promise<void> {
-      return http.deleteVoid(`/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`, { signal })
+    deletePersonalFinanceCard(
+      cardId: string,
+      signal?: AbortSignal,
+    ): Promise<void> {
+      return http.deleteVoid(
+        `/personal-finance/cards/${toEncodedPersonalFinanceCardId(cardId)}`,
+        { signal },
+      )
     },
   }
 }
@@ -321,7 +409,9 @@ function toEncodedAccountId(accountId: string): string {
 }
 
 function toEncodedTransactionId(transactionId: string): string {
-  return encodeURIComponent(toRequiredIdentifier(transactionId, 'transactionId'))
+  return encodeURIComponent(
+    toRequiredIdentifier(transactionId, 'transactionId'),
+  )
 }
 
 function toEncodedPersonalFinanceCardId(cardId: string): string {

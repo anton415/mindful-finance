@@ -17,7 +17,11 @@ import type {
 import { formatMoneyInput, normalizeMoneyInput } from '../../money-input'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-export type PersonalFinanceTab = 'expenses' | 'income' | 'income-entry' | 'settings'
+export type PersonalFinanceTab =
+  | 'expenses'
+  | 'income'
+  | 'income-entry'
+  | 'settings'
 export interface PersonalFinanceCardListItem extends PersonalFinanceCardDto {
   currentBalance: string | null
   currency: string | null
@@ -43,7 +47,12 @@ interface AggregatedExpensesViewModel {
   averageMonthlyActualTotal: string
 }
 
-export type AggregatedIncomeMonthStatus = 'ACTUAL' | 'FORECAST' | 'OVERRIDE' | 'MIXED' | null
+export type AggregatedIncomeMonthStatus =
+  | 'ACTUAL'
+  | 'FORECAST'
+  | 'OVERRIDE'
+  | 'MIXED'
+  | null
 
 interface AggregatedIncomeMonthViewModel {
   month: number
@@ -86,7 +95,9 @@ interface PersonalFinanceViewProps {
     month: number,
     request: UpdateMonthlyExpenseRequest,
   ) => Promise<boolean>
-  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
+  onCreateTransfer: (
+    request: CreatePersonalFinanceTransferRequest,
+  ) => Promise<boolean>
   onSaveIncomeActual: (
     cardId: string,
     month: number,
@@ -98,7 +109,9 @@ interface PersonalFinanceViewProps {
     request: UpdateIncomePlanRequest,
   ) => Promise<boolean>
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
-  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onSaveSettings: (
+    request: UpdatePersonalFinanceSettingsRequest,
+  ) => Promise<boolean>
   onArchiveCard: (cardId: string) => Promise<boolean>
   onRestoreCard: (cardId: string) => Promise<boolean>
   onDeleteCard: (cardId: string) => Promise<boolean>
@@ -119,7 +132,20 @@ const MONTH_LABELS = [
   'Декабрь',
 ] as const
 
-const MONTH_SHORT_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] as const
+const MONTH_SHORT_LABELS = [
+  'Янв',
+  'Фев',
+  'Мар',
+  'Апр',
+  'Май',
+  'Июн',
+  'Июл',
+  'Авг',
+  'Сен',
+  'Окт',
+  'Ноя',
+  'Дек',
+] as const
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
 
@@ -131,13 +157,18 @@ interface PersonalFinanceTabCopy {
   panelDescription?: string
 }
 
-const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCopy> = {
+const PERSONAL_FINANCE_TAB_COPY: Record<
+  PersonalFinanceTab,
+  PersonalFinanceTabCopy
+> = {
   expenses: {
     title: 'Фактические расходы',
-    description: 'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
+    description:
+      'Годовой обзор суммируется по всем активным картам, а факт сохраняется в выбранную карту.',
     actionLabel: '+ Операция',
     panelTitle: 'Расходы и переводы',
-    panelDescription: 'Добавляйте фактические расходы по категориям или переводите сумму между активными картами.',
+    panelDescription:
+      'Добавляйте фактические расходы по категориям или переводите сумму между активными картами.',
   },
   income: {
     title: 'Доходы по месяцам',
@@ -151,10 +182,12 @@ const PERSONAL_FINANCE_TAB_COPY: Record<PersonalFinanceTab, PersonalFinanceTabCo
   },
   settings: {
     title: 'Настройки карты',
-    description: 'Настройки остаются в основном контенте, а новую карту можно добавить через панель справа.',
+    description:
+      'Настройки остаются в основном контенте, а новую карту можно добавить через панель справа.',
     actionLabel: '+ Добавить карту',
     panelTitle: 'Добавить новую карту',
-    panelDescription: 'Создайте карту с внутренним cash-ledger для доходов, расходов и текущего баланса.',
+    panelDescription:
+      'Создайте карту с внутренним cash-ledger для доходов, расходов и текущего баланса.',
   },
 }
 
@@ -204,13 +237,23 @@ export function PersonalFinanceView({
   const hasAnyCards = cards.length > 0
   const hasActiveCards = activeCards.length > 0
   const hasLoadedActiveSnapshots = activeSnapshots.length > 0
-  const selectedCard = settingsSnapshot?.card ?? cards.find((card) => card.id === selectedCardId) ?? null
+  const selectedCard =
+    settingsSnapshot?.card ??
+    cards.find((card) => card.id === selectedCardId) ??
+    null
   const activeTabCopy = PERSONAL_FINANCE_TAB_COPY[activeTab]
   const yearOptions = selectableYearOptions(year)
-  const showsActionPanelButton = activeTab === 'expenses' || activeTab === 'settings'
-  const canOpenActionPanel = activeTab === 'settings' || (activeTab === 'expenses' && hasLoadedActiveSnapshots)
-  const aggregatedExpenses = hasLoadedActiveSnapshots ? aggregateExpenses(activeSnapshots) : null
-  const aggregatedIncome = hasLoadedActiveSnapshots ? aggregateIncome(activeSnapshots) : null
+  const showsActionPanelButton =
+    activeTab === 'expenses' || activeTab === 'settings'
+  const canOpenActionPanel =
+    activeTab === 'settings' ||
+    (activeTab === 'expenses' && hasLoadedActiveSnapshots)
+  const aggregatedExpenses = hasLoadedActiveSnapshots
+    ? aggregateExpenses(activeSnapshots)
+    : null
+  const aggregatedIncome = hasLoadedActiveSnapshots
+    ? aggregateIncome(activeSnapshots)
+    : null
 
   const handleTabSelect = (tab: PersonalFinanceTab): void => {
     setIsActionPanelOpen(false)
@@ -232,11 +275,15 @@ export function PersonalFinanceView({
       <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 lg:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Личные финансы</h2>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Личные финансы
+            </h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              У каждой карты есть внутренний cash-ledger: факт расходов и доходов меняет баланс,
-              а лимиты, цели и прогноз живут в настройках. Большинство расходных категорий задаются на месяц,
-              развлечения и обучение задаются на год, а инвестиции идут отдельной годовой целью перевода.
+              У каждой карты есть внутренний cash-ledger: факт расходов и
+              доходов меняет баланс, а лимиты, цели и прогноз живут в
+              настройках. Большинство расходных категорий задаются на месяц,
+              развлечения и обучение задаются на год, а инвестиции идут
+              отдельной годовой целью перевода.
             </p>
           </div>
 
@@ -304,18 +351,26 @@ export function PersonalFinanceView({
         </div>
 
         <div className="mt-4 border-t border-slate-200 pt-4">
-          <h3 className="text-base font-semibold text-slate-900">{activeTabCopy.title}</h3>
-          <p className="mt-1 text-sm text-slate-600">{activeTabCopy.description}</p>
+          <h3 className="text-base font-semibold text-slate-900">
+            {activeTabCopy.title}
+          </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            {activeTabCopy.description}
+          </p>
         </div>
       </section>
 
-      {activeTab === 'settings' && settingsSnapshot?.card.status === 'ARCHIVED' ? (
+      {activeTab === 'settings' &&
+      settingsSnapshot?.card.status === 'ARCHIVED' ? (
         <ArchivedCardBanner cardName={settingsSnapshot.card.name} />
       ) : null}
 
       {activeTab === 'expenses' ? (
         aggregatedExpenses ? (
-          <ExpensesTab key={`expenses-${year}-${activeCards.length}`} aggregate={aggregatedExpenses} />
+          <ExpensesTab
+            key={`expenses-${year}-${activeCards.length}`}
+            aggregate={aggregatedExpenses}
+          />
         ) : hasActiveCards ? (
           <InlineStatus
             tone="warning"
@@ -331,7 +386,10 @@ export function PersonalFinanceView({
         )
       ) : activeTab === 'income' ? (
         aggregatedIncome ? (
-          <IncomeTab key={`income-${year}-${activeCards.length}`} aggregate={aggregatedIncome} />
+          <IncomeTab
+            key={`income-${year}-${activeCards.length}`}
+            aggregate={aggregatedIncome}
+          />
         ) : hasActiveCards ? (
           <InlineStatus
             tone="warning"
@@ -368,9 +426,14 @@ export function PersonalFinanceView({
           />
         )
       ) : !hasAnyCards ? (
-        <PersonalFinanceSettingsEmptyState hasArchivedCards={archivedCards.length > 0} />
+        <PersonalFinanceSettingsEmptyState
+          hasArchivedCards={archivedCards.length > 0}
+        />
       ) : !settingsSnapshot ? (
-        <InlineStatus tone="neutral" message="Выберите карту, чтобы открыть настройки." />
+        <InlineStatus
+          tone="neutral"
+          message="Выберите карту, чтобы открыть настройки."
+        />
       ) : (
         <SettingsTab
           key={`settings-${settingsSnapshot.card.id}-${settingsSnapshot.card.name}-${settingsSnapshot.year}-${settingsSnapshot.settings.currentBalance}`}
@@ -383,7 +446,9 @@ export function PersonalFinanceView({
         />
       )}
 
-      {isActionPanelOpen && activeTabCopy.panelTitle && activeTabCopy.panelDescription ? (
+      {isActionPanelOpen &&
+      activeTabCopy.panelTitle &&
+      activeTabCopy.panelDescription ? (
         <DrawerShell
           title={activeTabCopy.panelTitle}
           description={activeTabCopy.panelDescription}
@@ -426,7 +491,9 @@ interface ExpenseEntryDrawerPanelProps {
     month: number,
     request: UpdateMonthlyExpenseRequest,
   ) => Promise<boolean>
-  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
+  onCreateTransfer: (
+    request: CreatePersonalFinanceTransferRequest,
+  ) => Promise<boolean>
   onClose: () => void
 }
 
@@ -438,15 +505,24 @@ function ExpenseEntryDrawerPanel({
   onClose,
 }: ExpenseEntryDrawerPanelProps) {
   const cards = activeSnapshots.map((snapshot) => snapshot.card)
-  const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
-  const [selectedMode, setSelectedMode] = useState<'expenses' | 'transfer'>('expenses')
+  const defaultCardId = resolveDefaultActiveCardId(
+    activeSnapshots,
+    preferredCardId,
+  )
+  const [selectedMode, setSelectedMode] = useState<'expenses' | 'transfer'>(
+    'expenses',
+  )
   const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
   const selectedSnapshot =
-    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
+    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ??
+    activeSnapshots[0]
+  const [selectedMonth, setSelectedMonth] = useState<number>(() =>
+    defaultActualMonth(selectedSnapshot.year),
+  )
   const selectedMonthData =
-    selectedSnapshot.expenses.months.find((month) => month.month === selectedMonth) ??
-    selectedSnapshot.expenses.months[0]
+    selectedSnapshot.expenses.months.find(
+      (month) => month.month === selectedMonth,
+    ) ?? selectedSnapshot.expenses.months[0]
   const [sourceCardId, setSourceCardId] = useState<string>(defaultCardId)
   const [destinationCardId, setDestinationCardId] = useState<string>(() =>
     resolveDefaultTransferDestinationId(cards, defaultCardId),
@@ -458,8 +534,8 @@ function ExpenseEntryDrawerPanel({
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-base font-semibold text-slate-900">Тип операции</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Факт расходов двигает expense review и linked balance. Перевод двигает только balances между картами и не
-          увеличивает расходные totals.
+          Факт расходов двигает expense review и linked balance. Перевод двигает
+          только balances между картами и не увеличивает расходные totals.
         </p>
         <div className="mt-3 inline-flex rounded-2xl border border-slate-200 bg-white p-1">
           <NestedTabButton
@@ -521,7 +597,10 @@ interface IncomeTabProps {
 function IncomeTab({ aggregate }: IncomeTabProps) {
   return (
     <div className="space-y-4">
-      <RecurringIncomeSummaryCard currency={aggregate.currency} summary={aggregate.recurringForecast} />
+      <RecurringIncomeSummaryCard
+        currency={aggregate.currency}
+        summary={aggregate.recurringForecast}
+      />
 
       <IncomeReviewTable aggregate={aggregate} />
     </div>
@@ -549,16 +628,24 @@ function IncomeEntryPage({
   onSaveIncomeActual,
   onSaveIncomePlan,
 }: IncomeEntryPageProps) {
-  const defaultCardId = resolveDefaultActiveCardId(activeSnapshots, preferredCardId)
+  const defaultCardId = resolveDefaultActiveCardId(
+    activeSnapshots,
+    preferredCardId,
+  )
   const [selectedCardId, setSelectedCardId] = useState<string>(defaultCardId)
-  const [selectedEntryMode, setSelectedEntryMode] = useState<IncomeEntryMode>('actual')
+  const [selectedEntryMode, setSelectedEntryMode] =
+    useState<IncomeEntryMode>('actual')
   const selectedSnapshot =
-    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ?? activeSnapshots[0]
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => defaultActualMonth(selectedSnapshot.year))
+    activeSnapshots.find((snapshot) => snapshot.card.id === selectedCardId) ??
+    activeSnapshots[0]
+  const [selectedMonth, setSelectedMonth] = useState<number>(() =>
+    defaultActualMonth(selectedSnapshot.year),
+  )
 
   const selectedMonthData =
-    selectedSnapshot.income.months.find((month) => month.month === selectedMonth) ??
-    selectedSnapshot.income.months[0]
+    selectedSnapshot.income.months.find(
+      (month) => month.month === selectedMonth,
+    ) ?? selectedSnapshot.income.months[0]
   const derivedPlanPreview = deriveIncomePlanPreview(
     selectedSnapshot.incomePlan,
     selectedSnapshot.settings.incomeForecast?.salaryAmount ?? '0.00',
@@ -569,9 +656,12 @@ function IncomeEntryPage({
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Карта и режим ввода</h3>
+            <h3 className="text-base font-semibold text-slate-900">
+              Карта и режим ввода
+            </h3>
             <p className="mt-1 text-sm text-slate-600">
-              Факт двигает monthly review и linked balance. Planner отпусков и 13-й зарплаты меняет только planning-слой года.
+              Факт двигает monthly review и linked balance. Planner отпусков и
+              13-й зарплаты меняет только planning-слой года.
             </p>
           </div>
 
@@ -603,7 +693,9 @@ function IncomeEntryPage({
                 Месяц
                 <select
                   value={selectedMonth}
-                  onChange={(event) => setSelectedMonth(Number(event.target.value))}
+                  onChange={(event) =>
+                    setSelectedMonth(Number(event.target.value))
+                  }
                   className={selectClassName()}
                 >
                   {MONTH_LABELS.map((label, index) => (
@@ -615,9 +707,15 @@ function IncomeEntryPage({
               </label>
             ) : (
               <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:max-w-64">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Год planner</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{selectedSnapshot.year}</p>
-                <p className="mt-1 text-xs text-slate-500">План сохраняется целиком на выбранный год.</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Год planner
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {selectedSnapshot.year}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  План сохраняется целиком на выбранный год.
+                </p>
               </div>
             )}
           </div>
@@ -636,14 +734,21 @@ function IncomeEntryPage({
             <>
               <MetricTile
                 label="Статус в review"
-                value={selectedMonthData.status ? incomeStatusLabel(selectedMonthData.status) : 'Нет данных'}
+                value={
+                  selectedMonthData.status
+                    ? incomeStatusLabel(selectedMonthData.status)
+                    : 'Нет данных'
+                }
                 hint="Факт имеет приоритет. Override подмешивается только при отсутствии факта."
               />
               <MetricTile
                 label="Сумма в review"
                 value={
                   selectedMonthData.status
-                    ? formatAmountWithCurrency(selectedMonthData.totalAmount, selectedSnapshot.currency)
+                    ? formatAmountWithCurrency(
+                        selectedMonthData.totalAmount,
+                        selectedSnapshot.currency,
+                      )
                     : '—'
                 }
                 hint={`Сейчас выбран ${toMonthLabel(selectedMonth)}.`}
@@ -681,7 +786,11 @@ function IncomeEntryPage({
           year={selectedSnapshot.year}
           currency={selectedSnapshot.currency}
           selectedMonth={selectedMonth}
-          initialAmount={selectedMonthData.status === 'ACTUAL' ? selectedMonthData.totalAmount : ''}
+          initialAmount={
+            selectedMonthData.status === 'ACTUAL'
+              ? selectedMonthData.totalAmount
+              : ''
+          }
           onSave={onSaveIncomeActual}
         />
       ) : (
@@ -690,8 +799,12 @@ function IncomeEntryPage({
           cardId={selectedSnapshot.card.id}
           year={selectedSnapshot.year}
           currency={selectedSnapshot.currency}
-          salaryAmount={selectedSnapshot.settings.incomeForecast?.salaryAmount ?? '0.00'}
-          baseForecastAmount={selectedSnapshot.settings.incomeForecast?.totalAmount ?? '0.00'}
+          salaryAmount={
+            selectedSnapshot.settings.incomeForecast?.salaryAmount ?? '0.00'
+          }
+          baseForecastAmount={
+            selectedSnapshot.settings.incomeForecast?.totalAmount ?? '0.00'
+          }
           initialIncomePlan={selectedSnapshot.incomePlan}
           incomeMonths={selectedSnapshot.income.months}
           onSave={onSaveIncomePlan}
@@ -704,7 +817,9 @@ function IncomeEntryPage({
 interface SettingsTabProps {
   snapshot: PersonalFinanceSnapshotDto
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
-  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onSaveSettings: (
+    request: UpdatePersonalFinanceSettingsRequest,
+  ) => Promise<boolean>
   onArchiveCard: (cardId: string) => Promise<boolean>
   onRestoreCard: (cardId: string) => Promise<boolean>
   onDeleteCard: (cardId: string) => Promise<boolean>
@@ -739,9 +854,12 @@ function PersonalFinanceAggregateEmptyState({
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5">
-      <h3 className="text-base font-semibold text-slate-900">Нет активных карт для {tabLabel}</h3>
+      <h3 className="text-base font-semibold text-slate-900">
+        Нет активных карт для {tabLabel}
+      </h3>
       <p className="mt-2 text-sm text-slate-600">
-        Годовой обзор доходов и расходов строится только по активному personal finance контуру.
+        Годовой обзор доходов и расходов строится только по активному personal
+        finance контуру.
       </p>
       <p className="mt-3 text-sm text-slate-500">
         {hasArchivedCards
@@ -762,7 +880,9 @@ function SettingsDetails({
 }: {
   snapshot: PersonalFinanceSnapshotDto
   onRenameCard: (request: UpdatePersonalFinanceCardRequest) => Promise<boolean>
-  onSaveSettings: (request: UpdatePersonalFinanceSettingsRequest) => Promise<boolean>
+  onSaveSettings: (
+    request: UpdatePersonalFinanceSettingsRequest,
+  ) => Promise<boolean>
   onArchiveCard: (cardId: string) => Promise<boolean>
   onRestoreCard: (cardId: string) => Promise<boolean>
   onDeleteCard: (cardId: string) => Promise<boolean>
@@ -778,15 +898,28 @@ function SettingsDetails({
   const [bonusPercent, setBonusPercent] = useState<string>(
     toDraftAmount(snapshot.settings.incomeForecast?.bonusPercent ?? '0.00'),
   )
-  const [limitPercentValues, setLimitPercentValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
-    toExpenseDraftValues(snapshot.settings.limitCategoryPercents, snapshot.categories),
+  const [limitPercentValues, setLimitPercentValues] = useState<
+    Record<PersonalExpenseCategoryCode, string>
+  >(() =>
+    toExpenseDraftValues(
+      snapshot.settings.limitCategoryPercents,
+      snapshot.categories,
+    ),
   )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [renameStatus, setRenameStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null)
-  const [cardActionStatus, setCardActionStatus] = useState<'idle' | 'archiving' | 'restoring' | 'deleting' | 'error'>('idle')
-  const [cardActionErrorMessage, setCardActionErrorMessage] = useState<string | null>(null)
+  const [renameStatus, setRenameStatus] = useState<
+    'idle' | 'submitting' | 'error'
+  >('idle')
+  const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(
+    null,
+  )
+  const [cardActionStatus, setCardActionStatus] = useState<
+    'idle' | 'archiving' | 'restoring' | 'deleting' | 'error'
+  >('idle')
+  const [cardActionErrorMessage, setCardActionErrorMessage] = useState<
+    string | null
+  >(null)
 
   const areBaseValuesValid =
     isValidNonNegativeAmountValue(baselineAmount) &&
@@ -795,7 +928,11 @@ function SettingsDetails({
   const areLimitsValid = snapshot.categories.every((category) =>
     isValidNonNegativeAmountValue(limitPercentValues[category.code]),
   )
-  const canSave = !isArchived && areBaseValuesValid && areLimitsValid && status !== 'submitting'
+  const canSave =
+    !isArchived &&
+    areBaseValuesValid &&
+    areLimitsValid &&
+    status !== 'submitting'
   const monthlyForecast = calculateForecastAmount(salaryAmount, bonusPercent)
   const configuredLimitTotals = calculateConfiguredLimitTotals(
     snapshot.categories,
@@ -805,10 +942,16 @@ function SettingsDetails({
   const isForecastMissing = compareDecimalStrings(monthlyForecast, '0.00') === 0
   const isCardNameValid = cardName.trim().length > 0
   const canSaveCardName =
-    !isArchived && isCardNameValid && cardName.trim() !== snapshot.card.name && renameStatus !== 'submitting'
-  const isCardActionBusy = cardActionStatus !== 'idle' && cardActionStatus !== 'error'
+    !isArchived &&
+    isCardNameValid &&
+    cardName.trim() !== snapshot.card.name &&
+    renameStatus !== 'submitting'
+  const isCardActionBusy =
+    cardActionStatus !== 'idle' && cardActionStatus !== 'error'
 
-  const handleRenameSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleRenameSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canSaveCardName) {
@@ -828,7 +971,9 @@ function SettingsDetails({
     setRenameErrorMessage('Не удалось сохранить название карты.')
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canSave) {
@@ -843,7 +988,9 @@ function SettingsDetails({
       limitCategoryPercents: snapshot.categories.reduce(
         (result, category) => ({
           ...result,
-          [category.code]: toDecimalAmountString(limitPercentValues[category.code]),
+          [category.code]: toDecimalAmountString(
+            limitPercentValues[category.code],
+          ),
         }),
         {} as Record<PersonalExpenseCategoryCode, string>,
       ),
@@ -928,7 +1075,9 @@ function SettingsDetails({
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold text-slate-900">Название карты</h3>
+            <h3 className="text-base font-semibold text-slate-900">
+              Название карты
+            </h3>
             <p className="mt-1 text-sm text-slate-600">
               Это имя используется и для внутреннего cash-ledger карты.
             </p>
@@ -954,33 +1103,50 @@ function SettingsDetails({
             disabled={!canSaveCardName}
             className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {renameStatus === 'submitting' ? 'Сохраняем...' : 'Сохранить название'}
+            {renameStatus === 'submitting'
+              ? 'Сохраняем...'
+              : 'Сохранить название'}
           </button>
         </div>
 
-        {renameErrorMessage ? <p className="mt-3 text-xs text-rose-600">{renameErrorMessage}</p> : null}
+        {renameErrorMessage ? (
+          <p className="mt-3 text-xs text-rose-600">{renameErrorMessage}</p>
+        ) : null}
         {isArchived ? (
-          <p className="mt-3 text-xs text-slate-500">Архивная карта доступна только для просмотра.</p>
+          <p className="mt-3 text-xs text-slate-500">
+            Архивная карта доступна только для просмотра.
+          </p>
         ) : null}
         {!isCardNameValid ? (
-          <p className="mt-3 text-xs text-rose-600">Название карты не может быть пустым.</p>
+          <p className="mt-3 text-xs text-rose-600">
+            Название карты не может быть пустым.
+          </p>
         ) : null}
       </form>
 
       <section className="grid gap-4 lg:grid-cols-3">
         <MetricTile
           label="Текущий баланс карты"
-          value={formatAmountWithCurrency(snapshot.settings.currentBalance, snapshot.currency)}
+          value={formatAmountWithCurrency(
+            snapshot.settings.currentBalance,
+            snapshot.currency,
+          )}
           hint="Считается из baseline и фактических доходов/расходов."
         />
         <MetricTile
           label="Месячные лимиты расходов"
-          value={formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
+          value={formatAmountWithCurrency(
+            configuredLimitTotals.monthlyLimitTotal,
+            snapshot.currency,
+          )}
           hint="Сумма категорий, которые сравниваются по каждому месяцу."
         />
         <MetricTile
           label="Годовой лимит расходов"
-          value={formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
+          value={formatAmountWithCurrency(
+            configuredLimitTotals.annualLimitTotal,
+            snapshot.currency,
+          )}
           hint="Полный бюджет расходов на год: месячные категории умножаются на 12, годовые расходные категории добавляются сверху."
         />
       </section>
@@ -992,10 +1158,13 @@ function SettingsDetails({
         }}
       >
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Настройки карты</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            Настройки карты
+          </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Проценты задаются от recurring monthly forecast: расходные категории сравниваются
-            по месяцу или по году, а инвестиции используются как годовая цель перевода в инвестиционные счета.
+            Проценты задаются от recurring monthly forecast: расходные категории
+            сравниваются по месяцу или по году, а инвестиции используются как
+            годовая цель перевода в инвестиционные счета.
           </p>
         </div>
 
@@ -1008,16 +1177,25 @@ function SettingsDetails({
                 inputMode="decimal"
                 value={baselineAmount}
                 disabled={isArchived}
-                onChange={(event) => setBaselineAmount(normalizeAmountInput(event.target.value))}
+                onChange={(event) =>
+                  setBaselineAmount(normalizeAmountInput(event.target.value))
+                }
                 placeholder="0.00"
-                className={inputClassName(isValidNonNegativeAmountValue(baselineAmount))}
+                className={inputClassName(
+                  isValidNonNegativeAmountValue(baselineAmount),
+                )}
               />
             </label>
 
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сейчас на карте</p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                Сейчас на карте
+              </p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
-                {formatAmountWithCurrency(snapshot.settings.currentBalance, snapshot.currency)}
+                {formatAmountWithCurrency(
+                  snapshot.settings.currentBalance,
+                  snapshot.currency,
+                )}
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 Меняется от фактических monthly income и expense записей.
@@ -1029,22 +1207,35 @@ function SettingsDetails({
         <section className="rounded-2xl bg-slate-50 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Лимиты и цели по категориям</h4>
+              <h4 className="text-sm font-semibold text-slate-900">
+                Лимиты и цели по категориям
+              </h4>
               <p className="mt-1 text-sm text-slate-600">
-                Вводите проценты, а денежные лимиты и цели пересчитываются автоматически от прогноза.
+                Вводите проценты, а денежные лимиты и цели пересчитываются
+                автоматически от прогноза.
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Месячные лимиты расходов</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Месячные лимиты расходов
+                </p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">
-                  {formatAmountWithCurrency(configuredLimitTotals.monthlyLimitTotal, snapshot.currency)}
+                  {formatAmountWithCurrency(
+                    configuredLimitTotals.monthlyLimitTotal,
+                    snapshot.currency,
+                  )}
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Годовой лимит расходов</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Годовой лимит расходов
+                </p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">
-                  {formatAmountWithCurrency(configuredLimitTotals.annualLimitTotal, snapshot.currency)}
+                  {formatAmountWithCurrency(
+                    configuredLimitTotals.annualLimitTotal,
+                    snapshot.currency,
+                  )}
                 </p>
               </div>
             </div>
@@ -1052,8 +1243,9 @@ function SettingsDetails({
 
           {isForecastMissing ? (
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Прогноз в месяц равен 0.00. Проценты можно сохранить уже сейчас, но денежные лимиты
-              останутся нулевыми, пока не заполнен прогноз доходов.
+              Прогноз в месяц равен 0.00. Проценты можно сохранить уже сейчас,
+              но денежные лимиты останутся нулевыми, пока не заполнен прогноз
+              доходов.
             </p>
           ) : null}
 
@@ -1073,12 +1265,20 @@ function SettingsDetails({
                     }))
                   }
                   placeholder="0.00"
-                  className={inputClassName(isValidNonNegativeAmountValue(limitPercentValues[category.code]))}
+                  className={inputClassName(
+                    isValidNonNegativeAmountValue(
+                      limitPercentValues[category.code],
+                    ),
+                  )}
                 />
                 <span className="mt-1 block text-xs text-slate-500">
                   {categoryAmountLabel(category)}:{' '}
                   {formatAmountWithCurrency(
-                    calculateConfiguredLimitAmount(category, limitPercentValues[category.code], monthlyForecast),
+                    calculateConfiguredLimitAmount(
+                      category,
+                      limitPercentValues[category.code],
+                      monthlyForecast,
+                    ),
                     snapshot.currency,
                   )}
                 </span>
@@ -1090,14 +1290,18 @@ function SettingsDetails({
         <section className="rounded-2xl bg-slate-50 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Прогноз доходов</h4>
+              <h4 className="text-sm font-semibold text-slate-900">
+                Прогноз доходов
+              </h4>
               <p className="mt-1 text-sm text-slate-600">
-                Оклад заполняется рублями, премия заполняется процентами. Прогноз используется только
-                там, где нет факта.
+                Оклад заполняется рублями, премия заполняется процентами.
+                Прогноз используется только там, где нет факта.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Прогноз в месяц</p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                Прогноз в месяц
+              </p>
               <p className="mt-1 text-sm font-semibold text-slate-900">
                 {formatAmountWithCurrency(monthlyForecast, snapshot.currency)}
               </p>
@@ -1112,9 +1316,13 @@ function SettingsDetails({
                 inputMode="decimal"
                 value={salaryAmount}
                 disabled={isArchived}
-                onChange={(event) => setSalaryAmount(normalizeAmountInput(event.target.value))}
+                onChange={(event) =>
+                  setSalaryAmount(normalizeAmountInput(event.target.value))
+                }
                 placeholder="0.00"
-                className={inputClassName(isValidNonNegativeAmountValue(salaryAmount))}
+                className={inputClassName(
+                  isValidNonNegativeAmountValue(salaryAmount),
+                )}
               />
             </label>
 
@@ -1125,9 +1333,13 @@ function SettingsDetails({
                 inputMode="decimal"
                 value={bonusPercent}
                 disabled={isArchived}
-                onChange={(event) => setBonusPercent(normalizeAmountInput(event.target.value))}
+                onChange={(event) =>
+                  setBonusPercent(normalizeAmountInput(event.target.value))
+                }
                 placeholder="0.00"
-                className={inputClassName(isValidNonNegativeAmountValue(bonusPercent))}
+                className={inputClassName(
+                  isValidNonNegativeAmountValue(bonusPercent),
+                )}
               />
             </label>
           </div>
@@ -1135,7 +1347,10 @@ function SettingsDetails({
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <MetricTile
               label="Оклад"
-              value={formatAmountWithCurrency(toDecimalAmountString(salaryAmount), snapshot.currency)}
+              value={formatAmountWithCurrency(
+                toDecimalAmountString(salaryAmount),
+                snapshot.currency,
+              )}
             />
             <MetricTile
               label="Премия"
@@ -1143,7 +1358,10 @@ function SettingsDetails({
             />
             <MetricTile
               label="Расчётная премия"
-              value={formatAmountWithCurrency(calculateBonusAmount(salaryAmount, bonusPercent), snapshot.currency)}
+              value={formatAmountWithCurrency(
+                calculateBonusAmount(salaryAmount, bonusPercent),
+                snapshot.currency,
+              )}
             />
           </div>
         </section>
@@ -1165,17 +1383,24 @@ function SettingsDetails({
           ) : null}
         </div>
 
-        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="text-xs text-rose-600">{errorMessage}</p>
+        ) : null}
         {!areBaseValuesValid || !areLimitsValid ? (
-          <p className="text-xs text-rose-600">Разрешены только неотрицательные значения с 2 знаками.</p>
+          <p className="text-xs text-rose-600">
+            Разрешены только неотрицательные значения с 2 знаками.
+          </p>
         ) : null}
       </form>
 
       {isArchived ? (
         <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-base font-semibold text-slate-900">Карта в архиве</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            Карта в архиве
+          </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Данные сохранены, но карта и linked account исключены из активного личного контура и текущих метрик.
+            Данные сохранены, но карта и linked account исключены из активного
+            личного контура и текущих метрик.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1187,7 +1412,9 @@ function SettingsDetails({
               disabled={isCardActionBusy}
               className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {cardActionStatus === 'restoring' ? 'Возвращаем...' : 'Вернуть из архива'}
+              {cardActionStatus === 'restoring'
+                ? 'Возвращаем...'
+                : 'Вернуть из архива'}
             </button>
             <button
               type="button"
@@ -1197,17 +1424,25 @@ function SettingsDetails({
               disabled={isCardActionBusy}
               className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+              {cardActionStatus === 'deleting'
+                ? 'Удаляем...'
+                : 'Удалить навсегда'}
             </button>
           </div>
-          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+          {cardActionErrorMessage ? (
+            <p className="mt-3 text-xs text-rose-600">
+              {cardActionErrorMessage}
+            </p>
+          ) : null}
         </section>
       ) : (
         <section className="rounded-3xl border border-rose-200 bg-rose-50 p-4">
-          <h3 className="text-base font-semibold text-rose-700">Управление картой</h3>
+          <h3 className="text-base font-semibold text-rose-700">
+            Управление картой
+          </h3>
           <p className="mt-1 text-sm text-rose-700/80">
-            Архивируйте карту, если хотите убрать её из активного контура без потери истории. Удаление навсегда
-            вычищает все связанные данные.
+            Архивируйте карту, если хотите убрать её из активного контура без
+            потери истории. Удаление навсегда вычищает все связанные данные.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1219,7 +1454,9 @@ function SettingsDetails({
               disabled={isCardActionBusy}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              {cardActionStatus === 'archiving' ? 'Архивируем...' : 'Архивировать'}
+              {cardActionStatus === 'archiving'
+                ? 'Архивируем...'
+                : 'Архивировать'}
             </button>
             <button
               type="button"
@@ -1229,27 +1466,41 @@ function SettingsDetails({
               disabled={isCardActionBusy}
               className="rounded-xl border border-rose-200 bg-rose-100 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              {cardActionStatus === 'deleting' ? 'Удаляем...' : 'Удалить навсегда'}
+              {cardActionStatus === 'deleting'
+                ? 'Удаляем...'
+                : 'Удалить навсегда'}
             </button>
           </div>
-          {cardActionErrorMessage ? <p className="mt-3 text-xs text-rose-600">{cardActionErrorMessage}</p> : null}
+          {cardActionErrorMessage ? (
+            <p className="mt-3 text-xs text-rose-600">
+              {cardActionErrorMessage}
+            </p>
+          ) : null}
         </section>
       )}
     </div>
   )
 }
 
-function PersonalFinanceSettingsEmptyState({ hasArchivedCards }: { hasArchivedCards: boolean }) {
+function PersonalFinanceSettingsEmptyState({
+  hasArchivedCards,
+}: {
+  hasArchivedCards: boolean
+}) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5">
-      <h3 className="text-base font-semibold text-slate-900">Добавьте первую карту</h3>
+      <h3 className="text-base font-semibold text-slate-900">
+        Добавьте первую карту
+      </h3>
       <p className="mt-2 text-sm text-slate-600">
-        Используйте кнопку + Добавить карту вверху справа на вкладке настроек, чтобы создать
-        personal finance card. После этого появятся расходы, доходы и годовой обзор.
+        Используйте кнопку + Добавить карту вверху справа на вкладке настроек,
+        чтобы создать personal finance card. После этого появятся расходы,
+        доходы и годовой обзор.
       </p>
       {hasArchivedCards ? (
         <p className="mt-3 text-sm text-slate-500">
-          Ниже в секции архива можно открыть старую карту, вернуть её в активные или удалить навсегда.
+          Ниже в секции архива можно открыть старую карту, вернуть её в активные
+          или удалить навсегда.
         </p>
       ) : null}
     </section>
@@ -1267,7 +1518,9 @@ function CreateCardDrawerPanel({
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (newCardName.trim().length === 0 || status === 'submitting') {
@@ -1294,7 +1547,8 @@ function CreateCardDrawerPanel({
       <div>
         <h3 className="text-base font-semibold text-slate-900">Новая карта</h3>
         <p className="mt-1 text-sm text-slate-600">
-          У каждой карты будет свой внутренний cash-ledger для расходов, доходов и текущего баланса.
+          У каждой карты будет свой внутренний cash-ledger для расходов, доходов
+          и текущего баланса.
         </p>
       </div>
 
@@ -1316,17 +1570,23 @@ function CreateCardDrawerPanel({
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-          <p className="text-sm text-slate-600">После создания карта сразу появится в списке на вкладке настроек.</p>
+          <p className="text-sm text-slate-600">
+            После создания карта сразу появится в списке на вкладке настроек.
+          </p>
           <button
             type="submit"
-            disabled={newCardName.trim().length === 0 || status === 'submitting'}
+            disabled={
+              newCardName.trim().length === 0 || status === 'submitting'
+            }
             className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {status === 'submitting' ? 'Добавляем...' : 'Добавить карту'}
           </button>
         </div>
 
-        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="text-xs text-rose-600">{errorMessage}</p>
+        ) : null}
       </form>
     </section>
   )
@@ -1341,9 +1601,12 @@ function RecurringIncomeSummaryCard({
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-base font-semibold text-slate-900">Повторяющийся прогноз доходов</h3>
+      <h3 className="text-base font-semibold text-slate-900">
+        Повторяющийся прогноз доходов
+      </h3>
       <p className="mt-1 text-sm text-slate-600">
-        Здесь показан только базовый recurring forecast по активным картам. Planner-derived overrides видны в таблице по месяцам ниже.
+        Здесь показан только базовый recurring forecast по активным картам.
+        Planner-derived overrides видны в таблице по месяцам ниже.
       </p>
       {isPositiveAmount(summary.totalAmount) ? (
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1360,7 +1623,8 @@ function RecurringIncomeSummaryCard({
         </div>
       ) : (
         <p className="mt-2 text-sm text-slate-600">
-          Повторяющийся прогноз ещё не задан ни для одной активной карты. Его можно настроить на вкладке настроек.
+          Повторяющийся прогноз ещё не задан ни для одной активной карты. Его
+          можно настроить на вкладке настроек.
         </p>
       )}
     </section>
@@ -1383,9 +1647,12 @@ function PersonalFinanceCardSelector({
     <article className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Карты личных финансов</h3>
+          <h3 className="text-sm font-semibold text-slate-900">
+            Карты личных финансов
+          </h3>
           <p className="mt-1 text-xs text-slate-500">
-            Выберите карту, чтобы открыть её настройки, архив или linked balance.
+            Выберите карту, чтобы открыть её настройки, архив или linked
+            balance.
           </p>
         </div>
       </div>
@@ -1436,7 +1703,9 @@ function CardListSection({
   return (
     <section>
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          {title}
+        </h4>
         <span className="text-xs text-slate-400">{cards.length}</span>
       </div>
 
@@ -1464,7 +1733,9 @@ function CardListSection({
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{card.name}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {card.name}
+                      </p>
                       {tone === 'archived' ? (
                         <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
                           Архив
@@ -1480,7 +1751,9 @@ function CardListSection({
                       {card.currency ?? 'RUB'}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {card.currentBalance ? formatAmount(card.currentBalance) : '...'}
+                      {card.currentBalance
+                        ? formatAmount(card.currentBalance)
+                        : '...'}
                     </p>
                   </div>
                 </div>
@@ -1496,10 +1769,15 @@ function CardListSection({
 function ArchivedCardBanner({ cardName }: { cardName: string }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-slate-100 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Архив</p>
-      <h3 className="mt-2 text-base font-semibold text-slate-900">{cardName}</h3>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+        Архив
+      </p>
+      <h3 className="mt-2 text-base font-semibold text-slate-900">
+        {cardName}
+      </h3>
       <p className="mt-1 text-sm text-slate-600">
-        Карта открыта в режиме просмотра. Доходы, расходы и настройки заморожены, пока вы не вернёте её в активные.
+        Карта открыта в режиме просмотра. Доходы, расходы и настройки
+        заморожены, пока вы не вернёте её в активные.
       </p>
     </section>
   )
@@ -1516,8 +1794,12 @@ function MetricTile({
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-1 break-all text-sm font-semibold text-slate-900">{value}</p>
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 break-all text-sm font-semibold text-slate-900">
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   )
@@ -1587,19 +1869,25 @@ function ExpenseEntryFormCard({
   onSave,
   onSaved,
 }: ExpenseEntryFormCardProps) {
-  const [draftValues, setDraftValues] = useState<Record<PersonalExpenseCategoryCode, string>>(() =>
-    toExpenseDraftValues(initialValues, categories),
-  )
+  const [draftValues, setDraftValues] = useState<
+    Record<PersonalExpenseCategoryCode, string>
+  >(() => toExpenseDraftValues(initialValues, categories))
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const hasInvalidValues = categories.some((category) => !isValidNonNegativeAmountValue(draftValues[category.code]))
+  const hasInvalidValues = categories.some(
+    (category) => !isValidNonNegativeAmountValue(draftValues[category.code]),
+  )
   const total = sumDecimalAmountStrings(
-    categories.map((category) => toDecimalAmountString(draftValues[category.code])),
+    categories.map((category) =>
+      toDecimalAmountString(draftValues[category.code]),
+    ),
   )
   const canSave = !hasInvalidValues && status !== 'submitting'
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canSave) {
@@ -1638,7 +1926,11 @@ function ExpenseEntryFormCard({
           <p className="mt-1 text-sm text-slate-600">{description}</p>
         </div>
         <div className="flex w-full flex-col gap-3 lg:max-w-xl lg:flex-row">
-          <CardField cards={cards} selectedCardId={selectedCardId} onSelectCard={onSelectCard} />
+          <CardField
+            cards={cards}
+            selectedCardId={selectedCardId}
+            onSelectCard={onSelectCard}
+          />
           <label className="w-full text-sm text-slate-600 sm:max-w-64">
             Месяц
             <select
@@ -1677,7 +1969,9 @@ function ExpenseEntryFormCard({
                   }))
                 }
                 placeholder="0.00"
-                className={inputClassName(isValidNonNegativeAmountValue(draftValues[category.code]))}
+                className={inputClassName(
+                  isValidNonNegativeAmountValue(draftValues[category.code]),
+                )}
               />
             </label>
           ))}
@@ -1685,7 +1979,9 @@ function ExpenseEntryFormCard({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Итого</p>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              Итого
+            </p>
             <p className="mt-1 text-lg font-semibold text-slate-900">
               {formatAmountWithCurrency(total, currency)}
             </p>
@@ -1699,9 +1995,13 @@ function ExpenseEntryFormCard({
           </button>
         </div>
 
-        {errorMessage ? <p className="text-xs text-rose-600">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="text-xs text-rose-600">{errorMessage}</p>
+        ) : null}
         {hasInvalidValues ? (
-          <p className="text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
+          <p className="text-xs text-rose-600">
+            Разрешены только неотрицательные суммы с 2 знаками.
+          </p>
         ) : null}
       </form>
     </section>
@@ -1714,7 +2014,9 @@ interface CardTransferFormCardProps {
   selectedDestinationCardId: string
   onSelectSourceCard: (cardId: string) => void
   onSelectDestinationCard: (cardId: string) => void
-  onCreateTransfer: (request: CreatePersonalFinanceTransferRequest) => Promise<boolean>
+  onCreateTransfer: (
+    request: CreatePersonalFinanceTransferRequest,
+  ) => Promise<boolean>
   onSaved?: () => void
 }
 
@@ -1732,7 +2034,9 @@ function CardTransferFormCard({
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const destinationOptions = cards.filter((card) => card.id !== selectedSourceCardId)
+  const destinationOptions = cards.filter(
+    (card) => card.id !== selectedSourceCardId,
+  )
   const normalizedAmount = toDecimalAmountString(amount)
   const hasPositiveAmount = compareDecimalStrings(normalizedAmount, '0.00') > 0
   const hasValidAmount = isValidNonNegativeAmountValue(amount)
@@ -1746,20 +2050,27 @@ function CardTransferFormCard({
     hasPositiveAmount &&
     status !== 'submitting'
 
-  const sourceCardName = cards.find((card) => card.id === selectedSourceCardId)?.name ?? 'Источник'
-  const destinationCardName = cards.find((card) => card.id === selectedDestinationCardId)?.name ?? 'Получатель'
+  const sourceCardName =
+    cards.find((card) => card.id === selectedSourceCardId)?.name ?? 'Источник'
+  const destinationCardName =
+    cards.find((card) => card.id === selectedDestinationCardId)?.name ??
+    'Получатель'
 
   useEffect(() => {
     if (destinationOptions.length === 0) {
       return
     }
 
-    if (!destinationOptions.some((card) => card.id === selectedDestinationCardId)) {
+    if (
+      !destinationOptions.some((card) => card.id === selectedDestinationCardId)
+    ) {
       onSelectDestinationCard(destinationOptions[0].id)
     }
   }, [destinationOptions, onSelectDestinationCard, selectedDestinationCardId])
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canSave) {
@@ -1789,10 +2100,13 @@ function CardTransferFormCard({
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
       <div>
-        <h3 className="text-base font-semibold text-slate-900">Перевод между картами</h3>
+        <h3 className="text-base font-semibold text-slate-900">
+          Перевод между картами
+        </h3>
         <p className="mt-1 text-sm text-slate-600">
-          Перевод создаёт парную запись: outflow на карте-источнике и inflow на карте-получателе. Это меняет balances,
-          но не добавляет расходы в monthly review.
+          Перевод создаёт парную запись: outflow на карте-источнике и inflow на
+          карте-получателе. Это меняет balances, но не добавляет расходы в
+          monthly review.
         </p>
       </div>
 
@@ -1841,9 +2155,14 @@ function CardTransferFormCard({
               type="text"
               inputMode="decimal"
               value={amount}
-              onChange={(event) => setAmount(normalizeAmountInput(event.target.value))}
+              onChange={(event) =>
+                setAmount(normalizeAmountInput(event.target.value))
+              }
               placeholder="0.00"
-              className={inputClassName(hasValidAmount && (hasPositiveAmount || amount.trim().length === 0))}
+              className={inputClassName(
+                hasValidAmount &&
+                  (hasPositiveAmount || amount.trim().length === 0),
+              )}
             />
           </label>
         </div>
@@ -1851,16 +2170,22 @@ function CardTransferFormCard({
         <div className="grid gap-3 md:grid-cols-2">
           <MetricTile
             label={`Списываем с «${sourceCardName}»`}
-            value={hasPositiveAmount ? `-${formatAmount(normalizedAmount)} RUB` : '—'}
+            value={
+              hasPositiveAmount ? `-${formatAmount(normalizedAmount)} RUB` : '—'
+            }
           />
           <MetricTile
             label={`Зачисляем в «${destinationCardName}»`}
-            value={hasPositiveAmount ? `+${formatAmount(normalizedAmount)} RUB` : '—'}
+            value={
+              hasPositiveAmount ? `+${formatAmount(normalizedAmount)} RUB` : '—'
+            }
           />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-          <p className="text-sm text-slate-600">Обе транзакции создаются атомарно одним действием.</p>
+          <p className="text-sm text-slate-600">
+            Обе транзакции создаются атомарно одним действием.
+          </p>
           <button
             type="submit"
             disabled={!canSave}
@@ -1871,15 +2196,23 @@ function CardTransferFormCard({
         </div>
       </form>
 
-      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="mt-3 text-xs text-rose-600">{errorMessage}</p>
+      ) : null}
       {!hasDifferentCards ? (
-        <p className="mt-3 text-xs text-rose-600">Карта-источник и карта-получатель должны отличаться.</p>
+        <p className="mt-3 text-xs text-rose-600">
+          Карта-источник и карта-получатель должны отличаться.
+        </p>
       ) : null}
       {!hasValidAmount || (!hasPositiveAmount && amount.trim().length > 0) ? (
-        <p className="mt-1 text-xs text-rose-600">Укажите положительную сумму с точностью до 2 знаков.</p>
+        <p className="mt-1 text-xs text-rose-600">
+          Укажите положительную сумму с точностью до 2 знаков.
+        </p>
       ) : null}
       {!hasValidDate ? (
-        <p className="mt-1 text-xs text-rose-600">Укажите корректную дату перевода.</p>
+        <p className="mt-1 text-xs text-rose-600">
+          Укажите корректную дату перевода.
+        </p>
       ) : null}
     </section>
   )
@@ -1948,26 +2281,39 @@ function DrawerShell({
   )
 }
 
-function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewModel }) {
+function ExpenseReviewTable({
+  aggregate,
+}: {
+  aggregate: AggregatedExpensesViewModel
+}) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
-        <h3 className="text-base font-semibold text-slate-900">Годовая таблица расходов</h3>
+        <h3 className="text-base font-semibold text-slate-900">
+          Годовая таблица расходов
+        </h3>
         <p className="mt-1 text-sm text-slate-600">
-          Факт и totals считаются только по расходным категориям. Инвестиции остаются в таблице отдельной серой
-          колонкой как перевод на инвестиционные счета и не входят в общий расход.
+          Факт и totals считаются только по расходным категориям. Инвестиции
+          остаются в таблице отдельной серой колонкой как перевод на
+          инвестиционные счета и не входят в общий расход.
         </p>
       </div>
 
       <div className="lg:hidden">
         <div className="space-y-3 p-4">
           {aggregate.months.map((month) => (
-            <article key={month.month} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <article
+              key={month.month}
+              className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900">{toMonthLabel(month.month)}</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    {toMonthLabel(month.month)}
+                  </h4>
                   <p className="mt-1 text-xs text-slate-500">
-                    Факт {formatAmount(month.actualTotal)} · Месячный лимит {formatAmount(month.limitTotal)}
+                    Факт {formatAmount(month.actualTotal)} · Месячный лимит{' '}
+                    {formatAmount(month.limitTotal)}
                   </p>
                 </div>
               </div>
@@ -1978,7 +2324,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                   const limit = month.limitCategoryAmounts[category.code]
                   const isMonthlyLimit = isMonthlyLimitCategory(category)
                   const isOverLimit =
-                    isMonthlyLimit && isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+                    isMonthlyLimit &&
+                    isPositiveAmount(limit) &&
+                    compareDecimalStrings(actual, limit) > 0
                   const isTransfer = isTransferCategory(category)
 
                   return (
@@ -1988,24 +2336,32 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                         isTransfer
                           ? 'border-slate-300 bg-slate-100'
                           : isOverLimit
-                          ? 'border-rose-200 bg-rose-50'
-                          : 'border-slate-200 bg-white'
+                            ? 'border-rose-200 bg-rose-50'
+                            : 'border-slate-200 bg-white'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className={`text-sm font-medium ${isTransfer ? 'text-slate-700' : 'text-slate-900'}`}>
+                        <p
+                          className={`text-sm font-medium ${isTransfer ? 'text-slate-700' : 'text-slate-900'}`}
+                        >
                           {category.label}
                         </p>
                         <p
                           className={`text-sm font-semibold ${
-                            isTransfer ? 'text-slate-700' : isOverLimit ? 'text-rose-700' : 'text-slate-900'
+                            isTransfer
+                              ? 'text-slate-700'
+                              : isOverLimit
+                                ? 'text-rose-700'
+                                : 'text-slate-900'
                           }`}
                         >
                           {formatAmountOrDash(actual)}
                         </p>
                       </div>
                       {isMonthlyLimit ? (
-                        <p className="mt-1 text-xs text-slate-500">Лимит {formatAmountOrDash(limit)}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Лимит {formatAmountOrDash(limit)}
+                        </p>
                       ) : null}
                     </div>
                   )
@@ -2013,8 +2369,14 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <MetricTile label="Факт за месяц" value={formatAmount(month.actualTotal)} />
-                <MetricTile label="Лимит за месяц" value={formatAmount(month.limitTotal)} />
+                <MetricTile
+                  label="Факт за месяц"
+                  value={formatAmount(month.actualTotal)}
+                />
+                <MetricTile
+                  label="Лимит за месяц"
+                  value={formatAmount(month.limitTotal)}
+                />
               </div>
             </article>
           ))}
@@ -2026,17 +2388,27 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 <div
                   key={category.code}
                   className={`rounded-2xl border px-3 py-2 ${
-                    isTransferCategory(category) ? 'border-slate-300 bg-slate-100' : 'border-slate-200 bg-slate-50'
+                    isTransferCategory(category)
+                      ? 'border-slate-300 bg-slate-100'
+                      : 'border-slate-200 bg-slate-50'
                   }`}
                 >
-                  <p className={`text-sm font-medium ${isTransferCategory(category) ? 'text-slate-700' : 'text-slate-900'}`}>
+                  <p
+                    className={`text-sm font-medium ${isTransferCategory(category) ? 'text-slate-700' : 'text-slate-900'}`}
+                  >
                     {category.label}
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    Факт {formatAmount(aggregate.actualTotalsByCategory[category.code])}
+                    Факт{' '}
+                    {formatAmount(
+                      aggregate.actualTotalsByCategory[category.code],
+                    )}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {categoryAmountLabel(category)} {formatAmount(aggregate.limitTotalsByCategory[category.code])}
+                    {categoryAmountLabel(category)}{' '}
+                    {formatAmount(
+                      aggregate.limitTotalsByCategory[category.code],
+                    )}
                   </p>
                 </div>
               ))}
@@ -2044,15 +2416,24 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <MetricTile
                 label="Годовой факт"
-                value={formatAmountWithCurrency(aggregate.annualActualTotal, aggregate.currency)}
+                value={formatAmountWithCurrency(
+                  aggregate.annualActualTotal,
+                  aggregate.currency,
+                )}
               />
               <MetricTile
                 label="Годовой лимит расходов"
-                value={formatAmountWithCurrency(aggregate.annualLimitTotal, aggregate.currency)}
+                value={formatAmountWithCurrency(
+                  aggregate.annualLimitTotal,
+                  aggregate.currency,
+                )}
               />
               <MetricTile
                 label="Средний факт"
-                value={formatAmountWithCurrency(aggregate.averageMonthlyActualTotal, aggregate.currency)}
+                value={formatAmountWithCurrency(
+                  aggregate.averageMonthlyActualTotal,
+                  aggregate.currency,
+                )}
               />
             </div>
           </section>
@@ -2070,13 +2451,19 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 <th
                   key={category.code}
                   className={`border-b border-r border-slate-200 px-3 py-3 text-left ${
-                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                    isTransferCategory(category)
+                      ? 'bg-slate-100 text-slate-700'
+                      : 'text-slate-900'
                   }`}
                 >
-                  <span className="block whitespace-nowrap font-semibold">{category.label}</span>
+                  <span className="block whitespace-nowrap font-semibold">
+                    {category.label}
+                  </span>
                   <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-slate-500">
                     {limitPeriodHeaderLabel(category)}{' '}
-                    {formatAmountOrDash(aggregate.limitCategoryAmounts[category.code])}
+                    {formatAmountOrDash(
+                      aggregate.limitCategoryAmounts[category.code],
+                    )}
                   </span>
                 </th>
               ))}
@@ -2099,13 +2486,19 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                   const limit = month.limitCategoryAmounts[category.code]
                   const isMonthlyLimit = isMonthlyLimitCategory(category)
                   const isOverLimit =
-                    isMonthlyLimit && isPositiveAmount(limit) && compareDecimalStrings(actual, limit) > 0
+                    isMonthlyLimit &&
+                    isPositiveAmount(limit) &&
+                    compareDecimalStrings(actual, limit) > 0
 
                   return (
                     <td
                       key={category.code}
                       className={`border-b border-r border-slate-200 px-2 py-2 ${
-                        isTransferCategory(category) ? 'bg-slate-100' : isOverLimit ? 'bg-rose-50' : ''
+                        isTransferCategory(category)
+                          ? 'bg-slate-100'
+                          : isOverLimit
+                            ? 'bg-rose-50'
+                            : ''
                       }`}
                     >
                       <p
@@ -2140,16 +2533,22 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 <td
                   key={category.code}
                   className={`border-t border-r border-slate-200 px-2 py-3 font-semibold ${
-                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                    isTransferCategory(category)
+                      ? 'bg-slate-100 text-slate-700'
+                      : 'text-slate-900'
                   }`}
                 >
-                  {formatAmount(aggregate.actualTotalsByCategory[category.code])}
+                  {formatAmount(
+                    aggregate.actualTotalsByCategory[category.code],
+                  )}
                 </td>
               ))}
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.annualActualTotal)}
               </td>
-              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Факт за год</td>
+              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">
+                Факт за год
+              </td>
             </tr>
             <tr>
               <td className="border-t border-r border-slate-200 px-3 py-3 font-semibold text-slate-900">
@@ -2159,7 +2558,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
                 <td
                   key={category.code}
                   className={`border-t border-r border-slate-200 px-2 py-3 font-semibold ${
-                    isTransferCategory(category) ? 'bg-slate-100 text-slate-700' : 'text-slate-900'
+                    isTransferCategory(category)
+                      ? 'bg-slate-100 text-slate-700'
+                      : 'text-slate-900'
                   }`}
                 >
                   {formatAmount(aggregate.limitTotalsByCategory[category.code])}
@@ -2168,7 +2569,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.annualLimitTotal)}
               </td>
-              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Лимит за год</td>
+              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">
+                Лимит за год
+              </td>
             </tr>
             <tr>
               <td
@@ -2180,7 +2583,9 @@ function ExpenseReviewTable({ aggregate }: { aggregate: AggregatedExpensesViewMo
               <td className="border-t border-r border-slate-200 px-2 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.averageMonthlyActualTotal)}
               </td>
-              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">Среднее</td>
+              <td className="border-t border-slate-200 px-2 py-3 text-slate-500">
+                Среднее
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -2212,13 +2617,17 @@ function IncomeActualFormCard({
   onSave,
   onSaved,
 }: IncomeActualFormCardProps) {
-  const [amount, setAmount] = useState<string>(normalizeAmountInput(initialAmount))
+  const [amount, setAmount] = useState<string>(
+    normalizeAmountInput(initialAmount),
+  )
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const isValid = isValidNonNegativeAmountValue(amount)
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!isValid || status === 'submitting') {
@@ -2246,9 +2655,12 @@ function IncomeActualFormCard({
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Фактический доход</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            Фактический доход
+          </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Сохраняется только итоговая сумма за {toMonthLabel(selectedMonth)}. Именно факт двигает review и linked balance.
+            Сохраняется только итоговая сумма за {toMonthLabel(selectedMonth)}.
+            Именно факт двигает review и linked balance.
           </p>
         </div>
       </div>
@@ -2265,7 +2677,9 @@ function IncomeActualFormCard({
             type="text"
             inputMode="decimal"
             value={amount}
-            onChange={(event) => setAmount(normalizeAmountInput(event.target.value))}
+            onChange={(event) =>
+              setAmount(normalizeAmountInput(event.target.value))
+            }
             placeholder="0.00"
             className={inputClassName(isValid)}
           />
@@ -2273,9 +2687,14 @@ function IncomeActualFormCard({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Сумма</p>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              Сумма
+            </p>
             <p className="mt-1 text-lg font-semibold text-slate-900">
-              {formatAmountWithCurrency(toDecimalAmountString(amount), currency)}
+              {formatAmountWithCurrency(
+                toDecimalAmountString(amount),
+                currency,
+              )}
             </p>
           </div>
           <button
@@ -2288,9 +2707,13 @@ function IncomeActualFormCard({
         </div>
       </form>
 
-      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="mt-3 text-xs text-rose-600">{errorMessage}</p>
+      ) : null}
       {!isValid ? (
-        <p className="mt-3 text-xs text-rose-600">Разрешены только неотрицательные суммы с 2 знаками.</p>
+        <p className="mt-3 text-xs text-rose-600">
+          Разрешены только неотрицательные суммы с 2 знаками.
+        </p>
       ) : null}
     </section>
   )
@@ -2323,13 +2746,12 @@ function IncomePlanFormCard({
   onSave,
   onSaved,
 }: IncomePlanFormCardProps) {
-  const [vacations, setVacations] = useState<PersonalFinanceVacationPeriodDto[]>(() =>
-    cloneVacationPeriods(initialIncomePlan?.vacations ?? []),
-  )
+  const [vacations, setVacations] = useState<
+    PersonalFinanceVacationPeriodDto[]
+  >(() => cloneVacationPeriods(initialIncomePlan?.vacations ?? []))
   const [pendingStartDate, setPendingStartDate] = useState<string | null>(null)
-  const [thirteenthSalaryEnabled, setThirteenthSalaryEnabled] = useState<boolean>(
-    initialIncomePlan?.thirteenthSalaryEnabled ?? false,
-  )
+  const [thirteenthSalaryEnabled, setThirteenthSalaryEnabled] =
+    useState<boolean>(initialIncomePlan?.thirteenthSalaryEnabled ?? false)
   const [thirteenthSalaryMonth, setThirteenthSalaryMonth] = useState<number>(
     initialIncomePlan?.thirteenthSalaryMonth ?? 1,
   )
@@ -2337,12 +2759,20 @@ function IncomePlanFormCard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const hasBaseForecast = isPositiveAmount(baseForecastAmount)
-  const plannedIncome = buildIncomePlanDraft(vacations, thirteenthSalaryEnabled, thirteenthSalaryMonth)
-  const derivedPreview = deriveIncomePlanPreview(plannedIncome, salaryAmount)
-  const actualMonthsWithDerivedOverrides = derivedPreview.extraMonths.filter((entry) =>
-    incomeMonths.some((month) => month.month === entry.month && month.status === 'ACTUAL'),
+  const plannedIncome = buildIncomePlanDraft(
+    vacations,
+    thirteenthSalaryEnabled,
+    thirteenthSalaryMonth,
   )
-  const canSave = hasBaseForecast && pendingStartDate === null && status !== 'submitting'
+  const derivedPreview = deriveIncomePlanPreview(plannedIncome, salaryAmount)
+  const actualMonthsWithDerivedOverrides = derivedPreview.extraMonths.filter(
+    (entry) =>
+      incomeMonths.some(
+        (month) => month.month === entry.month && month.status === 'ACTUAL',
+      ),
+  )
+  const canSave =
+    hasBaseForecast && pendingStartDate === null && status !== 'submitting'
 
   const handleDayClick = (date: string): void => {
     if (!pendingStartDate) {
@@ -2355,16 +2785,21 @@ function IncomePlanFormCard({
     setPendingStartDate(null)
   }
 
-  const handleRemoveVacation = (vacationToRemove: PersonalFinanceVacationPeriodDto): void => {
+  const handleRemoveVacation = (
+    vacationToRemove: PersonalFinanceVacationPeriodDto,
+  ): void => {
     setVacations((current) =>
       current.filter(
         (vacation) =>
-          vacation.startDate !== vacationToRemove.startDate || vacation.endDate !== vacationToRemove.endDate,
+          vacation.startDate !== vacationToRemove.startDate ||
+          vacation.endDate !== vacationToRemove.endDate,
       ),
     )
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault()
 
     if (!canSave) {
@@ -2389,24 +2824,28 @@ function IncomePlanFormCard({
     <section className="rounded-3xl border border-slate-200 bg-white p-4">
       <div>
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Годовой planner доходов</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            Годовой planner доходов
+          </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Отметьте отпускные периоды на календаре и укажите, будет ли 13-я зарплата. Planner сам производит derived overrides по месяцам.
+            Отметьте отпускные периоды на календаре и укажите, будет ли 13-я
+            зарплата. Planner сам производит derived overrides по месяцам.
           </p>
         </div>
       </div>
 
       {!hasBaseForecast ? (
         <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Сначала задайте recurring forecast на вкладке настроек. Только после этого можно сохранить planner доходов.
+          Сначала задайте recurring forecast на вкладке настроек. Только после
+          этого можно сохранить planner доходов.
         </p>
       ) : null}
 
       {pendingStartDate ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p>
-            Выбрана первая дата отпуска: {formatIsoDateToRu(pendingStartDate)}. Нажмите на дату окончания,
-            чтобы сохранить диапазон целиком.
+            Выбрана первая дата отпуска: {formatIsoDateToRu(pendingStartDate)}.
+            Нажмите на дату окончания, чтобы сохранить диапазон целиком.
           </p>
           <button
             type="button"
@@ -2420,8 +2859,12 @@ function IncomePlanFormCard({
 
       {actualMonthsWithDerivedOverrides.length > 0 ? (
         <p className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-          В месяцах {actualMonthsWithDerivedOverrides.map((entry) => toMonthLabel(entry.month)).join(', ')} уже есть факт.
-          Review использует фактический доход, но planner сохранится и станет fallback после очистки факта.
+          В месяцах{' '}
+          {actualMonthsWithDerivedOverrides
+            .map((entry) => toMonthLabel(entry.month))
+            .join(', ')}{' '}
+          уже есть факт. Review использует фактический доход, но planner
+          сохранится и станет fallback после очистки факта.
         </p>
       ) : null}
 
@@ -2434,14 +2877,22 @@ function IncomePlanFormCard({
         <section className="rounded-2xl bg-slate-50 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Календарь отпусков</h4>
+              <h4 className="text-sm font-semibold text-slate-900">
+                Календарь отпусков
+              </h4>
               <p className="mt-1 text-sm text-slate-600">
-                Первый клик выбирает начало отпуска, второй клик выбирает конец. Touching и overlapping периоды будут объединены при расчёте payout.
+                Первый клик выбирает начало отпуска, второй клик выбирает конец.
+                Touching и overlapping периоды будут объединены при расчёте
+                payout.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Год</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{year}</p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                Год
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {year}
+              </p>
             </div>
           </div>
 
@@ -2455,13 +2906,18 @@ function IncomePlanFormCard({
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
-                <h5 className="text-sm font-semibold text-slate-900">Отмеченные отпуска</h5>
-                <span className="text-xs text-slate-500">{vacations.length}</span>
+                <h5 className="text-sm font-semibold text-slate-900">
+                  Отмеченные отпуска
+                </h5>
+                <span className="text-xs text-slate-500">
+                  {vacations.length}
+                </span>
               </div>
 
               {vacations.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">
-                  Пока нет отпускных периодов. Для примера, отпуск `2025-06-16..2025-06-29` даст payout в июне.
+                  Пока нет отпускных периодов. Для примера, отпуск
+                  `2025-06-16..2025-06-29` даст payout в июне.
                 </p>
               ) : (
                 <ul className="mt-3 space-y-2">
@@ -2471,9 +2927,12 @@ function IncomePlanFormCard({
                       className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{formatVacationPeriod(vacation)}</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {formatVacationPeriod(vacation)}
+                        </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {getVacationLengthInDays(vacation)} календарных дней включительно
+                          {getVacationLengthInDays(vacation)} календарных дней
+                          включительно
                         </p>
                       </div>
                       <button
@@ -2494,13 +2953,18 @@ function IncomePlanFormCard({
         <section className="rounded-2xl bg-slate-50 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">13-я зарплата</h4>
+              <h4 className="text-sm font-semibold text-slate-900">
+                13-я зарплата
+              </h4>
               <p className="mt-1 text-sm text-slate-600">
-                Если включена, planner добавляет ещё один оклад в выбранный месяц.
+                Если включена, planner добавляет ещё один оклад в выбранный
+                месяц.
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-right">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Доплата</p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                Доплата
+              </p>
               <p className="mt-1 text-sm font-semibold text-slate-900">
                 {formatAmountWithCurrency(salaryAmount, currency)}
               </p>
@@ -2512,11 +2976,15 @@ function IncomePlanFormCard({
               <input
                 type="checkbox"
                 checked={thirteenthSalaryEnabled}
-                onChange={(event) => setThirteenthSalaryEnabled(event.target.checked)}
+                onChange={(event) =>
+                  setThirteenthSalaryEnabled(event.target.checked)
+                }
                 className="mt-1 h-4 w-4 rounded border-slate-300"
               />
               <span>
-                <span className="font-semibold text-slate-900">Будет в этом году</span>
+                <span className="font-semibold text-slate-900">
+                  Будет в этом году
+                </span>
                 <span className="mt-1 block text-xs text-slate-500">
                   Выключите, если 13-я зарплата не планируется.
                 </span>
@@ -2528,7 +2996,9 @@ function IncomePlanFormCard({
               <select
                 value={thirteenthSalaryMonth}
                 disabled={!thirteenthSalaryEnabled}
-                onChange={(event) => setThirteenthSalaryMonth(Number(event.target.value))}
+                onChange={(event) =>
+                  setThirteenthSalaryMonth(Number(event.target.value))
+                }
                 className={selectClassName()}
               >
                 {MONTH_LABELS.map((label, index) => (
@@ -2543,9 +3013,12 @@ function IncomePlanFormCard({
 
         <section className="rounded-2xl bg-slate-50 p-4">
           <div>
-            <h4 className="text-sm font-semibold text-slate-900">Derived preview</h4>
+            <h4 className="text-sm font-semibold text-slate-900">
+              Derived preview
+            </h4>
             <p className="mt-1 text-sm text-slate-600">
-              Preview зеркалит backend-правила: первый merged-отпуск длиной от 14 дней даёт основные отпускные в месяц его старта.
+              Preview зеркалит backend-правила: первый merged-отпуск длиной от
+              14 дней даёт основные отпускные в месяц его старта.
             </p>
           </div>
 
@@ -2553,7 +3026,8 @@ function IncomePlanFormCard({
             <MetricTile
               label="13-я зарплата"
               value={
-                plannedIncome.thirteenthSalaryEnabled && plannedIncome.thirteenthSalaryMonth
+                plannedIncome.thirteenthSalaryEnabled &&
+                plannedIncome.thirteenthSalaryMonth
                   ? toMonthLabel(plannedIncome.thirteenthSalaryMonth)
                   : 'Нет'
               }
@@ -2561,21 +3035,32 @@ function IncomePlanFormCard({
             />
             <MetricTile
               label="Первый отпуск >= 14 дней"
-              value={derivedPreview.mainVacation ? formatVacationPeriod(derivedPreview.mainVacation) : 'Нет'}
+              value={
+                derivedPreview.mainVacation
+                  ? formatVacationPeriod(derivedPreview.mainVacation)
+                  : 'Нет'
+              }
               hint="Короткие отпуска сохраняются, но payout не создают."
             />
             <MetricTile
               label="Месяц отпускных"
-              value={derivedPreview.vacationPayoutMonth ? toMonthLabel(derivedPreview.vacationPayoutMonth) : 'Нет'}
+              value={
+                derivedPreview.vacationPayoutMonth
+                  ? toMonthLabel(derivedPreview.vacationPayoutMonth)
+                  : 'Нет'
+              }
               hint="Используется месяц старта первого длинного отпуска."
             />
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <h5 className="text-sm font-semibold text-slate-900">Месяцы с дополнительным доходом</h5>
+            <h5 className="text-sm font-semibold text-slate-900">
+              Месяцы с дополнительным доходом
+            </h5>
             {derivedPreview.extraMonths.length === 0 ? (
               <p className="mt-2 text-sm text-slate-500">
-                Дополнительных начислений пока нет. При включённой 13-й зарплате или первом отпуске от 14 дней здесь появятся месяцы с `+ оклад`.
+                Дополнительных начислений пока нет. При включённой 13-й зарплате
+                или первом отпуске от 14 дней здесь появятся месяцы с `+ оклад`.
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
@@ -2585,8 +3070,12 @@ function IncomePlanFormCard({
                     className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-3"
                   >
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{toMonthLabel(entry.month)}</p>
-                      <p className="mt-1 text-xs text-slate-500">{entry.reasons.join(' + ')}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {toMonthLabel(entry.month)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {entry.reasons.join(' + ')}
+                      </p>
                     </div>
                     <p className="text-sm font-semibold text-slate-900">
                       {formatAmountWithCurrency(entry.amount, currency)}
@@ -2600,7 +3089,8 @@ function IncomePlanFormCard({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
           <p className="text-sm text-slate-600">
-            Planner не создаёт транзакции и не меняет linked balance. Он только подмешивает derived overrides в месячный review.
+            Planner не создаёт транзакции и не меняет linked balance. Он только
+            подмешивает derived overrides в месячный review.
           </p>
           <button
             type="submit"
@@ -2612,15 +3102,19 @@ function IncomePlanFormCard({
         </div>
       </form>
 
-      {errorMessage ? <p className="mt-3 text-xs text-rose-600">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="mt-3 text-xs text-rose-600">{errorMessage}</p>
+      ) : null}
       {!hasBaseForecast ? (
         <p className="mt-3 text-xs text-rose-600">
-          Planner доступен только после настройки recurring forecast в настройках карты.
+          Planner доступен только после настройки recurring forecast в
+          настройках карты.
         </p>
       ) : null}
       {pendingStartDate ? (
         <p className="mt-3 text-xs text-rose-600">
-          Завершите выбор текущего отпускного диапазона второй датой или сбросьте незавершённый выбор.
+          Завершите выбор текущего отпускного диапазона второй датой или
+          сбросьте незавершённый выбор.
         </p>
       ) : null}
     </section>
@@ -2676,7 +3170,9 @@ function VacationMonthGrid({
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-1.5">
       <div className="flex items-center justify-center">
-        <h5 className="text-[10px] font-semibold text-slate-900">{shortMonthLabel(month)}</h5>
+        <h5 className="text-[10px] font-semibold text-slate-900">
+          {shortMonthLabel(month)}
+        </h5>
       </div>
 
       <div className="mt-1 grid grid-cols-7 gap-px text-center text-[8px] uppercase text-slate-400">
@@ -2689,7 +3185,10 @@ function VacationMonthGrid({
 
       <div className="mt-1 grid grid-cols-7 gap-px">
         {Array.from({ length: offset }, (_, index) => (
-          <div key={`empty-${label}-${index}`} className="aspect-square rounded-[4px] bg-slate-50/60" />
+          <div
+            key={`empty-${label}-${index}`}
+            className="aspect-square rounded-[4px] bg-slate-50/60"
+          />
         ))}
 
         {Array.from({ length: days }, (_, index) => {
@@ -2724,13 +3223,20 @@ function VacationMonthGrid({
   )
 }
 
-function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel }) {
+function IncomeReviewTable({
+  aggregate,
+}: {
+  aggregate: AggregatedIncomeViewModel
+}) {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
-        <h3 className="text-base font-semibold text-slate-900">Годовая таблица доходов</h3>
+        <h3 className="text-base font-semibold text-slate-900">
+          Годовая таблица доходов
+        </h3>
         <p className="mt-1 text-sm text-slate-600">
-          Суммы и статусы считаются по всем активным картам: факт, recurring forecast, planner-derived override или смешанный месяц.
+          Суммы и статусы считаются по всем активным картам: факт, recurring
+          forecast, planner-derived override или смешанный месяц.
         </p>
       </div>
 
@@ -2759,7 +3265,11 @@ function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel
                   {formatAmountOrDash(month.totalAmount)}
                 </td>
                 <td className="border-b border-slate-200 px-4 py-3">
-                  {month.status ? <StatusBadge status={month.status} /> : <span className="text-slate-400">-</span>}
+                  {month.status ? (
+                    <StatusBadge status={month.status} />
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -2772,7 +3282,9 @@ function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.annualTotal)}
               </td>
-              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">Факт + прогноз + planner-derived overrides</td>
+              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">
+                Факт + прогноз + planner-derived overrides
+              </td>
             </tr>
             <tr>
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
@@ -2781,7 +3293,9 @@ function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel
               <td className="border-t border-r border-slate-200 px-4 py-3 font-semibold text-slate-900">
                 {formatAmount(aggregate.averageMonthlyTotal)}
               </td>
-              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">По всем месяцам года</td>
+              <td className="border-t border-slate-200 px-4 py-3 text-slate-500">
+                По всем месяцам года
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -2790,7 +3304,11 @@ function IncomeReviewTable({ aggregate }: { aggregate: AggregatedIncomeViewModel
   )
 }
 
-function StatusBadge({ status }: { status: Exclude<AggregatedIncomeMonthStatus, null> }) {
+function StatusBadge({
+  status,
+}: {
+  status: Exclude<AggregatedIncomeMonthStatus, null>
+}) {
   if (status === 'ACTUAL') {
     return (
       <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
@@ -2896,7 +3414,9 @@ function inputClassName(isValid: boolean): string {
 
 function controlClassName(isValid: boolean): string {
   return `mt-1 block h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100 ${
-    isValid ? 'border-slate-200 text-slate-900' : 'border-rose-300 text-rose-700'
+    isValid
+      ? 'border-slate-200 text-slate-900'
+      : 'border-rose-300 text-rose-700'
   }`
 }
 
@@ -2975,17 +3495,26 @@ function toDecimalAmountString(value: string): string {
 }
 
 function sumDecimalAmountStrings(values: string[]): string {
-  const total = values.reduce((sum, value) => sum + Number.parseFloat(value || '0'), 0)
+  const total = values.reduce(
+    (sum, value) => sum + Number.parseFloat(value || '0'),
+    0,
+  )
   return total.toFixed(2)
 }
 
-function calculateBonusAmount(salaryAmount: string, bonusPercent: string): string {
+function calculateBonusAmount(
+  salaryAmount: string,
+  bonusPercent: string,
+): string {
   const salary = Number.parseFloat(toDecimalAmountString(salaryAmount))
   const bonus = Number.parseFloat(toDecimalAmountString(bonusPercent))
   return ((salary * bonus) / 100).toFixed(2)
 }
 
-function calculateForecastAmount(salaryAmount: string, bonusPercent: string): string {
+function calculateForecastAmount(
+  salaryAmount: string,
+  bonusPercent: string,
+): string {
   return sumDecimalAmountStrings([
     toDecimalAmountString(salaryAmount),
     calculateBonusAmount(salaryAmount, bonusPercent),
@@ -3042,7 +3571,9 @@ function buildIncomePlanDraft(
   return {
     vacations: sortVacationPeriods(cloneVacationPeriods(vacations)),
     thirteenthSalaryEnabled,
-    thirteenthSalaryMonth: thirteenthSalaryEnabled ? thirteenthSalaryMonth : null,
+    thirteenthSalaryMonth: thirteenthSalaryEnabled
+      ? thirteenthSalaryMonth
+      : null,
   }
 }
 
@@ -3078,25 +3609,33 @@ function normalizeVacationPeriods(
   vacations: PersonalFinanceVacationPeriodDto[],
 ): PersonalFinanceVacationPeriodDto[] {
   const sorted = sortVacationPeriods(
-    vacations.map((vacation) => createOrderedVacationPeriod(vacation.startDate, vacation.endDate)),
+    vacations.map((vacation) =>
+      createOrderedVacationPeriod(vacation.startDate, vacation.endDate),
+    ),
   )
 
-  return sorted.reduce<PersonalFinanceVacationPeriodDto[]>((result, current) => {
-    const lastVacation = result[result.length - 1]
-    if (!lastVacation) {
-      result.push(current)
-      return result
-    }
+  return sorted.reduce<PersonalFinanceVacationPeriodDto[]>(
+    (result, current) => {
+      const lastVacation = result[result.length - 1]
+      if (!lastVacation) {
+        result.push(current)
+        return result
+      }
 
-    const nextDayAfterLast = addDaysToIsoDate(lastVacation.endDate, 1)
-    if (current.startDate <= nextDayAfterLast) {
-      lastVacation.endDate = current.endDate > lastVacation.endDate ? current.endDate : lastVacation.endDate
-      return result
-    }
+      const nextDayAfterLast = addDaysToIsoDate(lastVacation.endDate, 1)
+      if (current.startDate <= nextDayAfterLast) {
+        lastVacation.endDate =
+          current.endDate > lastVacation.endDate
+            ? current.endDate
+            : lastVacation.endDate
+        return result
+      }
 
-    result.push({ ...current })
-    return result
-  }, [])
+      result.push({ ...current })
+      return result
+    },
+    [],
+  )
 }
 
 function deriveIncomePlanPreview(
@@ -3106,7 +3645,9 @@ function deriveIncomePlanPreview(
   > | null,
   salaryAmount: string,
 ): DerivedIncomePlanPreview {
-  const normalizedVacations = normalizeVacationPeriods(incomePlan?.vacations ?? [])
+  const normalizedVacations = normalizeVacationPeriods(
+    incomePlan?.vacations ?? [],
+  )
   const extraMonthsByNumber = new Map<number, DerivedIncomePlanExtraMonth>()
   const normalizedSalaryAmount = toDecimalAmountString(salaryAmount)
 
@@ -3120,7 +3661,9 @@ function deriveIncomePlanPreview(
   }
 
   const mainVacation =
-    normalizedVacations.find((vacation) => getVacationLengthInDays(vacation) >= 14) ?? null
+    normalizedVacations.find(
+      (vacation) => getVacationLengthInDays(vacation) >= 14,
+    ) ?? null
 
   if (mainVacation) {
     appendDerivedIncomeExtra(
@@ -3138,8 +3681,12 @@ function deriveIncomePlanPreview(
       incomePlan?.thirteenthSalaryEnabled && incomePlan.thirteenthSalaryMonth
         ? incomePlan.thirteenthSalaryMonth
         : null,
-    vacationPayoutMonth: mainVacation ? getMonthFromIsoDate(mainVacation.startDate) : null,
-    extraMonths: Array.from(extraMonthsByNumber.values()).sort((left, right) => left.month - right.month),
+    vacationPayoutMonth: mainVacation
+      ? getMonthFromIsoDate(mainVacation.startDate)
+      : null,
+    extraMonths: Array.from(extraMonthsByNumber.values()).sort(
+      (left, right) => left.month - right.month,
+    ),
   }
 }
 
@@ -3163,7 +3710,9 @@ function appendDerivedIncomeExtra(
   current.reasons = [...current.reasons, reason]
 }
 
-function serializeIncomePlan(incomePlan: PersonalFinanceIncomePlanDto | null): string {
+function serializeIncomePlan(
+  incomePlan: PersonalFinanceIncomePlanDto | null,
+): string {
   if (!incomePlan) {
     return 'EMPTY'
   }
@@ -3175,11 +3724,15 @@ function serializeIncomePlan(incomePlan: PersonalFinanceIncomePlanDto | null): s
   })
 }
 
-function formatVacationPeriod(vacation: PersonalFinanceVacationPeriodDto): string {
+function formatVacationPeriod(
+  vacation: PersonalFinanceVacationPeriodDto,
+): string {
   return `${formatIsoDateToRu(vacation.startDate)} - ${formatIsoDateToRu(vacation.endDate)}`
 }
 
-function getVacationLengthInDays(vacation: PersonalFinanceVacationPeriodDto): number {
+function getVacationLengthInDays(
+  vacation: PersonalFinanceVacationPeriodDto,
+): number {
   const start = parseIsoDate(vacation.startDate)
   const end = parseIsoDate(vacation.endDate)
   return Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
@@ -3204,14 +3757,20 @@ function todayIsoDate(): string {
 }
 
 function parseIsoDate(value: string): Date {
-  const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10))
+  const [year, month, day] = value
+    .split('-')
+    .map((part) => Number.parseInt(part, 10))
   return new Date(Date.UTC(year, month - 1, day))
 }
 
 function addDaysToIsoDate(value: string, days: number): string {
   const date = parseIsoDate(value)
   date.setUTCDate(date.getUTCDate() + days)
-  return formatIsoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())
+  return formatIsoDate(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+  )
 }
 
 function getMonthFromIsoDate(value: string): number {
@@ -3227,14 +3786,18 @@ function isDateInsideVacationSelection(
   value: string,
   vacations: PersonalFinanceVacationPeriodDto[],
 ): boolean {
-  return vacations.some((vacation) => value >= vacation.startDate && value <= vacation.endDate)
+  return vacations.some(
+    (vacation) => value >= vacation.startDate && value <= vacation.endDate,
+  )
 }
 
 function isVacationBoundary(
   value: string,
   vacations: PersonalFinanceVacationPeriodDto[],
 ): boolean {
-  return vacations.some((vacation) => vacation.startDate === value || vacation.endDate === value)
+  return vacations.some(
+    (vacation) => vacation.startDate === value || vacation.endDate === value,
+  )
 }
 
 function daysInMonth(year: number, month: number): number {
@@ -3246,7 +3809,12 @@ function monthStartOffset(year: number, month: number): number {
   return dayOfWeek === 0 ? 6 : dayOfWeek - 1
 }
 
-function incomeStatusLabel(status: Exclude<PersonalFinanceSnapshotDto['income']['months'][number]['status'], null>): string {
+function incomeStatusLabel(
+  status: Exclude<
+    PersonalFinanceSnapshotDto['income']['months'][number]['status'],
+    null
+  >,
+): string {
   if (status === 'ACTUAL') {
     return 'Факт'
   }
@@ -3271,7 +3839,9 @@ function limitPercentInputLabel(category: PersonalExpenseCategoryDto): string {
     return '% цели от прогноза за год'
   }
 
-  return category.limitPeriod === 'ANNUAL' ? '% от прогноза за год' : '% от прогноза за месяц'
+  return category.limitPeriod === 'ANNUAL'
+    ? '% от прогноза за год'
+    : '% от прогноза за месяц'
 }
 
 function limitPeriodHeaderLabel(category: PersonalExpenseCategoryDto): string {
@@ -3292,7 +3862,9 @@ function calculateConfiguredLimitAmount(
   monthlyForecast: string,
 ): string {
   const baseAmount =
-    category.limitPeriod === 'ANNUAL' ? multiplyDecimalAmount(monthlyForecast, 12) : toDecimalAmountString(monthlyForecast)
+    category.limitPeriod === 'ANNUAL'
+      ? multiplyDecimalAmount(monthlyForecast, 12)
+      : toDecimalAmountString(monthlyForecast)
 
   return calculatePercentAmount(baseAmount, percentValue)
 }
@@ -3306,7 +3878,11 @@ function calculateConfiguredLimitTotals(
   const annualValues: string[] = []
 
   categories.forEach((category) => {
-    const amount = calculateConfiguredLimitAmount(category, percentValues[category.code], monthlyForecast)
+    const amount = calculateConfiguredLimitAmount(
+      category,
+      percentValues[category.code],
+      monthlyForecast,
+    )
     if (isTransferCategory(category)) {
       return
     }
@@ -3328,7 +3904,10 @@ function calculateConfiguredLimitTotals(
   }
 }
 
-function calculatePercentAmount(baseAmount: string, percentValue: string): string {
+function calculatePercentAmount(
+  baseAmount: string,
+  percentValue: string,
+): string {
   const base = Number.parseFloat(toDecimalAmountString(baseAmount))
   const percent = Number.parseFloat(toDecimalAmountString(percentValue))
   return ((base * percent) / 100).toFixed(2)
@@ -3338,7 +3917,9 @@ function multiplyDecimalAmount(value: string, factor: number): string {
   return (Number.parseFloat(value || '0') * factor).toFixed(2)
 }
 
-function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedExpensesViewModel {
+function aggregateExpenses(
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+): AggregatedExpensesViewModel {
   const [firstSnapshot] = activeSnapshots
   const categories = firstSnapshot.categories
   const months = Array.from({ length: 12 }, (_, index) => ({
@@ -3380,16 +3961,26 @@ function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): Aggre
           month.limitCategoryAmounts[category.code],
         )
       })
-      aggregateMonth.actualTotal = addDecimalAmounts(aggregateMonth.actualTotal, month.actualTotal)
-      aggregateMonth.limitTotal = addDecimalAmounts(aggregateMonth.limitTotal, month.limitTotal)
+      aggregateMonth.actualTotal = addDecimalAmounts(
+        aggregateMonth.actualTotal,
+        month.actualTotal,
+      )
+      aggregateMonth.limitTotal = addDecimalAmounts(
+        aggregateMonth.limitTotal,
+        month.limitTotal,
+      )
     })
   })
 
-  const annualActualTotal = sumDecimalAmountStrings(months.map((month) => month.actualTotal))
+  const annualActualTotal = sumDecimalAmountStrings(
+    months.map((month) => month.actualTotal),
+  )
   const annualLimitTotal = sumDecimalAmountStrings(
     activeSnapshots.map((snapshot) => snapshot.expenses.annualLimitTotal),
   )
-  const filledMonths = months.filter((month) => isPositiveAmount(month.actualTotal)).length
+  const filledMonths = months.filter((month) =>
+    isPositiveAmount(month.actualTotal),
+  ).length
 
   return {
     categories,
@@ -3400,35 +3991,54 @@ function aggregateExpenses(activeSnapshots: PersonalFinanceSnapshotDto[]): Aggre
     limitTotalsByCategory,
     annualActualTotal,
     annualLimitTotal,
-    averageMonthlyActualTotal: averageDecimalAmounts(annualActualTotal, filledMonths),
+    averageMonthlyActualTotal: averageDecimalAmounts(
+      annualActualTotal,
+      filledMonths,
+    ),
   }
 }
 
-function aggregateIncome(activeSnapshots: PersonalFinanceSnapshotDto[]): AggregatedIncomeViewModel {
+function aggregateIncome(
+  activeSnapshots: PersonalFinanceSnapshotDto[],
+): AggregatedIncomeViewModel {
   const [firstSnapshot] = activeSnapshots
-  const months: AggregatedIncomeMonthViewModel[] = Array.from({ length: 12 }, (_, index) => ({
-    month: index + 1,
-    totalAmount: '0.00',
-    status: null,
-  }))
+  const months: AggregatedIncomeMonthViewModel[] = Array.from(
+    { length: 12 },
+    (_, index) => ({
+      month: index + 1,
+      totalAmount: '0.00',
+      status: null,
+    }),
+  )
 
   let cardsWithForecast = 0
 
   activeSnapshots.forEach((snapshot) => {
-    const forecastAmount = snapshot.settings.incomeForecast?.totalAmount ?? '0.00'
+    const forecastAmount =
+      snapshot.settings.incomeForecast?.totalAmount ?? '0.00'
     if (isPositiveAmount(forecastAmount)) {
       cardsWithForecast += 1
     }
 
     snapshot.income.months.forEach((month) => {
       const aggregateMonth = months[month.month - 1]
-      aggregateMonth.totalAmount = addDecimalAmounts(aggregateMonth.totalAmount, month.totalAmount)
-      aggregateMonth.status = mergeIncomeStatuses(aggregateMonth.status, month.status)
+      aggregateMonth.totalAmount = addDecimalAmounts(
+        aggregateMonth.totalAmount,
+        month.totalAmount,
+      )
+      aggregateMonth.status = mergeIncomeStatuses(
+        aggregateMonth.status,
+        month.status,
+      )
     })
   })
 
-  const annualTotal = sumDecimalAmountStrings(months.map((month) => month.totalAmount))
-  const filledMonths = months.filter((month) => isPositiveAmount(month.totalAmount)).length
+  const annualTotal = sumDecimalAmountStrings(
+    months.map((month) => month.totalAmount),
+  )
+  const filledMonths = months.filter((month) =>
+    isPositiveAmount(month.totalAmount),
+  ).length
 
   return {
     currency: firstSnapshot.currency,
@@ -3437,7 +4047,9 @@ function aggregateIncome(activeSnapshots: PersonalFinanceSnapshotDto[]): Aggrega
     averageMonthlyTotal: averageDecimalAmounts(annualTotal, filledMonths),
     recurringForecast: {
       totalAmount: sumDecimalAmountStrings(
-        activeSnapshots.map((snapshot) => snapshot.settings.incomeForecast?.totalAmount ?? '0.00'),
+        activeSnapshots.map(
+          (snapshot) => snapshot.settings.incomeForecast?.totalAmount ?? '0.00',
+        ),
       ),
       activeCardCount: activeSnapshots.length,
       cardsWithForecast,
@@ -3449,7 +4061,10 @@ function resolveDefaultActiveCardId(
   activeSnapshots: PersonalFinanceSnapshotDto[],
   preferredCardId: string | null,
 ): string {
-  if (preferredCardId && activeSnapshots.some((snapshot) => snapshot.card.id === preferredCardId)) {
+  if (
+    preferredCardId &&
+    activeSnapshots.some((snapshot) => snapshot.card.id === preferredCardId)
+  ) {
     return preferredCardId
   }
 
@@ -3460,7 +4075,11 @@ function resolveDefaultTransferDestinationId(
   cards: PersonalFinanceCardDto[],
   sourceCardId: string,
 ): string {
-  return cards.find((card) => card.id !== sourceCardId)?.id ?? cards[0]?.id ?? sourceCardId
+  return (
+    cards.find((card) => card.id !== sourceCardId)?.id ??
+    cards[0]?.id ??
+    sourceCardId
+  )
 }
 
 function createZeroAmountMap(
