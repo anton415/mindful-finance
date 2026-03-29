@@ -5,6 +5,7 @@
 [![Architecture Guard](https://github.com/anton415/mindful-finance/actions/workflows/architecture-guard.yml/badge.svg?branch=main)](https://github.com/anton415/mindful-finance/actions/workflows/architecture-guard.yml)
 [![CodeQL](https://github.com/anton415/mindful-finance/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anton415/mindful-finance/actions/workflows/codeql.yml)
 [![Dependency Review](https://img.shields.io/badge/Dependency%20Review-PR%20only-6e5494?logo=github&logoColor=white)](https://github.com/anton415/mindful-finance/actions/workflows/dependency-review.yml)
+[![Code Style: Spotless](https://img.shields.io/badge/Code%20Style-Spotless-2F80ED)](https://github.com/diffplug/spotless)
 [![Code Style: Prettier](https://img.shields.io/badge/Code%20Style-Prettier-F7B93E?logo=prettier&logoColor=1A2B34)](https://prettier.io/)
 [![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot 3.x](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
