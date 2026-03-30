@@ -9,7 +9,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
-const eslintProfile = process.env.ESLINT_PROFILE === 'strict' ? 'strict' : 'safe'
+const eslintProfile =
+  process.env.ESLINT_PROFILE === 'strict' ? 'strict' : 'safe'
 const isStrictProfile = eslintProfile === 'strict'
 
 const typeAwareConfig = isStrictProfile
