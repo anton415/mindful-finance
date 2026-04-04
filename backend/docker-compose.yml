@@ -8,8 +8,14 @@ services:
       POSTGRES_PASSWORD: mindfulfinance
     ports:
       - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mindfulfinance -d mindfulfinance"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+volumes:
+  postgres-data:
+    name: mindful-finance-postgres-data

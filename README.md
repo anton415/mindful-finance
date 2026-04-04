@@ -1,5 +1,19 @@
 # 🌿 Mindful Finance
 
+[![Built with Codex](https://img.shields.io/badge/Built%20with-Codex-0A66C2?logo=openai&logoColor=white)](https://openai.com/codex/)
+[![CI](https://github.com/anton415/mindful-finance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anton415/mindful-finance/actions/workflows/ci.yml)
+[![Architecture Guard](https://github.com/anton415/mindful-finance/actions/workflows/architecture-guard.yml/badge.svg?branch=main)](https://github.com/anton415/mindful-finance/actions/workflows/architecture-guard.yml)
+[![CodeQL](https://github.com/anton415/mindful-finance/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anton415/mindful-finance/actions/workflows/codeql.yml)
+[![Dependency Review](https://img.shields.io/badge/Dependency%20Review-PR%20only-6e5494?logo=github&logoColor=white)](https://github.com/anton415/mindful-finance/actions/workflows/dependency-review.yml)
+[![Code Style: Spotless](https://img.shields.io/badge/Code%20Style-Spotless-2F80ED)](https://github.com/diffplug/spotless)
+[![Code Style: Prettier](https://img.shields.io/badge/Code%20Style-Prettier-F7B93E?logo=prettier&logoColor=1A2B34)](https://prettier.io/)
+[![ESLint Safe Profile](https://img.shields.io/badge/ESLint-safe%20profile-4B32C3?logo=eslint&logoColor=white)](./frontend/eslint.config.js)
+[![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 3.x](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript 5.x](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS 4.x](https://img.shields.io/badge/Tailwind%20CSS-4.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
 **Подход Calm Architect к финансовой свободе.**
 
 ## 🎯 Видение
@@ -50,6 +64,13 @@ make dev
 make down
 ```
 
+`make down` останавливает контейнер, но не удаляет локальные данные. Postgres хранит данные в named volume `mindful-finance-postgres-data`, поэтому база переживает `make down` и следующий `make dev`.
+
+Чтобы намеренно сбросить локальную dev-базу и начать с пустого состояния:
+```bash
+docker compose -f backend/docker-compose.yml down -v
+```
+
 Собрать backend и frontend одной командой:
 ```bash
 make build
@@ -63,6 +84,23 @@ make build
 - `MINDFUL_FINANCE_DB_URL`
 - `MINDFUL_FINANCE_DB_USERNAME`
 - `MINDFUL_FINANCE_DB_PASSWORD`
+
+## ☕ Backend-only запуск для разработки
+
+Если нужен только API без frontend, используй отдельный backend runtime из корня репозитория:
+```bash
+make backend-dev
+```
+
+Этот режим:
+- поднимает тот же локальный PostgreSQL;
+- ждёт healthcheck контейнера;
+- запускает Spring Boot с `SPRING_PROFILES_ACTIVE=postgres`;
+- использует те же `MINDFUL_FINANCE_DB_*`, что и `make dev`.
+
+Для VS Code в репозитории сохранён launch config `Mindful Finance API (postgres)` и pre-launch task, который поднимает локальный PostgreSQL перед стартом приложения.
+
+Ручной локальный backend-запуск без профиля `postgres` считается вспомогательным in-memory режимом, а не основным dev-runtime.
 
 ## 📘 Документы по workflow
 - Для разработчика: [`docs/product/05-developer-local-workflow.md`](docs/product/05-developer-local-workflow.md)

@@ -30,11 +30,13 @@ jobs:
 
     steps:
       - name: Approve pull request when all required checks pass
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const requiredChecks = [
+              "Backend format",
               "Backend tests",
+              "Frontend format",
               "Frontend lint and build",
               "Framework boundary",
               "Analyze (java-kotlin)",

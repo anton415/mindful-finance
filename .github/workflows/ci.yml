@@ -11,6 +11,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend-format:
+    name: Backend format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run backend format check
+        run: mvn --batch-mode -f backend/pom.xml spotless:check
+
   backend-test:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -28,6 +46,29 @@ jobs:
 
       - name: Run backend tests
         run: mvn --batch-mode -f backend/pom.xml test
+
+  frontend-format:
+    name: Frontend format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run frontend format check
+        run: npm run format:check
+        working-directory: frontend
 
   frontend-quality:
     name: Frontend lint and build
@@ -48,8 +89,8 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Run frontend lint
-        run: npm run lint
+      - name: Run frontend lint (safe profile)
+        run: npm run lint:safe
         working-directory: frontend
 
       - name: Run frontend build

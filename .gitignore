@@ -27,7 +27,9 @@ replay_pid*
 .idea/
 *.iml
 out/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # Maven
 target/

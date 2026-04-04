@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Mindful Finance API (postgres)",
+            "request": "launch",
+            "mainClass": "com.mindfulfinance.api.ApiApplication",
+            "projectName": "api",
+            "preLaunchTask": "Mindful Finance: Start local Postgres",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "postgres",
+                "MINDFUL_FINANCE_DB_URL": "jdbc:postgresql://localhost:55432/mindfulfinance",
+                "MINDFUL_FINANCE_DB_USERNAME": "mindfulfinance",
+                "MINDFUL_FINANCE_DB_PASSWORD": "mindfulfinance"
+            }
+        }
+    ]
+}
