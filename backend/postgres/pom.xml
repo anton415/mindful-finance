@@ -13,7 +13,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <spring-boot.version>3.2.5</spring-boot.version>
+    <spring-boot.version>4.0.5</spring-boot.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <flyway.version>11.11.0</flyway.version>
   </properties>
