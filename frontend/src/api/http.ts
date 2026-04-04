@@ -1,6 +1,12 @@
 import type { ApiErrorDto } from './types'
 
 type QueryValue = string | number | boolean | null | undefined
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[]
+
+interface JsonObject {
+  [key: string]: JsonValue
+}
+
 export type QueryParams = Record<string, QueryValue>
 
 export interface RequestJsonOptions {
@@ -228,14 +234,14 @@ async function parseJsonResponse<T>(
   return body as T
 }
 
-async function readResponseBody(response: Response): Promise<unknown | null> {
+async function readResponseBody(response: Response): Promise<JsonValue> {
   const rawText = await response.text()
   if (rawText.length === 0) {
     return null
   }
 
   try {
-    return JSON.parse(rawText) as unknown
+    return JSON.parse(rawText) as JsonValue
   } catch {
     return rawText
   }

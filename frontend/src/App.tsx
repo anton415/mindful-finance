@@ -34,7 +34,7 @@ import {
   PersonalFinanceView,
   type PersonalFinanceCardListItem,
   type PersonalFinanceTab,
-} from './features/personal-finance/PersonalFinanceView'
+} from './features/personal-finance'
 import { formatMoneyInput, normalizeMoneyInput } from './money-input'
 
 interface DashboardData {
@@ -54,7 +54,7 @@ type TransactionDirectionFilter = 'ALL' | 'INFLOW' | 'OUTFLOW'
 type CreateAccountStatus = 'idle' | 'submitting' | 'error'
 type CreateTransactionStatus = 'idle' | 'submitting' | 'error'
 type CsvImportStatus = 'idle' | 'submitting' | 'success' | 'error'
-type AccountStatus = 'ACTIVE' | string
+type AccountStatus = AccountDto['status']
 interface NavigationState {
   tab: ViewTab
   accountId: string | null

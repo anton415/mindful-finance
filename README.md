@@ -7,6 +7,7 @@
 [![Dependency Review](https://img.shields.io/badge/Dependency%20Review-PR%20only-6e5494?logo=github&logoColor=white)](https://github.com/anton415/mindful-finance/actions/workflows/dependency-review.yml)
 [![Code Style: Spotless](https://img.shields.io/badge/Code%20Style-Spotless-2F80ED)](https://github.com/diffplug/spotless)
 [![Code Style: Prettier](https://img.shields.io/badge/Code%20Style-Prettier-F7B93E?logo=prettier&logoColor=1A2B34)](https://prettier.io/)
+[![ESLint Safe Profile](https://img.shields.io/badge/ESLint-safe%20profile-4B32C3?logo=eslint&logoColor=white)](./frontend/eslint.config.js)
 [![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot 3.x](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
