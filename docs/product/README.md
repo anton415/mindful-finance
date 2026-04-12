@@ -17,7 +17,8 @@
 
 ## Supplementary materials
 
-- [Week 01 — Гипотеза проблемы](./problem-hypothesis-week-01.md) - учебный supplement, переводящий product framing из `ТЗ-00` и `ТЗ-01` в problem statement, проверяемую гипотезу, явные assumptions и минимальный тест на 1 неделю.
+- [Проверяемая гипотеза проблемы](./problem-hypothesis.md) - учебный supplement, переводящий product framing из `ТЗ-00` и `ТЗ-01` в problem statement, проверяемую гипотезу, явные assumptions и минимальный тест на 1 неделю.
+- [Карта текущего personal-finance flow](./personal-finance-runtime-map.md) - учебный supplement, фиксирующий runtime path текущего shipped personal-finance flow от `App` до backend use case, state owners и risky seams перед refactor slices.
 - [Guide-Dev. Локальный workflow разработчика](./05-developer-local-workflow.md) - инженерный runbook локальной разработки, checkpoint-команд и milestone closure-loop.
 - [Guide-User. Спокойный review личных финансов](./06-user-personal-finance-review-flow.md) - пользовательский сценарий спокойного review в personal-finance разделе.
 
