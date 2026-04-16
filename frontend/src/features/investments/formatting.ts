@@ -60,7 +60,9 @@ export function toDirectionLabel(direction: TransactionDirection): string {
   return toDirectionSelectLabel(direction)
 }
 
-export function toDirectionSelectLabel(direction: TransactionDirection): string {
+export function toDirectionSelectLabel(
+  direction: TransactionDirection,
+): string {
   return direction === 'INFLOW' ? 'Доход' : 'Расход'
 }
 

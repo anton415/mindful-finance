@@ -67,13 +67,16 @@ export function buildInvestmentOverview(
       totalsByCurrency: summary.totalsByCurrency,
     }))
     .sort((left, right) =>
-      toAccountTypeLabel(left.type).localeCompare(toAccountTypeLabel(right.type)),
+      toAccountTypeLabel(left.type).localeCompare(
+        toAccountTypeLabel(right.type),
+      ),
     )
 
   return {
     totalAccountCount: accounts.length,
-    activeAccountCount: accounts.filter((account) => account.status === 'ACTIVE')
-      .length,
+    activeAccountCount: accounts.filter(
+      (account) => account.status === 'ACTIVE',
+    ).length,
     archivedAccountCount: accounts.filter(
       (account) => account.status === 'ARCHIVED',
     ).length,

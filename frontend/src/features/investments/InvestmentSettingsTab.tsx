@@ -1,8 +1,5 @@
 import { type FormEvent } from 'react'
-import type {
-  AccountType,
-  ImportTransactionsCsvResponse,
-} from '../../api'
+import type { AccountType, ImportTransactionsCsvResponse } from '../../api'
 import { toAccountTypeLabel } from './formatting'
 import type {
   AccountWithBalance,
@@ -27,9 +24,7 @@ interface InvestmentSettingsTabProps {
   onNewAccountCurrencyChange: (value: string) => void
   onNewAccountTypeChange: (value: AccountType) => void
   canCreate: boolean
-  onCreateAccountSubmit: (
-    event: FormEvent<HTMLFormElement>,
-  ) => Promise<void>
+  onCreateAccountSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onSelectAccount: (accountId: string) => void
   isEditingSelectedAccount: boolean
   editingAccountName: string
@@ -40,9 +35,7 @@ interface InvestmentSettingsTabProps {
   updateAccountStatus: CreateAccountStatus
   updateAccountErrorMessage: string | null
   onStartEditingAccount: () => void
-  onUpdateAccountSubmit: (
-    event: FormEvent<HTMLFormElement>,
-  ) => Promise<void>
+  onUpdateAccountSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onCancelEditingAccount: () => void
   canDeleteAccount: boolean
   deleteAccountStatus: CreateAccountStatus

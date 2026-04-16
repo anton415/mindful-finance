@@ -511,9 +511,7 @@ export function InvestmentsView({
       <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 lg:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">
-              Инвестиции
-            </h2>
+            <h2 className="text-xl font-semibold text-slate-900">Инвестиции</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
               Раздел показывает truthful cash view по инвестиционным счетам:
               обзор структуры портфеля, ручной ввод покупок и продаж, а также
@@ -569,7 +567,9 @@ export function InvestmentsView({
             handleSelectAccountClick(accountId)
             setActiveInvestmentTab('settings')
           }}
-          onOpenSettingsWithoutSelection={() => setActiveInvestmentTab('settings')}
+          onOpenSettingsWithoutSelection={() =>
+            setActiveInvestmentTab('settings')
+          }
         />
       ) : null}
 

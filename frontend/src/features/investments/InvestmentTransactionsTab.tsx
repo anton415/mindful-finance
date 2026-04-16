@@ -1,8 +1,5 @@
 import { type FormEvent } from 'react'
-import type {
-  TransactionDirection,
-  TransactionDto,
-} from '../../api'
+import type { TransactionDirection, TransactionDto } from '../../api'
 import { formatMoneyInput } from '../../money-input'
 import {
   formatIsoDateRu,
