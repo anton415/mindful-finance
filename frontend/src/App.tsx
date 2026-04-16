@@ -835,6 +835,7 @@ function App() {
         />
       ) : (
         <InvestmentsView
+          key={accountsStatus}
           status={accountsStatus}
           accounts={accounts}
           selectedAccountId={selectedAccountId}
