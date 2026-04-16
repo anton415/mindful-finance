@@ -35,6 +35,7 @@ import {
   type PersonalFinanceCardListItem,
   type PersonalFinanceTab,
 } from './features/personal-finance'
+import { AppShell, type ViewTab } from './features/app-shell'
 import { formatMoneyInput, normalizeMoneyInput } from './money-input'
 
 interface DashboardData {
@@ -49,7 +50,6 @@ interface AccountWithBalance extends AccountDto {
 }
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
-type ViewTab = 'dashboard' | 'accounts' | 'personal-finance'
 type TransactionDirectionFilter = 'ALL' | 'INFLOW' | 'OUTFLOW'
 type CreateAccountStatus = 'idle' | 'submitting' | 'error'
 type CreateTransactionStatus = 'idle' | 'submitting' | 'error'
@@ -491,8 +491,6 @@ function App() {
     })
   }, [transactions, directionFilter, memoFilter])
 
-  const localizedTitle = getViewTitle(activeView)
-  const localizedDescription = getViewDescription(activeView)
   const headerContextLabel =
     activeView === 'personal-finance'
       ? activePersonalFinanceTab === 'settings'
@@ -813,124 +811,89 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen w-full px-4 py-8 sm:px-6 sm:py-14">
-      <section className="rounded-2xl border border-slate-200 bg-white/85 p-5 shadow-sm backdrop-blur lg:p-8">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-              Mindful Finance
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
-              {localizedTitle}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-              {localizedDescription}
-            </p>
-          </div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            {headerContextLabel}
-          </p>
-        </header>
-
-        <nav className="mt-8 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-          <TabButton
-            label="Обзор"
-            isActive={activeView === 'dashboard'}
-            onClick={() => setActiveView('dashboard')}
-          />
-          <TabButton
-            label="Инвестиции"
-            isActive={activeView === 'accounts'}
-            onClick={() => setActiveView('accounts')}
-          />
-          <TabButton
-            label="Личные финансы"
-            isActive={activeView === 'personal-finance'}
-            onClick={() => setActiveView('personal-finance')}
-          />
-        </nav>
-
-        <section className="mt-6">
-          {activeView === 'dashboard' ? (
-            <DashboardView
-              status={dashboardStatus}
-              dashboard={dashboard}
-              errorMessage={dashboardErrorMessage}
-              onRetry={() => {
-                setDashboardErrorMessage(null)
-                setDashboardReloadTick((tick) => tick + 1)
-              }}
-            />
-          ) : activeView === 'personal-finance' ? (
-            <PersonalFinanceView
-              status={personalFinanceStatus}
-              cards={personalFinanceCards}
-              activeSnapshots={activePersonalFinanceSnapshots}
-              settingsSnapshot={selectedPersonalFinanceSettingsSnapshot}
-              selectedCardId={selectedPersonalFinanceCardId}
-              activeTab={activePersonalFinanceTab}
-              year={selectedPersonalFinanceYear}
-              errorMessage={personalFinanceErrorMessage}
-              onSelectTab={setActivePersonalFinanceTab}
-              onSelectYear={setSelectedPersonalFinanceYear}
-              onSelectCard={setSelectedPersonalFinanceCardId}
-              onRetry={() => {
-                setPersonalFinanceErrorMessage(null)
-                setPersonalFinanceReloadTick((tick) => tick + 1)
-              }}
-              onCreateCard={handleCreatePersonalFinanceCard}
-              onSaveExpenseActual={handleSaveExpenseActual}
-              onCreateTransfer={handleCreatePersonalFinanceTransfer}
-              onSaveIncomeActual={handleSaveIncomeActual}
-              onSaveIncomePlan={handleSaveIncomePlan}
-              onRenameCard={handleRenamePersonalFinanceCard}
-              onSaveSettings={handleSavePersonalFinanceSettings}
-              onArchiveCard={handleArchivePersonalFinanceCard}
-              onRestoreCard={handleRestorePersonalFinanceCard}
-              onDeleteCard={handleDeletePersonalFinanceCard}
-            />
-          ) : (
-            <AccountsView
-              status={accountsStatus}
-              accounts={accounts}
-              selectedAccountId={selectedAccountId}
-              selectedAccount={selectedAccount}
-              transactionsStatus={transactionsStatus}
-              transactionsErrorMessage={transactionsErrorMessage}
-              filteredTransactions={filteredTransactions}
-              totalTransactionsCount={transactions.length}
-              directionFilter={directionFilter}
-              memoFilter={memoFilter}
-              onDirectionFilterChange={setDirectionFilter}
-              onMemoFilterChange={setMemoFilter}
-              onSelectAccount={handleAccountSelect}
-              createAccountStatus={createAccountStatus}
-              createAccountErrorMessage={createAccountErrorMessage}
-              onCreateAccount={handleCreateAccount}
-              onUpdateAccount={handleUpdateAccount}
-              onDeleteAccount={handleDeleteAccount}
-              createTransactionStatus={createTransactionStatus}
-              createTransactionErrorMessage={createTransactionErrorMessage}
-              onCreateTransaction={handleCreateTransaction}
-              onUpdateTransaction={handleUpdateTransaction}
-              onDeleteTransaction={handleDeleteTransaction}
-              csvImportStatus={csvImportStatus}
-              csvImportErrorMessage={csvImportErrorMessage}
-              csvImportResult={csvImportResult}
-              onImportTransactionsCsv={handleImportTransactionsCsv}
-              errorMessage={accountsErrorMessage}
-              onRetryAccounts={() => {
-                setAccountsErrorMessage(null)
-                setAccountsReloadTick((tick) => tick + 1)
-              }}
-              onRetryTransactions={() => {
-                setTransactionsReloadTick((tick) => tick + 1)
-              }}
-            />
-          )}
-        </section>
-      </section>
-    </main>
+    <AppShell
+      activeView={activeView}
+      headerContextLabel={headerContextLabel}
+      onSelectView={setActiveView}
+    >
+      {activeView === 'dashboard' ? (
+        <DashboardView
+          status={dashboardStatus}
+          dashboard={dashboard}
+          errorMessage={dashboardErrorMessage}
+          onRetry={() => {
+            setDashboardErrorMessage(null)
+            setDashboardReloadTick((tick) => tick + 1)
+          }}
+        />
+      ) : activeView === 'personal-finance' ? (
+        <PersonalFinanceView
+          status={personalFinanceStatus}
+          cards={personalFinanceCards}
+          activeSnapshots={activePersonalFinanceSnapshots}
+          settingsSnapshot={selectedPersonalFinanceSettingsSnapshot}
+          selectedCardId={selectedPersonalFinanceCardId}
+          activeTab={activePersonalFinanceTab}
+          year={selectedPersonalFinanceYear}
+          errorMessage={personalFinanceErrorMessage}
+          onSelectTab={setActivePersonalFinanceTab}
+          onSelectYear={setSelectedPersonalFinanceYear}
+          onSelectCard={setSelectedPersonalFinanceCardId}
+          onRetry={() => {
+            setPersonalFinanceErrorMessage(null)
+            setPersonalFinanceReloadTick((tick) => tick + 1)
+          }}
+          onCreateCard={handleCreatePersonalFinanceCard}
+          onSaveExpenseActual={handleSaveExpenseActual}
+          onCreateTransfer={handleCreatePersonalFinanceTransfer}
+          onSaveIncomeActual={handleSaveIncomeActual}
+          onSaveIncomePlan={handleSaveIncomePlan}
+          onRenameCard={handleRenamePersonalFinanceCard}
+          onSaveSettings={handleSavePersonalFinanceSettings}
+          onArchiveCard={handleArchivePersonalFinanceCard}
+          onRestoreCard={handleRestorePersonalFinanceCard}
+          onDeleteCard={handleDeletePersonalFinanceCard}
+        />
+      ) : (
+        <AccountsView
+          status={accountsStatus}
+          accounts={accounts}
+          selectedAccountId={selectedAccountId}
+          selectedAccount={selectedAccount}
+          transactionsStatus={transactionsStatus}
+          transactionsErrorMessage={transactionsErrorMessage}
+          filteredTransactions={filteredTransactions}
+          totalTransactionsCount={transactions.length}
+          directionFilter={directionFilter}
+          memoFilter={memoFilter}
+          onDirectionFilterChange={setDirectionFilter}
+          onMemoFilterChange={setMemoFilter}
+          onSelectAccount={handleAccountSelect}
+          createAccountStatus={createAccountStatus}
+          createAccountErrorMessage={createAccountErrorMessage}
+          onCreateAccount={handleCreateAccount}
+          onUpdateAccount={handleUpdateAccount}
+          onDeleteAccount={handleDeleteAccount}
+          createTransactionStatus={createTransactionStatus}
+          createTransactionErrorMessage={createTransactionErrorMessage}
+          onCreateTransaction={handleCreateTransaction}
+          onUpdateTransaction={handleUpdateTransaction}
+          onDeleteTransaction={handleDeleteTransaction}
+          csvImportStatus={csvImportStatus}
+          csvImportErrorMessage={csvImportErrorMessage}
+          csvImportResult={csvImportResult}
+          onImportTransactionsCsv={handleImportTransactionsCsv}
+          errorMessage={accountsErrorMessage}
+          onRetryAccounts={() => {
+            setAccountsErrorMessage(null)
+            setAccountsReloadTick((tick) => tick + 1)
+          }}
+          onRetryTransactions={() => {
+            setTransactionsReloadTick((tick) => tick + 1)
+          }}
+        />
+      )}
+    </AppShell>
   )
 }
 
@@ -2150,28 +2113,6 @@ function AccountsView({
   )
 }
 
-interface TabButtonProps {
-  label: string
-  isActive: boolean
-  onClick: () => void
-}
-
-function TabButton({ label, isActive, onClick }: TabButtonProps) {
-  const activeClasses = isActive
-    ? 'bg-white text-slate-900 shadow-sm'
-    : 'bg-transparent text-slate-500 hover:text-slate-800'
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeClasses}`}
-    >
-      {label}
-    </button>
-  )
-}
-
 interface MetricCardProps {
   title: string
   subtitle: string
@@ -2486,26 +2427,6 @@ function getAccountCurrencyOptions(): string[] {
       dynamicOptions.map((currencyCode) => currencyCode.toUpperCase()),
     ),
   ].sort((left, right) => left.localeCompare(right))
-}
-
-function getViewTitle(view: ViewTab): string {
-  if (view === 'accounts') {
-    return 'Инвестиции'
-  }
-  if (view === 'personal-finance') {
-    return 'Личные финансы'
-  }
-  return 'Обзор'
-}
-
-function getViewDescription(view: ViewTab): string {
-  if (view === 'accounts') {
-    return 'Инвестиционные счета и активы с балансами, деталями транзакций и простыми фильтрами.'
-  }
-  if (view === 'personal-finance') {
-    return 'Ручной yearly review по картам: факт расходов, лимиты, фактический доход и прогноз.'
-  }
-  return 'Спокойный срез капитала и метрик финансового спокойствия.'
 }
 
 function readNavigationFromUrl(): NavigationState {
