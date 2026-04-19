@@ -10,10 +10,20 @@
             "preLaunchTask": "Mindful Finance: Start local Postgres",
             "env": {
                 "SPRING_PROFILES_ACTIVE": "postgres",
+                "SERVER_PORT": "${input:mindfulFinanceApiPort}",
+                "MINDFUL_FINANCE_API_PORT": "${input:mindfulFinanceApiPort}",
                 "MINDFUL_FINANCE_DB_URL": "jdbc:postgresql://localhost:55432/mindfulfinance",
                 "MINDFUL_FINANCE_DB_USERNAME": "mindfulfinance",
                 "MINDFUL_FINANCE_DB_PASSWORD": "mindfulfinance"
             }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "mindfulFinanceApiPort",
+            "type": "promptString",
+            "description": "API port for local launch",
+            "default": "8080"
         }
     ]
 }

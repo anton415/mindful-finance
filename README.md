@@ -38,6 +38,11 @@
 make dev
 ```
 
+Безопасно посмотреть orchestration-план без запуска процессов можно через:
+```bash
+make -n dev
+```
+
 Что делает `make dev`:
 - подготавливает backend-модули для запуска API без отдельного ручного `mvn install`;
 - поднимает PostgreSQL из `backend/docker-compose.yml`;
@@ -47,13 +52,13 @@ make dev
 - при первом запуске или изменении `frontend/package-lock.json` автоматически выполняет `npm ci`.
 
 После старта:
-- API доступен на `http://localhost:8080`;
-- health-check: `curl http://localhost:8080/health`;
+- API доступен на `http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}`;
+- health-check: `curl http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}/health`;
 - ожидаемый ответ:
 ```json
 {"status":"ok"}
 ```
-- frontend доступен на `http://localhost:5173`.
+- frontend доступен на `http://localhost:${MINDFUL_FINANCE_FRONTEND_PORT:-5173}`.
 
 Остановка приложения:
 - `Ctrl+C` завершает backend и frontend;
@@ -78,18 +83,28 @@ make build
 
 Локальная база данных доступна на `localhost:55432`, чтобы не конфликтовать с PostgreSQL на `5432`.
 
-По умолчанию frontend использует `VITE_API_BASE_URL=/api`, а Vite-прокси перенаправляет запросы на `http://localhost:8080`.
+По умолчанию frontend использует `VITE_API_BASE_URL=/api`, а Vite-прокси перенаправляет запросы на `http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}`.
 
 При необходимости параметры подключения к БД можно переопределить переменными окружения:
 - `MINDFUL_FINANCE_DB_URL`
 - `MINDFUL_FINANCE_DB_USERNAME`
 - `MINDFUL_FINANCE_DB_PASSWORD`
 
+Порты локального runtime тоже можно переопределить переменными окружения:
+- `MINDFUL_FINANCE_API_PORT` для Spring Boot API;
+- `MINDFUL_FINANCE_FRONTEND_PORT` для Vite dev server;
+- `VITE_DEV_PROXY_TARGET`, если frontend должен проксировать API не на локальный backend-порт, а на другой target.
+
 ## ☕ Backend-only запуск для разработки
 
 Если нужен только API без frontend, используй отдельный backend runtime из корня репозитория:
 ```bash
 make backend-dev
+```
+
+Безопасный dry-run для этого пути:
+```bash
+make -n backend-dev
 ```
 
 Этот режим:
@@ -99,6 +114,7 @@ make backend-dev
 - использует те же `MINDFUL_FINANCE_DB_*`, что и `make dev`.
 
 Для VS Code в репозитории сохранён launch config `Mindful Finance API (postgres)` и pre-launch task, который поднимает локальный PostgreSQL перед стартом приложения.
+При запуске VS Code попросит указать API port; если просто нажать Enter, будет использован `8080`.
 
 Ручной локальный backend-запуск без профиля `postgres` считается вспомогательным in-memory режимом, а не основным dev-runtime.
 

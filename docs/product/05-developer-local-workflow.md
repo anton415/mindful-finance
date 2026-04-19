@@ -37,15 +37,21 @@
 Проверка локального runtime smoke:
 
 1. `make dev`
-2. `curl http://localhost:8080/health` (ожидаемый ответ: `{"status":"ok"}`)
-3. открыть `http://localhost:5173`
+2. `curl http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}/health` (ожидаемый ответ: `{"status":"ok"}`)
+3. открыть `http://localhost:${MINDFUL_FINANCE_FRONTEND_PORT:-5173}`
 4. `make down`
+
+Перед реальным запуском допускается безопасный dry-run orchestration через `make -n dev`.
 
 Backend-only smoke для разработки с сохранением тех же данных:
 
 1. `make backend-dev`
-2. `curl http://localhost:8080/health` (ожидаемый ответ: `{"status":"ok"}`)
+2. `curl http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}/health` (ожидаемый ответ: `{"status":"ok"}`)
 3. остановить процесс через `Ctrl+C`
+
+Для backend-only пути безопасный dry-run выполняется через `make -n backend-dev`.
+
+Если `8080` или `5173` заняты, локальный runtime должен запускаться через переопределение `MINDFUL_FINANCE_API_PORT` и/или `MINDFUL_FINANCE_FRONTEND_PORT`, а не через правку кода.
 
 Локальный PostgreSQL хранит данные в persistent Docker volume и должен переживать `make down`. Если нужен чистый старт базы, он выполняется явно через `docker compose -f backend/docker-compose.yml down -v`.
 
