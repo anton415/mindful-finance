@@ -63,6 +63,27 @@ public enum DomainErrorCode {
   /** Indicates that a Transaction was created with a null createdAt timestamp. */
   TRANSACTION_CREATED_AT_NULL,
 
+  /** Indicates that investment trade details are incomplete. */
+  TRANSACTION_TRADE_FIELDS_INCOMPLETE,
+
+  /** Indicates that investment trade symbol is null or blank. */
+  TRANSACTION_TRADE_INSTRUMENT_SYMBOL_NULL_OR_BLANK,
+
+  /** Indicates that investment trade quantity is null, negative, or zero. */
+  TRANSACTION_TRADE_QUANTITY_NULL_OR_NEGATIVE_OR_ZERO,
+
+  /** Indicates that investment trade unit price is null, negative, or zero. */
+  TRANSACTION_TRADE_UNIT_PRICE_NULL_OR_NEGATIVE_OR_ZERO,
+
+  /** Indicates that investment trade fee is null or negative. */
+  TRANSACTION_TRADE_FEE_NULL_OR_NEGATIVE,
+
+  /** Indicates that investment trade monetary fields use different currencies. */
+  TRANSACTION_TRADE_CURRENCY_MISMATCH,
+
+  /** Indicates that transaction cash amount does not match trade details. */
+  TRANSACTION_TRADE_AMOUNT_MISMATCH,
+
   /** Indicates that a LifeGoal was created with a null id. */
   LIFEGOAL_ID_NULL,
 

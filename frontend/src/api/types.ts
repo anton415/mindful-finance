@@ -32,15 +32,23 @@ export type TransactionDirection = 'INFLOW' | 'OUTFLOW'
 export interface CreateTransactionRequest {
   occurredOn: IsoDate
   direction: TransactionDirection
-  amount: DecimalAmount
+  amount?: DecimalAmount
   memo: string
+  instrumentSymbol?: string
+  quantity?: DecimalAmount
+  unitPrice?: DecimalAmount
+  feeAmount?: DecimalAmount
 }
 
 export interface UpdateTransactionRequest {
   occurredOn: IsoDate
   direction: TransactionDirection
-  amount: DecimalAmount
+  amount?: DecimalAmount
   memo: string
+  instrumentSymbol?: string
+  quantity?: DecimalAmount
+  unitPrice?: DecimalAmount
+  feeAmount?: DecimalAmount
 }
 
 export interface CreateTransactionResponse {
@@ -55,11 +63,27 @@ export interface ImportTransactionsCsvResponse {
 
 export interface TransactionDto {
   id: string
+  accountId: string
+  accountName: string
   occurredOn: IsoDate
   direction: TransactionDirection
   amount: DecimalAmount
   currency: CurrencyCode
   memo: string | null
+  instrumentSymbol: string | null
+  quantity: DecimalAmount | null
+  unitPrice: DecimalAmount | null
+  feeAmount: DecimalAmount | null
+}
+
+export type InstrumentKind = 'SHARE' | 'FUND' | 'BOND'
+
+export interface InstrumentOptionDto {
+  symbol: string
+  shortName: string | null
+  name: string | null
+  isin: string | null
+  kind: InstrumentKind
 }
 
 export interface MoneyDto {

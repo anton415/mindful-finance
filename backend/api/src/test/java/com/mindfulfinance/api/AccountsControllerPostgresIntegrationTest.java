@@ -2,6 +2,8 @@ package com.mindfulfinance.api;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -11,12 +13,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.mindfulfinance.application.ports.InstrumentCatalog;
+import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
+import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -46,6 +53,9 @@ public class AccountsControllerPostgresIntegrationTest {
   @Autowired MockMvc mockMvc;
 
   @Autowired JdbcTemplate jdbcTemplate;
+  @Autowired CreatePersonalFinanceCard createPersonalFinanceCard;
+  @Autowired SavePersonalFinanceSettings savePersonalFinanceSettings;
+  @MockBean InstrumentCatalog instrumentCatalog;
 
   @BeforeEach
   void cleanDatabase() {
@@ -91,6 +101,8 @@ public class AccountsControllerPostgresIntegrationTest {
     mockMvc
         .perform(get("/accounts/{accountId}/transactions", accountId))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].accountId").value(accountId))
+        .andExpect(jsonPath("$[0].accountName").value("Cash"))
         .andExpect(jsonPath("$[0].direction").value("INFLOW"))
         .andExpect(jsonPath("$[0].amount").value("100.00"));
 
@@ -99,6 +111,186 @@ public class AccountsControllerPostgresIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.amount").value("100.00"))
         .andExpect(jsonPath("$.currency").value("USD"));
+  }
+
+  @Test
+  public void trade_transaction_endpoints_persist_trade_fields_with_postgres_profile()
+      throws Exception {
+    MvcResult accountResult =
+        mockMvc
+            .perform(
+                post("/accounts")
+                    .contentType("application/json")
+                    .content("{\"name\":\"Brokerage\",\"currency\":\"USD\",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    String accountId =
+        JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+    mockMvc
+        .perform(
+            post("/accounts/{accountId}/transactions", accountId)
+                .contentType("application/json")
+                .content(
+                    """
+                    {
+                      "occurredOn":"2026-03-02",
+                      "direction":"OUTFLOW",
+                      "memo":"Buy AAPL",
+                      "instrumentSymbol":"aapl",
+                      "quantity":"2",
+                      "unitPrice":"100.00",
+                      "feeAmount":"1.50"
+                    }
+                    """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.transactionId").exists());
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/transactions", accountId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].accountId").value(accountId))
+        .andExpect(jsonPath("$[0].accountName").value("Brokerage"))
+        .andExpect(jsonPath("$[0].amount").value("201.50"))
+        .andExpect(jsonPath("$[0].instrumentSymbol").value("AAPL"))
+        .andExpect(jsonPath("$[0].quantity").value("2"))
+        .andExpect(jsonPath("$[0].unitPrice").value("100.00"))
+        .andExpect(jsonPath("$[0].feeAmount").value("1.50"));
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/balance", accountId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.amount").value("-201.50"))
+        .andExpect(jsonPath("$.currency").value("USD"));
+  }
+
+  @Test
+  public void investment_transactions_endpoint_returns_global_sorted_rows_with_postgres_profile()
+      throws Exception {
+    String alphaAccountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType("application/json")
+                        .content(
+                            "{\"name\":\"Alpha Brokerage\",\"currency\":\"USD\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+    String betaAccountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType("application/json")
+                        .content(
+                            "{\"name\":\"Beta Cash\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+
+    String alphaSameDayId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", alphaAccountId)
+                        .contentType("application/json")
+                        .content(
+                            "{\"occurredOn\":\"2026-04-15\",\"direction\":\"OUTFLOW\",\"amount\":\"10.00\",\"memo\":\"Alpha same day\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+    String olderAlphaId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", alphaAccountId)
+                        .contentType("application/json")
+                        .content(
+                            "{\"occurredOn\":\"2026-04-10\",\"direction\":\"INFLOW\",\"amount\":\"50.00\",\"memo\":\"Alpha older\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+    String betaSameDayLaterCreatedId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", betaAccountId)
+                        .contentType("application/json")
+                        .content(
+                            "{\"occurredOn\":\"2026-04-15\",\"direction\":\"INFLOW\",\"amount\":\"200.00\",\"memo\":\"Beta same day\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+
+    PersonalFinanceCard card =
+        createPersonalFinanceCard.create(new CreatePersonalFinanceCard.Command("Основная карта"));
+    savePersonalFinanceSettings.save(
+        new SavePersonalFinanceSettings.Command(
+            card.id(),
+            new java.math.BigDecimal("1000.00"),
+            java.util.Map.of(),
+            new java.math.BigDecimal("0.00"),
+            new java.math.BigDecimal("0.00")));
+
+    mockMvc
+        .perform(get("/investment-transactions"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0].id").value(betaSameDayLaterCreatedId))
+        .andExpect(jsonPath("$[0].accountId").value(betaAccountId))
+        .andExpect(jsonPath("$[0].accountName").value("Beta Cash"))
+        .andExpect(jsonPath("$[1].id").value(alphaSameDayId))
+        .andExpect(jsonPath("$[1].accountId").value(alphaAccountId))
+        .andExpect(jsonPath("$[1].accountName").value("Alpha Brokerage"))
+        .andExpect(jsonPath("$[2].id").value(olderAlphaId))
+        .andExpect(jsonPath("$[2].accountId").value(alphaAccountId))
+        .andExpect(jsonPath("$[2].accountName").value("Alpha Brokerage"));
+  }
+
+  @Test
+  public void account_instruments_endpoint_returns_rows_with_postgres_profile() throws Exception {
+    String accountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType("application/json")
+                        .content(
+                            "{\"name\":\"Brokerage\",\"currency\":\"RUB\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+    given(instrumentCatalog.search(any()))
+        .willReturn(
+            java.util.List.of(
+                new InstrumentCatalog.InstrumentOption(
+                    "SBER",
+                    "Сбербанк",
+                    "ПАО Сбербанк",
+                    "RU0009029540",
+                    InstrumentCatalog.Kind.SHARE)));
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/instruments", accountId).param("q", "SBER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].symbol").value("SBER"))
+        .andExpect(jsonPath("$[0].kind").value("SHARE"));
   }
 
   @Test

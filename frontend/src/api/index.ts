@@ -26,6 +26,8 @@ export type {
   ExpenseCategoryClassification,
   ExpenseLimitPeriod,
   ImportTransactionsCsvResponse,
+  InstrumentKind,
+  InstrumentOptionDto,
   IsoDate,
   MoneyDto,
   PersonalExpenseCategoryCode,

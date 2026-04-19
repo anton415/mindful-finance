@@ -14,6 +14,7 @@ import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.transaction.Transaction;
 import com.mindfulfinance.domain.transaction.TransactionDirection;
 import com.mindfulfinance.domain.transaction.TransactionId;
+import com.mindfulfinance.domain.transaction.TransactionTrade;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -53,7 +54,11 @@ public class UpdateTransactionTest {
                 LocalDate.parse("2026-03-03"),
                 INFLOW,
                 new BigDecimal("75.50"),
-                "   "));
+                "   ",
+                null,
+                null,
+                null,
+                null));
 
     assertTrue(updated.isPresent());
     assertEquals(transactionId, updated.get().id());
@@ -82,7 +87,11 @@ public class UpdateTransactionTest {
                 LocalDate.parse("2026-03-03"),
                 INFLOW,
                 new BigDecimal("75.50"),
-                "Salary"));
+                "Salary",
+                null,
+                null,
+                null,
+                null));
 
     assertNotNull(updated);
     assertTrue(updated.isEmpty());
@@ -127,13 +136,58 @@ public class UpdateTransactionTest {
                         LocalDate.parse("2026-03-01"),
                         INFLOW,
                         new BigDecimal("100.00"),
-                        "bonus")));
+                        "bonus",
+                        null,
+                        null,
+                        null,
+                        null)));
 
     assertEquals(
         "Transaction with same date, direction, amount, and memo already exists",
         exception.getMessage());
     assertEquals(first, transactions.findByAccountId(accountId).get(0));
     assertEquals(second, transactions.findByAccountId(accountId).get(1));
+  }
+
+  @Test
+  @DisplayName("Should derive amount from trade details when updating transaction")
+  void shouldDeriveAmountFromTradeDetailsWhenUpdatingTransaction() {
+    AccountId accountId = AccountId.random();
+    TransactionId transactionId = TransactionId.random();
+    Instant createdAt = Instant.parse("2026-03-01T10:15:30Z");
+    Transaction original =
+        transaction(
+            transactionId,
+            accountId,
+            "2026-03-01",
+            OUTFLOW,
+            "25.00",
+            "USD",
+            "Initial",
+            createdAt);
+    transactions.save(original);
+
+    Optional<Transaction> updated =
+        useCase.update(
+            new UpdateTransaction.Command(
+                accountId,
+                transactionId,
+                Currency.getInstance("USD"),
+                LocalDate.parse("2026-03-03"),
+                OUTFLOW,
+                null,
+                "Buy AAPL",
+                "aapl",
+                new BigDecimal("2"),
+                new BigDecimal("100.00"),
+                new BigDecimal("1.50")));
+
+    assertTrue(updated.isPresent());
+    assertEquals(new BigDecimal("201.50"), updated.get().amount().amount());
+    assertEquals("AAPL", updated.get().trade().instrumentSymbol());
+    assertEquals(new BigDecimal("2"), updated.get().trade().quantity());
+    assertEquals(new BigDecimal("100.00"), updated.get().trade().unitPrice().amount());
+    assertEquals(new BigDecimal("1.50"), updated.get().trade().feeAmount().amount());
   }
 
   private static Transaction transaction(

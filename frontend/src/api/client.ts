@@ -1,4 +1,5 @@
 import { createHttpClient, type HttpClientConfig } from './http'
+import { decodeTransactionDtoList } from './transaction-decoder'
 import type {
   AccountDto,
   CreateAccountRequest,
@@ -10,6 +11,7 @@ import type {
   CreateTransactionResponse,
   CurrencyTotalsDto,
   ImportTransactionsCsvResponse,
+  InstrumentOptionDto,
   IsoDate,
   MoneyDto,
   PersonalFinanceCardDto,
@@ -61,6 +63,12 @@ export interface ApiClient {
     accountId: string,
     signal?: AbortSignal,
   ): Promise<TransactionDto[]>
+  listInvestmentTransactions(signal?: AbortSignal): Promise<TransactionDto[]>
+  searchAccountInstruments(
+    accountId: string,
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<InstrumentOptionDto[]>
   getAccountBalance(accountId: string, signal?: AbortSignal): Promise<MoneyDto>
   getNetWorth(signal?: AbortSignal): Promise<CurrencyTotalsDto>
   getMonthlyBurn(options?: {
@@ -223,9 +231,42 @@ export function createApiClient(config: HttpClientConfig = {}): ApiClient {
       accountId: string,
       signal?: AbortSignal,
     ): Promise<TransactionDto[]> {
-      return http.getJson<TransactionDto[]>(
-        `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+      return http
+        .getJson<unknown>(
+          `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+          {
+            signal,
+          },
+        )
+        .then((response) =>
+          decodeTransactionDtoList(
+            response,
+            `/accounts/${toEncodedAccountId(accountId)}/transactions`,
+          ),
+        )
+    },
+
+    listInvestmentTransactions(signal?: AbortSignal): Promise<TransactionDto[]> {
+      return http
+        .getJson<unknown>('/investment-transactions', {
+          signal,
+        })
+        .then((response) =>
+          decodeTransactionDtoList(response, '/investment-transactions'),
+        )
+    },
+
+    searchAccountInstruments(
+      accountId: string,
+      query: string,
+      signal?: AbortSignal,
+    ): Promise<InstrumentOptionDto[]> {
+      return http.getJson<InstrumentOptionDto[]>(
+        `/accounts/${toEncodedAccountId(accountId)}/instruments`,
         {
+          query: {
+            q: query.trim(),
+          },
           signal,
         },
       )

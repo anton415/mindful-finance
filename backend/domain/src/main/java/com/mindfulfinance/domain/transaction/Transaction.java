@@ -6,12 +6,15 @@ import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_CREAT
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_DIRECTION_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_ID_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_OCCURRED_ON_NULL;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_TRADE_AMOUNT_MISMATCH;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_TRADE_FIELDS_INCOMPLETE;
 
 import com.mindfulfinance.domain.account.AccountId;
 import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.shared.DomainException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 
 /**
  * Represents a financial transaction associated with an account. This class is immutable and
@@ -24,7 +27,19 @@ public record Transaction(
     TransactionDirection direction,
     Money amount,
     String memo,
-    Instant createdAt) {
+    Instant createdAt,
+    TransactionTrade trade) {
+  public Transaction(
+      TransactionId id,
+      AccountId accountId,
+      LocalDate occurredOn,
+      TransactionDirection direction,
+      Money amount,
+      String memo,
+      Instant createdAt) {
+    this(id, accountId, occurredOn, direction, amount, memo, createdAt, null);
+  }
+
   /**
    * Constructs a new Transaction with the given parameters.
    *
@@ -36,6 +51,7 @@ public record Transaction(
    * @param amount the amount of money involved in the Transaction, must not be null
    * @param memo an optional memo or note about the Transaction, can be null
    * @param createdAt the timestamp when the Transaction was created, must not be null
+   * @param trade optional investment trade details associated with the Transaction
    */
   public Transaction {
     if (memo != null) {
@@ -71,6 +87,37 @@ public record Transaction(
       throw new DomainException(
           TRANSACTION_CREATED_AT_NULL, "Transaction createdAt cannot be null", null);
     }
+
+    if (trade != null) {
+      Money derivedAmount = trade.cashAmount(direction);
+      if (!amount.currency().equals(derivedAmount.currency())
+          || amount.amount().compareTo(derivedAmount.amount()) != 0) {
+        throw new DomainException(
+            TRANSACTION_TRADE_AMOUNT_MISMATCH,
+            "Transaction amount must match trade cash effect",
+            Map.of("amount", amount, "derivedAmount", derivedAmount, "trade", trade));
+      }
+    }
+  }
+
+  public static TransactionTrade trade(
+      String instrumentSymbol, java.math.BigDecimal quantity, Money unitPrice, Money feeAmount) {
+    boolean hasAnyTradeField =
+        instrumentSymbol != null || quantity != null || unitPrice != null || feeAmount != null;
+    boolean hasAllTradeFields =
+        instrumentSymbol != null && quantity != null && unitPrice != null && feeAmount != null;
+
+    if (!hasAnyTradeField) {
+      return null;
+    }
+    if (!hasAllTradeFields) {
+      throw new DomainException(
+          TRANSACTION_TRADE_FIELDS_INCOMPLETE,
+          "Transaction trade requires instrumentSymbol, quantity, unitPrice, and feeAmount",
+          null);
+    }
+
+    return new TransactionTrade(instrumentSymbol, quantity, unitPrice, feeAmount);
   }
 
   /**

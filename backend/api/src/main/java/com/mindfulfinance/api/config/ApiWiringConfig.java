@@ -8,7 +8,9 @@ import com.mindfulfinance.api.InMemoryMonthlyExpenseLimitRepository;
 import com.mindfulfinance.api.InMemoryMonthlyIncomeActualRepository;
 import com.mindfulfinance.api.InMemoryPersonalFinanceCardRepository;
 import com.mindfulfinance.api.InMemoryTransactionRepository;
+import com.mindfulfinance.api.MoexInstrumentCatalog;
 import com.mindfulfinance.application.ports.AccountRepository;
+import com.mindfulfinance.application.ports.InstrumentCatalog;
 import com.mindfulfinance.application.ports.IncomeForecastRepository;
 import com.mindfulfinance.application.ports.IncomePlanRepository;
 import com.mindfulfinance.application.ports.MonthlyExpenseActualRepository;
@@ -28,8 +30,10 @@ import com.mindfulfinance.application.usecases.DeleteTransaction;
 import com.mindfulfinance.application.usecases.GetCardPersonalFinanceSnapshot;
 import com.mindfulfinance.application.usecases.ImportTransactions;
 import com.mindfulfinance.application.usecases.ListPersonalFinanceCards;
+import com.mindfulfinance.application.usecases.ListInvestmentTransactions;
 import com.mindfulfinance.application.usecases.RenamePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.RestorePersonalFinanceCard;
+import com.mindfulfinance.application.usecases.SearchAccountInstruments;
 import com.mindfulfinance.application.usecases.SaveIncomeForecast;
 import com.mindfulfinance.application.usecases.SaveIncomePlan;
 import com.mindfulfinance.application.usecases.SaveMonthlyExpenseActual;
@@ -53,8 +57,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.web.client.RestClient;
 
 @Configuration
 public class ApiWiringConfig {
@@ -217,6 +223,38 @@ public class ApiWiringConfig {
   @Bean
   public UpdateTransaction updateTransaction(TransactionRepository transactionRepository) {
     return new UpdateTransaction(transactionRepository);
+  }
+
+  @Bean
+  public RestClient moexRestClient(
+      @Value("${mindful-finance.moex.base-url:https://iss.moex.com/iss}") String baseUrl) {
+    SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+    requestFactory.setConnectTimeout(3000);
+    requestFactory.setReadTimeout(3000);
+    return RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
+  }
+
+  @Bean
+  public InstrumentCatalog instrumentCatalog(RestClient moexRestClient) {
+    return new MoexInstrumentCatalog(moexRestClient);
+  }
+
+  @Bean
+  public SearchAccountInstruments searchAccountInstruments(
+      AccountRepository accountRepository,
+      PersonalFinanceCardRepository personalFinanceCardRepository,
+      InstrumentCatalog instrumentCatalog) {
+    return new SearchAccountInstruments(
+        accountRepository, personalFinanceCardRepository, instrumentCatalog);
+  }
+
+  @Bean
+  public ListInvestmentTransactions listInvestmentTransactions(
+      AccountRepository accountRepository,
+      PersonalFinanceCardRepository personalFinanceCardRepository,
+      TransactionRepository transactionRepository) {
+    return new ListInvestmentTransactions(
+        accountRepository, personalFinanceCardRepository, transactionRepository);
   }
 
   @Bean

@@ -260,11 +260,7 @@ function App() {
   }, [activeView, accountsReloadTick])
 
   useEffect(() => {
-    if (
-      activeView !== 'accounts' ||
-      !selectedAccountId ||
-      !accounts.some((account) => account.id === selectedAccountId)
-    ) {
+    if (activeView !== 'accounts') {
       return
     }
 
@@ -275,19 +271,13 @@ function App() {
       setTransactionsErrorMessage(null)
 
       try {
-        const rows = await apiClient.listAccountTransactions(
-          selectedAccountId,
-          controller.signal,
-        )
+        const rows = await apiClient.listInvestmentTransactions(controller.signal)
 
         if (controller.signal.aborted) {
           return
         }
 
-        const sortedRows = [...rows].sort((left, right) =>
-          right.occurredOn.localeCompare(left.occurredOn),
-        )
-        setTransactions(sortedRows)
+        setTransactions(rows)
         setTransactionsStatus('ready')
         setCreateTransactionStatus('idle')
         setCreateTransactionErrorMessage(null)
@@ -306,7 +296,7 @@ function App() {
     return () => {
       controller.abort()
     }
-  }, [activeView, accounts, selectedAccountId, transactionsReloadTick])
+  }, [activeView, transactionsReloadTick])
 
   useEffect(() => {
     if (activeView !== 'personal-finance') {
@@ -470,6 +460,16 @@ function App() {
     })
   }, [transactions, directionFilter, memoFilter])
 
+  const selectedAccountTransactionsCount = useMemo(() => {
+    if (!selectedAccountId) {
+      return 0
+    }
+
+    return transactions.filter(
+      (transaction) => transaction.accountId === selectedAccountId,
+    ).length
+  }, [transactions, selectedAccountId])
+
   const headerContextLabel =
     activeView === 'personal-finance'
       ? activePersonalFinanceTab === 'settings'
@@ -483,20 +483,10 @@ function App() {
 
   const handleAccountSelect = (accountId: string): void => {
     if (accountId === selectedAccountId) {
-      setTransactionsReloadTick((tick) => tick + 1)
       return
     }
 
     setSelectedAccountId(accountId)
-    setDirectionFilter('ALL')
-    setMemoFilter('')
-    setTransactions([])
-    setTransactionsErrorMessage(null)
-    setCreateTransactionStatus('idle')
-    setCreateTransactionErrorMessage(null)
-    setCsvImportStatus('idle')
-    setCsvImportErrorMessage(null)
-    setCsvImportResult(null)
   }
 
   const handleCreateAccount = async (
@@ -525,6 +515,7 @@ function App() {
   ): Promise<void> => {
     await apiClient.updateAccount(accountId, request)
     setAccountsReloadTick((tick) => tick + 1)
+    setTransactionsReloadTick((tick) => tick + 1)
   }
 
   const handleDeleteAccount = async (accountId: string): Promise<void> => {
@@ -532,16 +523,9 @@ function App() {
 
     if (selectedAccountId === accountId) {
       setSelectedAccountId(null)
-      setTransactions([])
-      setTransactionsStatus('idle')
-      setTransactionsErrorMessage(null)
-      setCreateTransactionStatus('idle')
-      setCreateTransactionErrorMessage(null)
       setCsvImportStatus('idle')
       setCsvImportErrorMessage(null)
       setCsvImportResult(null)
-      setDirectionFilter('ALL')
-      setMemoFilter('')
     }
 
     setAccounts((current) =>
@@ -844,6 +828,7 @@ function App() {
           transactionsErrorMessage={transactionsErrorMessage}
           filteredTransactions={filteredTransactions}
           totalTransactionsCount={transactions.length}
+          selectedAccountTransactionsCount={selectedAccountTransactionsCount}
           directionFilter={directionFilter}
           memoFilter={memoFilter}
           onDirectionFilterChange={setDirectionFilter}
