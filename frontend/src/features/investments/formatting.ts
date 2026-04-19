@@ -1,4 +1,4 @@
-import type { AccountType, TransactionDirection } from '../../api'
+import type { AccountType, InstrumentKind, TransactionDirection } from '../../api'
 import type { AccountStatus } from './types'
 
 export function addDecimalAmountsExact(left: string, right: string): string {
@@ -57,13 +57,13 @@ export function formatIsoDateRu(isoDate: string): string {
 }
 
 export function toDirectionLabel(direction: TransactionDirection): string {
-  return toDirectionSelectLabel(direction)
+  return direction === 'INFLOW' ? 'Продажа' : 'Покупка'
 }
 
 export function toDirectionSelectLabel(
   direction: TransactionDirection,
 ): string {
-  return direction === 'INFLOW' ? 'Доход' : 'Расход'
+  return direction === 'INFLOW' ? 'Продать' : 'Купить'
 }
 
 export function toAccountTypeLabel(type: AccountType): string {
@@ -75,6 +75,19 @@ export function toAccountTypeLabel(type: AccountType): string {
     BROKERAGE: 'Брокерский',
   }
   return labels[type]
+}
+
+export function isMoexTradeAccountType(type: AccountType): boolean {
+  return type === 'BROKERAGE' || type === 'IIS'
+}
+
+export function toInstrumentKindLabel(kind: InstrumentKind): string {
+  const labels: Record<InstrumentKind, string> = {
+    SHARE: 'Акция',
+    FUND: 'Фонд',
+    BOND: 'Облигация',
+  }
+  return labels[kind]
 }
 
 export function toAccountStatusLabel(status: AccountStatus): string {

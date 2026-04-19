@@ -38,8 +38,8 @@ Optimize for safe incremental delivery and engineer skill growth, not for maximu
 - Frontend fast: `npm --prefix frontend run lint`
 - Frontend final: `npm --prefix frontend run build`
 - End-to-end local runtime: `make dev`
-- API health: `curl http://localhost:8080/health`
-- Frontend URL: `http://localhost:5173`
+- API health: `curl http://localhost:${MINDFUL_FINANCE_API_PORT:-8080}/health`
+- Frontend URL: `http://localhost:${MINDFUL_FINANCE_FRONTEND_PORT:-5173}`
 - Stop local stack: `make down`
 
 ## Reviews

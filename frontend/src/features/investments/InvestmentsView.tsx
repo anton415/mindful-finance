@@ -5,23 +5,27 @@ import {
   type CreateAccountRequest,
   type CreateTransactionRequest,
   type ImportTransactionsCsvResponse,
-  type TransactionDirection,
   type TransactionDto,
   type UpdateAccountRequest,
   type UpdateTransactionRequest,
 } from '../../api'
-import { formatMoneyInput, normalizeMoneyInput } from '../../money-input'
 import {
-  isValidIsoDateValue,
-  isValidPositiveAmountValue,
-  normalizeTransactionMemo,
+  isMoexTradeAccountType,
   toInvestmentAccountCountLabel,
-  todayIsoDate,
 } from './formatting'
 import { InvestmentOverviewTab } from './InvestmentOverviewTab'
 import { InvestmentSettingsTab } from './InvestmentSettingsTab'
 import { InvestmentTransactionsTab } from './InvestmentTransactionsTab'
 import { INVESTMENT_TAB_COPY } from './model'
+import {
+  canSubmitTransactionTrade,
+  createEmptyTransactionTradeDraft,
+  createTransactionTradeDraftFromTransaction,
+  evaluateTransactionTradeDraft,
+  type TransactionTradeDraft,
+  toCreateTransactionTradeRequest,
+  toUpdateTransactionTradeRequest,
+} from './transactionTrade'
 import type {
   AccountWithBalance,
   CreateAccountStatus,
@@ -56,6 +60,7 @@ interface InvestmentsViewProps {
   transactionsErrorMessage: string | null
   filteredTransactions: TransactionDto[]
   totalTransactionsCount: number
+  selectedAccountTransactionsCount: number
   directionFilter: TransactionDirectionFilter
   memoFilter: string
   onDirectionFilterChange: (value: TransactionDirectionFilter) => void
@@ -102,6 +107,7 @@ export function InvestmentsView({
   transactionsErrorMessage,
   filteredTransactions,
   totalTransactionsCount,
+  selectedAccountTransactionsCount,
   directionFilter,
   memoFilter,
   onDirectionFilterChange,
@@ -149,25 +155,19 @@ export function InvestmentsView({
   >(null)
   const [deleteAccountErrorAccountId, setDeleteAccountErrorAccountId] =
     useState<string | null>(null)
-  const [newTransactionDate, setNewTransactionDate] =
-    useState<string>(todayIsoDate())
-  const [newTransactionDirection, setNewTransactionDirection] =
-    useState<TransactionDirection>('OUTFLOW')
-  const [newTransactionAmount, setNewTransactionAmount] = useState<string>('')
-  const [newTransactionMemo, setNewTransactionMemo] = useState<string>('')
+  const [newTransactionDraft, setNewTransactionDraft] =
+    useState<TransactionTradeDraft>(() =>
+      createEmptyTransactionTradeDraft(
+        resolvePreferredTransactionAccountId(accounts, selectedAccountId, null),
+      ),
+    )
   const [editingTransactionAccountId, setEditingTransactionAccountId] =
     useState<string | null>(null)
   const [editingTransactionId, setEditingTransactionId] = useState<
     string | null
   >(null)
-  const [editingTransactionDate, setEditingTransactionDate] =
-    useState<string>(todayIsoDate())
-  const [editingTransactionDirection, setEditingTransactionDirection] =
-    useState<TransactionDirection>('OUTFLOW')
-  const [editingTransactionAmount, setEditingTransactionAmount] =
-    useState<string>('')
-  const [editingTransactionMemo, setEditingTransactionMemo] =
-    useState<string>('')
+  const [editingTransactionDraft, setEditingTransactionDraft] =
+    useState<TransactionTradeDraft>(() => createEmptyTransactionTradeDraft())
   const [updateTransactionStatus, setUpdateTransactionStatus] =
     useState<CreateTransactionStatus>('idle')
   const [updateTransactionErrorMessage, setUpdateTransactionErrorMessage] =
@@ -198,10 +198,7 @@ export function InvestmentsView({
   const resetEditingTransaction = (): void => {
     setEditingTransactionAccountId(null)
     setEditingTransactionId(null)
-    setEditingTransactionDate(todayIsoDate())
-    setEditingTransactionDirection('OUTFLOW')
-    setEditingTransactionAmount('')
-    setEditingTransactionMemo('')
+    setEditingTransactionDraft(createEmptyTransactionTradeDraft())
     setUpdateTransactionStatus('idle')
     setUpdateTransactionErrorMessage(null)
   }
@@ -241,46 +238,53 @@ export function InvestmentsView({
     updateAccountStatus !== 'submitting'
   const isDeleteAvailabilityKnown = transactionsStatus === 'ready'
   const hasLoadedTransactions =
-    isDeleteAvailabilityKnown && totalTransactionsCount > 0
+    isDeleteAvailabilityKnown && selectedAccountTransactionsCount > 0
   const canDeleteAccount =
     selectedAccount !== null &&
     !isEditingSelectedAccount &&
     isDeleteAvailabilityKnown &&
-    totalTransactionsCount === 0 &&
+    selectedAccountTransactionsCount === 0 &&
     deleteAccountStatus !== 'submitting'
+  const resolvedNewTransactionDraft =
+    newTransactionDraft.accountId ===
+    resolvePreferredTransactionAccountId(
+      accounts,
+      selectedAccountId,
+      newTransactionDraft.accountId,
+    )
+      ? newTransactionDraft
+      : {
+          ...newTransactionDraft,
+          accountId: resolvePreferredTransactionAccountId(
+            accounts,
+            selectedAccountId,
+            newTransactionDraft.accountId,
+          ),
+        }
 
-  const transactionDateCandidate = newTransactionDate.trim()
-  const transactionAmountCandidate = normalizeMoneyInput(newTransactionAmount)
-  const transactionMemoCandidate = newTransactionMemo.trim()
-  const isTransactionDateValid = isValidIsoDateValue(transactionDateCandidate)
-  const isTransactionAmountValid = isValidPositiveAmountValue(
-    transactionAmountCandidate,
+  const newTransactionEvaluation = evaluateTransactionTradeDraft(
+    resolvedNewTransactionDraft,
   )
+  const newTransactionAccount =
+    accounts.find(
+      (account) => account.id === resolvedNewTransactionDraft.accountId,
+    ) ??
+    null
   const canCreateTransaction =
-    selectedAccount !== null &&
-    isTransactionDateValid &&
-    isTransactionAmountValid &&
+    newTransactionAccount !== null &&
+    isMoexTradeAccountType(newTransactionAccount.type) &&
+    canSubmitTransactionTrade(newTransactionEvaluation) &&
     createTransactionStatus !== 'submitting'
-  const editingTransactionDateCandidate = editingTransactionDate.trim()
-  const editingTransactionAmountCandidate = normalizeMoneyInput(
-    editingTransactionAmount,
+  const editingTransactionEvaluation = evaluateTransactionTradeDraft(
+    editingTransactionDraft,
   )
-  const editingTransactionMemoCandidate = editingTransactionMemo.trim()
-  const isEditingTransactionDateValid = isValidIsoDateValue(
-    editingTransactionDateCandidate,
-  )
-  const isEditingTransactionAmountValid = isValidPositiveAmountValue(
-    editingTransactionAmountCandidate,
-  )
-  const activeEditingTransactionId =
-    editingTransactionAccountId === selectedAccountId
-      ? editingTransactionId
-      : null
+  const editingTransactionAccount =
+    accounts.find((account) => account.id === editingTransactionAccountId) ?? null
+  const activeEditingTransactionId = editingTransactionId
   const canUpdateTransaction =
-    selectedAccount !== null &&
+    editingTransactionAccount !== null &&
     activeEditingTransactionId !== null &&
-    isEditingTransactionDateValid &&
-    isEditingTransactionAmountValid &&
+    canSubmitTransactionTrade(editingTransactionEvaluation) &&
     updateTransactionStatus !== 'submitting'
   const canImportCsv =
     selectedAccount !== null &&
@@ -377,26 +381,33 @@ export function InvestmentsView({
   }
 
   const handleCreateTransactionSubmit = async (
-    event: FormEvent<HTMLFormElement>,
+    options: { resetAfterSave: boolean } = { resetAfterSave: false },
   ): Promise<void> => {
-    event.preventDefault()
+    if (!newTransactionAccount || !canCreateTransaction) {
+      return
+    }
 
-    if (!selectedAccount || !canCreateTransaction) {
+    const request = toCreateTransactionTradeRequest(newTransactionEvaluation)
+    if (!request) {
       return
     }
 
     resetDeleteAccountState()
-    const created = await onCreateTransaction(selectedAccount.id, {
-      occurredOn: transactionDateCandidate,
-      direction: newTransactionDirection,
-      amount: transactionAmountCandidate,
-      memo: transactionMemoCandidate,
-    })
+    const created = await onCreateTransaction(newTransactionAccount.id, request)
 
     if (created) {
-      setNewTransactionAmount('')
-      setNewTransactionMemo('')
+      if (options.resetAfterSave) {
+        setNewTransactionDraft(
+          createEmptyTransactionTradeDraft(resolvedNewTransactionDraft.accountId),
+        )
+      }
     }
+  }
+
+  const handleResetNewTransaction = (): void => {
+    setNewTransactionDraft(
+      createEmptyTransactionTradeDraft(resolvedNewTransactionDraft.accountId),
+    )
   }
 
   const handleImportCsvSubmit = async (
@@ -422,26 +433,26 @@ export function InvestmentsView({
 
   const handleStartEditingTransaction = (transaction: TransactionDto): void => {
     resetDeleteTransactionState()
-    setEditingTransactionAccountId(selectedAccountId)
+    setEditingTransactionAccountId(transaction.accountId)
     setEditingTransactionId(transaction.id)
-    setEditingTransactionDate(transaction.occurredOn)
-    setEditingTransactionDirection(transaction.direction)
-    setEditingTransactionAmount(formatMoneyInput(transaction.amount))
-    setEditingTransactionMemo(normalizeTransactionMemo(transaction.memo))
+    setEditingTransactionDraft(
+      createTransactionTradeDraftFromTransaction(transaction),
+    )
     setUpdateTransactionStatus('idle')
     setUpdateTransactionErrorMessage(null)
   }
 
-  const handleUpdateTransactionSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ): Promise<void> => {
-    event.preventDefault()
-
+  const handleUpdateTransactionSubmit = async (): Promise<void> => {
     if (
-      !selectedAccount ||
+      !editingTransactionAccount ||
       !activeEditingTransactionId ||
       !canUpdateTransaction
     ) {
+      return
+    }
+
+    const request = toUpdateTransactionTradeRequest(editingTransactionEvaluation)
+    if (!request) {
       return
     }
 
@@ -451,14 +462,9 @@ export function InvestmentsView({
 
     try {
       await onUpdateTransaction(
-        selectedAccount.id,
+        editingTransactionAccount.id,
         activeEditingTransactionId,
-        {
-          occurredOn: editingTransactionDateCandidate,
-          direction: editingTransactionDirection,
-          amount: editingTransactionAmountCandidate,
-          memo: editingTransactionMemoCandidate,
-        },
+        request,
       )
       resetEditingTransaction()
     } catch (error) {
@@ -470,7 +476,7 @@ export function InvestmentsView({
   const handleDeleteTransactionClick = async (
     transaction: TransactionDto,
   ): Promise<void> => {
-    if (!selectedAccount || isDeleteTransactionSubmitting) {
+    if (isDeleteTransactionSubmitting) {
       return
     }
 
@@ -479,7 +485,7 @@ export function InvestmentsView({
     setDeleteTransactionErrorMessage(null)
 
     try {
-      await onDeleteTransaction(selectedAccount.id, transaction.id)
+      await onDeleteTransaction(transaction.accountId, transaction.id)
       if (activeEditingTransactionId === transaction.id) {
         resetEditingTransaction()
       }
@@ -496,10 +502,7 @@ export function InvestmentsView({
     resetDeleteAccountState()
     resetEditingTransaction()
     resetDeleteTransactionState()
-    setNewTransactionDate(todayIsoDate())
-    setNewTransactionDirection('OUTFLOW')
-    setNewTransactionAmount('')
-    setNewTransactionMemo('')
+    setNewTransactionDraft(createEmptyTransactionTradeDraft(accountId))
     setCsvFile(null)
     if (csvFileInputRef.current) {
       csvFileInputRef.current.value = ''
@@ -576,8 +579,6 @@ export function InvestmentsView({
       {activeInvestmentTab === 'transactions' ? (
         <InvestmentTransactionsTab
           accounts={accounts}
-          selectedAccountId={selectedAccountId}
-          selectedAccount={selectedAccount}
           transactionsStatus={transactionsStatus}
           transactionsErrorMessage={transactionsErrorMessage}
           filteredTransactions={filteredTransactions}
@@ -586,30 +587,27 @@ export function InvestmentsView({
           memoFilter={memoFilter}
           onDirectionFilterChange={onDirectionFilterChange}
           onMemoFilterChange={onMemoFilterChange}
-          onSelectAccount={handleSelectAccountClick}
           createTransactionStatus={createTransactionStatus}
           createTransactionErrorMessage={createTransactionErrorMessage}
-          newTransactionDate={newTransactionDate}
-          newTransactionDirection={newTransactionDirection}
-          newTransactionAmount={newTransactionAmount}
-          newTransactionMemo={newTransactionMemo}
-          onNewTransactionDateChange={setNewTransactionDate}
-          onNewTransactionDirectionChange={setNewTransactionDirection}
-          onNewTransactionAmountChange={setNewTransactionAmount}
-          onNewTransactionMemoChange={setNewTransactionMemo}
-          isTransactionAmountValid={isTransactionAmountValid}
+          newTransactionDraft={resolvedNewTransactionDraft}
+          newTransactionEvaluation={newTransactionEvaluation}
+          newTransactionAccount={newTransactionAccount}
+          onNewTransactionDraftChange={setNewTransactionDraft}
+          onNewTransactionAccountChange={(accountId) =>
+            setNewTransactionDraft((current) => ({
+              ...current,
+              accountId,
+              instrumentSymbol: '',
+            }))
+          }
           canCreateTransaction={canCreateTransaction}
           onCreateTransactionSubmit={handleCreateTransactionSubmit}
+          onResetNewTransaction={handleResetNewTransaction}
           activeEditingTransactionId={activeEditingTransactionId}
-          editingTransactionDate={editingTransactionDate}
-          editingTransactionDirection={editingTransactionDirection}
-          editingTransactionAmount={editingTransactionAmount}
-          editingTransactionMemo={editingTransactionMemo}
-          onEditingTransactionDateChange={setEditingTransactionDate}
-          onEditingTransactionDirectionChange={setEditingTransactionDirection}
-          onEditingTransactionAmountChange={setEditingTransactionAmount}
-          onEditingTransactionMemoChange={setEditingTransactionMemo}
-          isEditingTransactionAmountValid={isEditingTransactionAmountValid}
+          editingTransactionDraft={editingTransactionDraft}
+          editingTransactionEvaluation={editingTransactionEvaluation}
+          editingTransactionAccount={editingTransactionAccount}
+          onEditingTransactionDraftChange={setEditingTransactionDraft}
           canUpdateTransaction={canUpdateTransaction}
           updateTransactionStatus={updateTransactionStatus}
           updateTransactionErrorMessage={updateTransactionErrorMessage}
@@ -675,6 +673,32 @@ export function InvestmentsView({
       ) : null}
     </div>
   )
+}
+
+function resolvePreferredTransactionAccountId(
+  accounts: AccountWithBalance[],
+  selectedAccountId: string | null,
+  currentAccountId: string | null,
+): string {
+  const supportedAccounts = accounts.filter((account) =>
+    isMoexTradeAccountType(account.type),
+  )
+
+  if (
+    currentAccountId &&
+    supportedAccounts.some((account) => account.id === currentAccountId)
+  ) {
+    return currentAccountId
+  }
+
+  if (
+    selectedAccountId &&
+    supportedAccounts.some((account) => account.id === selectedAccountId)
+  ) {
+    return selectedAccountId
+  }
+
+  return supportedAccounts[0]?.id ?? ''
 }
 
 function toErrorMessage(error: unknown): string {

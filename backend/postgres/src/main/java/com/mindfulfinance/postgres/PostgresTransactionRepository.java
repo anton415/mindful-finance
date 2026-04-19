@@ -6,6 +6,7 @@ import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.transaction.Transaction;
 import com.mindfulfinance.domain.transaction.TransactionDirection;
 import com.mindfulfinance.domain.transaction.TransactionId;
+import com.mindfulfinance.domain.transaction.TransactionTrade;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.Currency;
@@ -24,7 +25,13 @@ public final class PostgresTransactionRepository implements TransactionRepositor
               TransactionDirection.valueOf(rs.getString("direction")),
               new Money(rs.getBigDecimal("amount"), Currency.getInstance(rs.getString("currency"))),
               rs.getString("memo"),
-              rs.getTimestamp("created_at").toInstant());
+              rs.getTimestamp("created_at").toInstant(),
+              toTrade(
+                  rs.getString("instrument_symbol"),
+                  rs.getBigDecimal("quantity"),
+                  rs.getBigDecimal("unit_price"),
+                  rs.getBigDecimal("fee_amount"),
+                  Currency.getInstance(rs.getString("currency"))));
 
   private final JdbcTemplate jdbcTemplate;
 
@@ -36,7 +43,8 @@ public final class PostgresTransactionRepository implements TransactionRepositor
   public List<Transaction> findByAccountId(AccountId accountId) {
     return jdbcTemplate.query(
         """
-                SELECT id, account_id, occurred_on, direction, amount, currency, memo, created_at
+                SELECT id, account_id, occurred_on, direction, amount, currency, memo, created_at,
+                       instrument_symbol, quantity, unit_price, fee_amount
                 FROM transactions
                 WHERE account_id = ?
                 ORDER BY occurred_on, created_at, id
@@ -57,8 +65,12 @@ public final class PostgresTransactionRepository implements TransactionRepositor
                     amount,
                     currency,
                     memo,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at,
+                    instrument_symbol,
+                    quantity,
+                    unit_price,
+                    fee_amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
         transaction.id().value(),
         transaction.accountId().value(),
@@ -67,7 +79,11 @@ public final class PostgresTransactionRepository implements TransactionRepositor
         transaction.amount().amount(),
         transaction.amount().currency().getCurrencyCode(),
         transaction.memo(),
-        Timestamp.from(transaction.createdAt()));
+        Timestamp.from(transaction.createdAt()),
+        transaction.trade() == null ? null : transaction.trade().instrumentSymbol(),
+        transaction.trade() == null ? null : transaction.trade().quantity(),
+        transaction.trade() == null ? null : transaction.trade().unitPrice().amount(),
+        transaction.trade() == null ? null : transaction.trade().feeAmount().amount());
   }
 
   @Override
@@ -76,13 +92,18 @@ public final class PostgresTransactionRepository implements TransactionRepositor
         jdbcTemplate.update(
             """
                 UPDATE transactions
-                SET occurred_on = ?, direction = ?, amount = ?, memo = ?
+                SET occurred_on = ?, direction = ?, amount = ?, memo = ?, instrument_symbol = ?,
+                    quantity = ?, unit_price = ?, fee_amount = ?
                 WHERE id = ? AND account_id = ?
                 """,
             Date.valueOf(transaction.occurredOn()),
             transaction.direction().name(),
             transaction.amount().amount(),
             transaction.memo(),
+            transaction.trade() == null ? null : transaction.trade().instrumentSymbol(),
+            transaction.trade() == null ? null : transaction.trade().quantity(),
+            transaction.trade() == null ? null : transaction.trade().unitPrice().amount(),
+            transaction.trade() == null ? null : transaction.trade().feeAmount().amount(),
             transaction.id().value(),
             transaction.accountId().value());
 
@@ -101,5 +122,25 @@ public final class PostgresTransactionRepository implements TransactionRepositor
             transactionId.value(),
             accountId.value())
         == 1;
+  }
+
+  private static TransactionTrade toTrade(
+      String instrumentSymbol,
+      java.math.BigDecimal quantity,
+      java.math.BigDecimal unitPrice,
+      java.math.BigDecimal feeAmount,
+      Currency currency) {
+    return Transaction.trade(
+        instrumentSymbol,
+        quantity,
+        toMoney(unitPrice, currency),
+        toMoney(feeAmount, currency));
+  }
+
+  private static Money toMoney(java.math.BigDecimal amount, Currency currency) {
+    if (amount == null || currency == null) {
+      return null;
+    }
+    return new Money(amount, currency);
   }
 }

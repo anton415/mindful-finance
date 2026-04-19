@@ -42,6 +42,13 @@ public class ApiExceptionHandler {
         .body(new ApiError("BAD_REQUEST", ex.getMessage()));
   }
 
+  @ExceptionHandler(InstrumentCatalogUnavailableException.class)
+  public ResponseEntity<ApiError> handleServiceUnavailable(
+      InstrumentCatalogUnavailableException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(new ApiError("SERVICE_UNAVAILABLE", ex.getMessage()));
+  }
+
   @ExceptionHandler({IllegalStateException.class, DuplicateKeyException.class})
   public ResponseEntity<ApiError> handleConflict(RuntimeException ex) {
     return ResponseEntity.status(HttpStatus.CONFLICT)

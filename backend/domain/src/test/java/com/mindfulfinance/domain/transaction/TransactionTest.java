@@ -6,6 +6,8 @@ import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_CREAT
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_DIRECTION_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_ID_NULL;
 import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_OCCURRED_ON_NULL;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_TRADE_AMOUNT_MISMATCH;
+import static com.mindfulfinance.domain.shared.DomainErrorCode.TRANSACTION_TRADE_FIELDS_INCOMPLETE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -258,5 +260,74 @@ public class TransactionTest {
             Instant.now());
     assertNotNull(transaction);
     assertNull(transaction.memo()); // Memo should be null
+  }
+
+  @Test
+  @DisplayName("Should create investment trade transaction with derived cash effect")
+  void shouldCreateTradeTransactionWithDerivedCashEffect() {
+    TransactionTrade trade =
+        Transaction.trade(
+            "  aapl ",
+            new BigDecimal("2"),
+            new Money(new BigDecimal("100.00"), Currency.getInstance("USD")),
+            new Money(new BigDecimal("1.50"), Currency.getInstance("USD")));
+
+    Transaction transaction =
+        new Transaction(
+            TransactionId.random(),
+            AccountId.random(),
+            LocalDate.now(),
+            TransactionDirection.OUTFLOW,
+            new Money(new BigDecimal("201.50"), Currency.getInstance("USD")),
+            "Buy shares",
+            Instant.now(),
+            trade);
+
+    assertNotNull(transaction.trade());
+    assertEquals("AAPL", transaction.trade().instrumentSymbol());
+    assertEquals(new BigDecimal("2"), transaction.trade().quantity());
+  }
+
+  @Test
+  @DisplayName("Should reject incomplete trade fields")
+  void shouldRejectIncompleteTradeFields() {
+    DomainException exception =
+        assertThrows(
+            DomainException.class,
+            () ->
+                Transaction.trade(
+                    "AAPL",
+                    new BigDecimal("2"),
+                    new Money(new BigDecimal("100.00"), Currency.getInstance("USD")),
+                    null));
+
+    assertEquals(TRANSACTION_TRADE_FIELDS_INCOMPLETE, exception.code());
+  }
+
+  @Test
+  @DisplayName("Should reject amount mismatch against trade cash effect")
+  void shouldRejectTradeAmountMismatch() {
+    TransactionTrade trade =
+        Transaction.trade(
+            "AAPL",
+            new BigDecimal("2"),
+            new Money(new BigDecimal("100.00"), Currency.getInstance("USD")),
+            new Money(new BigDecimal("1.50"), Currency.getInstance("USD")));
+
+    DomainException exception =
+        assertThrows(
+            DomainException.class,
+            () ->
+                new Transaction(
+                    TransactionId.random(),
+                    AccountId.random(),
+                    LocalDate.now(),
+                    TransactionDirection.OUTFLOW,
+                    new Money(new BigDecimal("200.00"), Currency.getInstance("USD")),
+                    "Buy shares",
+                    Instant.now(),
+                    trade));
+
+    assertEquals(TRANSACTION_TRADE_AMOUNT_MISMATCH, exception.code());
   }
 }

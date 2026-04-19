@@ -6,6 +6,7 @@ import com.mindfulfinance.domain.money.Money;
 import com.mindfulfinance.domain.transaction.Transaction;
 import com.mindfulfinance.domain.transaction.TransactionDirection;
 import com.mindfulfinance.domain.transaction.TransactionId;
+import com.mindfulfinance.domain.transaction.TransactionTrade;
 import java.math.BigDecimal;
 import java.util.Currency;
 import java.util.List;
@@ -24,6 +25,16 @@ public final class UpdateTransaction {
 
   public Optional<Transaction> update(Command command) {
     List<Transaction> existingTransactions = transactions.findByAccountId(command.accountId());
+    TransactionTrade trade =
+        Transaction.trade(
+            command.instrumentSymbol(),
+            command.quantity(),
+            toMoney(command.unitPrice(), command.currency()),
+            toMoney(command.feeAmount(), command.currency()));
+    Money amount =
+        trade == null
+            ? new Money(command.amount(), command.currency())
+            : trade.cashAmount(command.direction());
 
     Transaction currentTransaction =
         existingTransactions.stream()
@@ -44,9 +55,10 @@ public final class UpdateTransaction {
                     !transaction.id().equals(command.transactionId())
                         && transaction.occurredOn().equals(command.occurredOn())
                         && transaction.direction() == command.direction()
-                        && transaction.amount().amount().compareTo(command.amount()) == 0
-                        && transaction.amount().currency().equals(command.currency())
-                        && memoEqualsIgnoreCase(transaction.memo(), normalizedMemo));
+                        && transaction.amount().amount().compareTo(amount.amount()) == 0
+                        && transaction.amount().currency().equals(amount.currency())
+                        && memoEqualsIgnoreCase(transaction.memo(), normalizedMemo)
+                        && Objects.equals(transaction.trade(), trade));
 
     if (isDuplicate) {
       throw new IllegalStateException(DUPLICATE_TRANSACTION_MESSAGE);
@@ -58,12 +70,20 @@ public final class UpdateTransaction {
             currentTransaction.accountId(),
             command.occurredOn(),
             command.direction(),
-            new Money(command.amount(), command.currency()),
+            amount,
             normalizedMemo,
-            currentTransaction.createdAt());
+            currentTransaction.createdAt(),
+            trade);
 
     transactions.update(updatedTransaction);
     return Optional.of(updatedTransaction);
+  }
+
+  private static Money toMoney(BigDecimal amount, Currency currency) {
+    if (amount == null || currency == null) {
+      return null;
+    }
+    return new Money(amount, currency);
   }
 
   private static boolean memoEqualsIgnoreCase(String left, String right) {
@@ -87,5 +107,9 @@ public final class UpdateTransaction {
       java.time.LocalDate occurredOn,
       TransactionDirection direction,
       BigDecimal amount,
-      String memo) {}
+      String memo,
+      String instrumentSymbol,
+      BigDecimal quantity,
+      BigDecimal unitPrice,
+      BigDecimal feeAmount) {}
 }

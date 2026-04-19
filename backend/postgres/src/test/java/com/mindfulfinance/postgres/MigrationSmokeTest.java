@@ -34,7 +34,7 @@ class MigrationSmokeTest {
     flyway.clean();
     var result = flyway.migrate();
 
-    assertEquals(10, result.migrationsExecuted);
+    assertEquals(11, result.migrationsExecuted);
 
     try (var connection =
         DriverManager.getConnection(
@@ -63,12 +63,19 @@ class MigrationSmokeTest {
               "amount",
               "currency",
               "memo",
-              "created_at");
+              "created_at",
+              "instrument_symbol",
+              "quantity",
+              "unit_price",
+              "fee_amount");
 
       assertThat(loadColumnTypes(connection, "transactions"))
           .containsEntry("account_id", "uuid")
           .containsEntry("occurred_on", "date")
           .containsEntry("amount", "numeric")
+          .containsEntry("quantity", "numeric")
+          .containsEntry("unit_price", "numeric")
+          .containsEntry("fee_amount", "numeric")
           .containsEntry("created_at", "timestamp with time zone");
 
       assertThat(loadColumnTypes(connection, "personal_finance_cards"))

@@ -10,14 +10,17 @@ SPRING_PROFILES_ACTIVE ?= postgres
 MINDFUL_FINANCE_DB_URL ?= jdbc:postgresql://localhost:55432/mindfulfinance
 MINDFUL_FINANCE_DB_USERNAME ?= mindfulfinance
 MINDFUL_FINANCE_DB_PASSWORD ?= mindfulfinance
-BACKEND_ENV := SPRING_PROFILES_ACTIVE=$(SPRING_PROFILES_ACTIVE) MINDFUL_FINANCE_DB_URL=$(MINDFUL_FINANCE_DB_URL) MINDFUL_FINANCE_DB_USERNAME=$(MINDFUL_FINANCE_DB_USERNAME) MINDFUL_FINANCE_DB_PASSWORD=$(MINDFUL_FINANCE_DB_PASSWORD)
+MINDFUL_FINANCE_API_PORT ?= 8080
+MINDFUL_FINANCE_FRONTEND_PORT ?= 5173
+BACKEND_ENV := SPRING_PROFILES_ACTIVE=$(SPRING_PROFILES_ACTIVE) SERVER_PORT=$(MINDFUL_FINANCE_API_PORT) MINDFUL_FINANCE_DB_URL=$(MINDFUL_FINANCE_DB_URL) MINDFUL_FINANCE_DB_USERNAME=$(MINDFUL_FINANCE_DB_USERNAME) MINDFUL_FINANCE_DB_PASSWORD=$(MINDFUL_FINANCE_DB_PASSWORD)
+FRONTEND_ENV := MINDFUL_FINANCE_API_PORT=$(MINDFUL_FINANCE_API_PORT) MINDFUL_FINANCE_FRONTEND_PORT=$(MINDFUL_FINANCE_FRONTEND_PORT)
 BACKEND_PREPARE_CMD := mvn -f $(BACKEND_POM) -pl api -am -Dmaven.test.skip=true install
 BACKEND_DEV_CMD := $(BACKEND_ENV) mvn -f $(BACKEND_POM) -pl api -am -rf :api spring-boot:run
 BACKEND_BUILD_CMD := mvn -f $(BACKEND_POM) -Dmaven.test.skip=true package
-FRONTEND_DEV_CMD := npm --prefix $(FRONTEND_DIR) run dev
+FRONTEND_DEV_CMD := $(FRONTEND_ENV) npm --prefix $(FRONTEND_DIR) run dev
 FRONTEND_BUILD_CMD := npm --prefix $(FRONTEND_DIR) run build
 
-.PHONY: dev build down frontend-deps db-up backend-dev
+.PHONY: dev build down frontend-deps db-up backend-dev backend-prepare
 
 $(FRONTEND_STAMP): $(FRONTEND_DIR)/package.json $(FRONTEND_DIR)/package-lock.json
 	@echo "Installing frontend dependencies..."
@@ -26,6 +29,10 @@ $(FRONTEND_STAMP): $(FRONTEND_DIR)/package.json $(FRONTEND_DIR)/package-lock.jso
 	@touch $(FRONTEND_STAMP)
 
 frontend-deps: $(FRONTEND_STAMP)
+
+backend-prepare:
+	@echo "Preparing backend modules..."
+	@$(BACKEND_PREPARE_CMD)
 
 build: $(FRONTEND_STAMP)
 	@echo "Building backend..."
@@ -52,14 +59,11 @@ db-up:
 	done; \
 	echo "PostgreSQL is healthy."
 
-backend-dev:
-	@echo "Preparing backend modules..."
-	@$(BACKEND_PREPARE_CMD)
-	@$(MAKE) db-up
-	@echo "Starting backend on http://localhost:8080 ..."
+backend-dev: backend-prepare db-up
+	@echo "Starting backend on http://localhost:$(MINDFUL_FINANCE_API_PORT) ..."
 	@$(BACKEND_DEV_CMD)
 
-dev: $(FRONTEND_STAMP)
+dev: $(FRONTEND_STAMP) backend-prepare db-up
 	@set -eu; \
 	backend_pid=""; \
 	frontend_pid=""; \
@@ -80,13 +84,10 @@ dev: $(FRONTEND_STAMP)
 		exit "$$status"; \
 	}; \
 	trap 'cleanup 130' INT TERM; \
-	echo "Preparing backend modules..."; \
-	$(BACKEND_PREPARE_CMD); \
-	$(MAKE) db-up; \
-	echo "Starting backend on http://localhost:8080 ..."; \
+	echo "Starting backend on http://localhost:$(MINDFUL_FINANCE_API_PORT) ..."; \
 	$(BACKEND_DEV_CMD) & \
 	backend_pid=$$!; \
-	echo "Starting frontend on http://localhost:5173 ..."; \
+	echo "Starting frontend on http://localhost:$(MINDFUL_FINANCE_FRONTEND_PORT) ..."; \
 	$(FRONTEND_DEV_CMD) & \
 	frontend_pid=$$!; \
 	echo "Dev stack is running. Press Ctrl+C to stop app processes; PostgreSQL stays up."; \

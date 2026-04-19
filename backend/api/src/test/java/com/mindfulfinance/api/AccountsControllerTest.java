@@ -2,6 +2,9 @@ package com.mindfulfinance.api;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -12,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.mindfulfinance.api.config.ApiWiringConfig;
+import com.mindfulfinance.application.ports.InstrumentCatalog;
 import com.mindfulfinance.application.usecases.CreatePersonalFinanceCard;
 import com.mindfulfinance.application.usecases.SavePersonalFinanceSettings;
 import com.mindfulfinance.domain.personalfinance.PersonalFinanceCard;
@@ -21,6 +25,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -35,6 +40,7 @@ public class AccountsControllerTest {
   @Autowired MockMvc mockMvc;
   @Autowired CreatePersonalFinanceCard createPersonalFinanceCard;
   @Autowired SavePersonalFinanceSettings savePersonalFinanceSettings;
+  @MockBean InstrumentCatalog instrumentCatalog;
 
   @Test
   public void createAccount_returns201AndAccountId() throws Exception {
@@ -250,8 +256,282 @@ public class AccountsControllerTest {
     mockMvc
         .perform(get("/accounts/{accountId}/transactions", accountId))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].accountId").value(accountId))
+        .andExpect(jsonPath("$[0].accountName").value("Cash"))
         .andExpect(jsonPath("$[0].direction").value("OUTFLOW"))
         .andExpect(jsonPath("$[0].amount").value("12.34"));
+  }
+
+  @Test
+  public void createAndListTradeTransactions_forExistingAccount() throws Exception {
+    MvcResult accountResult =
+        mockMvc
+            .perform(
+                post("/accounts")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"Brokerage\",\"currency\":\"USD\",\"type\":\"BROKERAGE\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    String accountId =
+        JsonPath.read(accountResult.getResponse().getContentAsString(), "$.accountId");
+
+    mockMvc
+        .perform(
+            post("/accounts/{accountId}/transactions", accountId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "occurredOn":"2026-02-20",
+                      "direction":"OUTFLOW",
+                      "memo":"Buy AAPL",
+                      "instrumentSymbol":"aapl",
+                      "quantity":"2",
+                      "unitPrice":"100.00",
+                      "feeAmount":"1.50"
+                    }
+                    """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.transactionId").exists());
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/transactions", accountId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].accountId").value(accountId))
+        .andExpect(jsonPath("$[0].accountName").value("Brokerage"))
+        .andExpect(jsonPath("$[0].direction").value("OUTFLOW"))
+        .andExpect(jsonPath("$[0].amount").value("201.50"))
+        .andExpect(jsonPath("$[0].instrumentSymbol").value("AAPL"))
+        .andExpect(jsonPath("$[0].quantity").value("2"))
+        .andExpect(jsonPath("$[0].unitPrice").value("100.00"))
+        .andExpect(jsonPath("$[0].feeAmount").value("1.50"))
+        .andExpect(jsonPath("$[0].memo").value("Buy AAPL"));
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/balance", accountId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.amount").value("-201.50"))
+        .andExpect(jsonPath("$.currency").value("USD"));
+  }
+
+  @Test
+  public void getAccountInstruments_returnsBrokerageScopedRows() throws Exception {
+    String accountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"name\":\"Brokerage\",\"currency\":\"RUB\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+    given(instrumentCatalog.search(any()))
+        .willReturn(
+            java.util.List.of(
+                new InstrumentCatalog.InstrumentOption(
+                    "SBER",
+                    "Сбербанк",
+                    "ПАО Сбербанк",
+                    "RU0009029540",
+                    InstrumentCatalog.Kind.SHARE)));
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/instruments", accountId).param("q", "SBER"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].symbol").value("SBER"))
+        .andExpect(jsonPath("$[0].shortName").value("Сбербанк"))
+        .andExpect(jsonPath("$[0].kind").value("SHARE"));
+  }
+
+  @Test
+  public void getAccountInstruments_withShortQuery_returnsEmptyArrayWithoutCallingCatalog()
+      throws Exception {
+    String accountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"name\":\"Brokerage\",\"currency\":\"RUB\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/instruments", accountId).param("q", "S"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isEmpty());
+
+    verifyNoInteractions(instrumentCatalog);
+  }
+
+  @Test
+  public void getAccountInstruments_withUnsupportedAccountType_returns400() throws Exception {
+    String accountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Cash\",\"currency\":\"USD\",\"type\":\"CASH\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/instruments", accountId).param("q", "SBER"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+        .andExpect(
+            jsonPath("$.message")
+                .value("Instrument search is supported only for BROKERAGE and IIS accounts"));
+  }
+
+  @Test
+  public void getAccountInstruments_forLinkedAccount_returns404() throws Exception {
+    PersonalFinanceCard card =
+        createPersonalFinanceCard.create(
+            new CreatePersonalFinanceCard.Command("Тестовая карта"));
+
+    mockMvc
+        .perform(
+            get("/accounts/{accountId}/instruments", card.linkedAccountId().value())
+                .param("q", "SBER"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+  }
+
+  @Test
+  public void getAccountInstruments_whenCatalogUnavailable_returns503() throws Exception {
+    String accountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"name\":\"Brokerage\",\"currency\":\"RUB\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+    given(instrumentCatalog.search(any()))
+        .willThrow(
+            new InstrumentCatalogUnavailableException(
+                "Не удалось загрузить инструменты с Московской биржи. Попробуйте позже.",
+                null));
+
+    mockMvc
+        .perform(get("/accounts/{accountId}/instruments", accountId).param("q", "SBER"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.error").value("SERVICE_UNAVAILABLE"));
+  }
+
+  @Test
+  public void listInvestmentTransactions_returnsGlobalSortedRows_andExcludesLinkedAccounts()
+      throws Exception {
+    String alphaAccountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"name\":\"Alpha Brokerage\",\"currency\":\"USD\",\"type\":\"BROKERAGE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+    String betaAccountId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"name\":\"Beta Cash\",\"currency\":\"EUR\",\"type\":\"CASH\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.accountId");
+
+    String alphaSameDayId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", alphaAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"occurredOn\":\"2026-04-15\",\"direction\":\"OUTFLOW\",\"amount\":\"10.00\",\"memo\":\"Alpha same day\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+    String olderAlphaId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", alphaAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"occurredOn\":\"2026-04-10\",\"direction\":\"INFLOW\",\"amount\":\"50.00\",\"memo\":\"Alpha older\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+    String betaSameDayLaterCreatedId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    post("/accounts/{accountId}/transactions", betaAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                            "{\"occurredOn\":\"2026-04-15\",\"direction\":\"INFLOW\",\"amount\":\"200.00\",\"memo\":\"Beta same day\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$.transactionId");
+
+    PersonalFinanceCard card =
+        createPersonalFinanceCard.create(new CreatePersonalFinanceCard.Command("Основная карта"));
+    savePersonalFinanceSettings.save(
+        new SavePersonalFinanceSettings.Command(
+            card.id(),
+            new java.math.BigDecimal("1000.00"),
+            java.util.Map.of(),
+            new java.math.BigDecimal("0.00"),
+            new java.math.BigDecimal("0.00")));
+
+    mockMvc
+        .perform(get("/investment-transactions"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3))
+        .andExpect(jsonPath("$[0].id").value(betaSameDayLaterCreatedId))
+        .andExpect(jsonPath("$[0].accountId").value(betaAccountId))
+        .andExpect(jsonPath("$[0].accountName").value("Beta Cash"))
+        .andExpect(jsonPath("$[1].id").value(alphaSameDayId))
+        .andExpect(jsonPath("$[1].accountId").value(alphaAccountId))
+        .andExpect(jsonPath("$[1].accountName").value("Alpha Brokerage"))
+        .andExpect(jsonPath("$[2].id").value(olderAlphaId))
+        .andExpect(jsonPath("$[2].accountId").value(alphaAccountId))
+        .andExpect(jsonPath("$[2].accountName").value("Alpha Brokerage"));
   }
 
   @Test

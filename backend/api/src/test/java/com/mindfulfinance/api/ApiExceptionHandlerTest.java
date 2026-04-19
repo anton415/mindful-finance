@@ -66,6 +66,14 @@ public class ApiExceptionHandlerTest {
   }
 
   @Test
+  public void instrumentCatalogUnavailableException_returns503ServiceUnavailable() throws Exception {
+    mockMvc
+        .perform(get("/throw/service-unavailable"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.error").value("SERVICE_UNAVAILABLE"));
+  }
+
+  @Test
   public void duplicateKeyException_returns409Conflict() throws Exception {
     mockMvc
         .perform(get("/throw/duplicate-key"))
@@ -111,6 +119,11 @@ public class ApiExceptionHandlerTest {
     @GetMapping("/throw/bad-request")
     public String badRequest() {
       throw new IllegalArgumentException("Invalid value");
+    }
+
+    @GetMapping("/throw/service-unavailable")
+    public String serviceUnavailable() {
+      throw new InstrumentCatalogUnavailableException("MOEX is unavailable", null);
     }
 
     @GetMapping("/throw/duplicate-key")
